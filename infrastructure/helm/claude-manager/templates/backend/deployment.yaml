@@ -52,21 +52,21 @@ spec:
             - containerPort: {{ .Values.backend.port }}
           volumeMounts:
             - name: claude-data
-              mountPath: /home/claude/.claude
+              mountPath: /root/.claude
               readOnly: false
             - name: claude-bin
               mountPath: /usr/local/bin/claude
               readOnly: true
             - name: managed-projects
-              mountPath: /home/claude/managed-projects
+              mountPath: {{ .Values.backend.managedProjectsPath }}
               readOnly: false
           env:
             - name: CLAUDE_DATA_DIR
-              value: /home/claude/.claude
+              value: /root/.claude
             - name: CLAUDE_BIN
               value: /usr/local/bin/claude
             - name: MANAGED_PROJECTS_DIR
-              value: /home/claude/managed-projects
+              value: {{ .Values.backend.managedProjectsPath }}
           readinessProbe:
             httpGet:
               path: /api/health
