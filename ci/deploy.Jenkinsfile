@@ -88,7 +88,9 @@ pipeline {
     }
     failure {
       echo "Deployment failed for tag=${params.IMAGE_TAG}."
-      sh "helm history claude-manager -n claude-manager --max 5 || true"
+      container('helm') {
+        sh "helm history claude-manager -n claude-manager --max 5 || true"
+      }
     }
   }
 }
