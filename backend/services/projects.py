@@ -172,7 +172,7 @@ def bootstrap_project(name: str, goal: str, description: str) -> ManagedProject:
             check=True,
             capture_output=True,
         )
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, FileNotFoundError):
         pass  # Git not available or failed — directory still created
 
     return ManagedProject(
