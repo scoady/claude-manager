@@ -1,0 +1,17 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "4040:4040"
+    volumes:
+      # Auth credentials + session JSONL files written by claude CLI
+      - "${HOME}/.claude:/root/.claude"
+      # Managed projects root — same absolute path inside and outside so
+      # path strings displayed in the UI match what's on disk
+      - "${MANAGED_PROJECTS_DIR:-${HOME}/git/claude-managed-projects}:${MANAGED_PROJECTS_DIR:-${HOME}/git/claude-managed-projects}"
+    environment:
+      CLAUDE_DATA_DIR: /root/.claude
+      MANAGED_PROJECTS_DIR: "${MANAGED_PROJECTS_DIR:-${HOME}/git/claude-managed-projects}"
+    restart: unless-stopped
