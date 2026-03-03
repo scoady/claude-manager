@@ -1,0 +1,10 @@
+apiVersion: v2
+name: claude-manager
+description: Control plane for monitoring and managing local Claude Code agents.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - claude
+  - ai
+  - agent-manager

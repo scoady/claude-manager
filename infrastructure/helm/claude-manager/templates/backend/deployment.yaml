@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "claude-manager.labels" . | nindent 4 }}
+    app: backend
+    app.kubernetes.io/component: backend
+spec:
+  # Single replica — the backend reads host-local files and processes.
+  # Horizontal scaling would require a shared volume or remote session store.
+  replicas: {{ .Values.backend.replicas }}
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+        app.kubernetes.io/component: backend
+    spec:
+      # hostPID lets the backend see all processes on the node so it can
+      # discover running Claude Code sessions via `ps aux`.
+      hostPID: true
+
+      volumes:
+        # Mount the host's .claude directory so the backend can read session
+        # JSONL files written by Claude Code.
+        - name: claude-data
+          hostPath:
+            path: {{ .Values.backend.claudeDataPath }}
+            type: Directory
+        # Mount the claude CLI binary so the backend can send messages to
+        # agents via `claude -p --resume <session-id>`.
+        - name: claude-bin
+          hostPath:
+            path: {{ .Values.backend.claudeBinPath }}
+            type: File
+
+      containers:
+        - name: backend
+          image: "{{ if .Values.global.imageRegistry }}{{ .Values.global.imageRegistry }}/{{ end }}{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.backend.port }}
+          volumeMounts:
+            - name: claude-data
+              mountPath: /home/claude/.claude
+              readOnly: false
+            - name: claude-bin
+              mountPath: /usr/local/bin/claude
+              readOnly: true
+          env:
+            - name: CLAUDE_DATA_DIR
+              value: /home/claude/.claude
+            - name: CLAUDE_BIN
+              value: /usr/local/bin/claude
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: {{ .Values.backend.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: {{ .Values.backend.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}

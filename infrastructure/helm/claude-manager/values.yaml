@@ -1,0 +1,64 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# claude-manager Helm values
+#
+# Deploy with:
+#   helm upgrade --install claude-manager ./infrastructure/helm/claude-manager \
+#     --namespace claude-manager --create-namespace \
+#     --values ./infrastructure/helm/claude-manager/values.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Global ────────────────────────────────────────────────────────────────────
+global:
+  # Registry prefix prepended to every image reference.
+  # Empty → no prefix (local dev). Jenkins CI sets this to the in-cluster addr.
+  imageRegistry: ""
+
+# ── Backend (FastAPI) ─────────────────────────────────────────────────────────
+backend:
+  image:
+    repository: claude-manager/backend
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  replicas: 1   # Single replica — node-local, not horizontally scalable.
+  port: 4040
+
+  # Path to the claude CLI binary on the host node.
+  # Mounted into the container so the backend can spawn `claude -p --resume`.
+  claudeBinPath: /home/ubuntu/.local/bin/claude
+
+  # Path to the user's .claude directory on the host node.
+  # Contains session JSONL files read by the backend.
+  claudeDataPath: /home/ubuntu/.claude
+
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+# ── Frontend (nginx) ──────────────────────────────────────────────────────────
+frontend:
+  image:
+    repository: claude-manager/frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  replicas: 1
+
+  ingress:
+    enabled: true
+    className: nginx
+    # Leave host empty to match all hostnames (default for kind / localhost).
+    # Set to a real hostname for production: claude-manager.example.com
+    host: ""
+
+  resources:
+    requests:
+      memory: "32Mi"
+      cpu: "25m"
+    limits:
+      memory: "64Mi"
+      cpu: "100m"

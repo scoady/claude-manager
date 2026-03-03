@@ -1,0 +1,35 @@
+{{- if .Values.frontend.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: claude-manager-ingress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "claude-manager.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  ingressClassName: {{ .Values.frontend.ingress.className }}
+  rules:
+    {{- if .Values.frontend.ingress.host }}
+    - host: {{ .Values.frontend.ingress.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
+    {{- else }}
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
+    {{- end }}
+{{- end }}
