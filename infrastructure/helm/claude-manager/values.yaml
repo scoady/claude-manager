@@ -13,35 +13,9 @@ global:
   # Empty → no prefix (local dev). Jenkins CI sets this to the in-cluster addr.
   imageRegistry: ""
 
-# ── Backend (FastAPI) ─────────────────────────────────────────────────────────
-backend:
-  image:
-    repository: claude-manager/backend
-    tag: latest
-    pullPolicy: IfNotPresent
-
-  replicas: 1   # Single replica — node-local, not horizontally scalable.
-  port: 4040
-
-  # Path to the claude CLI binary on the host node.
-  # Mounted into the container so the backend can spawn `claude -p --resume`.
-  claudeBinPath: /Users/ayx106492/.local/bin/claude
-
-  # Path to the user's .claude directory on the host node.
-  # Contains session JSONL files read by the backend.
-  claudeDataPath: /Users/ayx106492/.claude
-
-  # Path to the managed projects root on the host node.
-  # Each subdirectory is a git repo representing a managed project.
-  managedProjectsPath: /Users/ayx106492/git/claude-managed-projects
-
-  resources:
-    requests:
-      memory: "128Mi"
-      cpu: "100m"
-    limits:
-      memory: "512Mi"
-      cpu: "500m"
+# Backend runs natively on the host (not in k8s).
+# Start with: ./run.sh
+# nginx proxies /api/ and /ws → host.docker.internal:4040
 
 # ── Frontend (nginx) ──────────────────────────────────────────────────────────
 frontend:

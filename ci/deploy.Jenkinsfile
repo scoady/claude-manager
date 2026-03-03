@@ -9,10 +9,8 @@
 //   - jnlp container: clones repo
 //   - helm container: runs helm upgrade and kubectl rollout status
 //
-// NOTE: The backend pod runs with hostPID=true and a hostPath volume mount
-// for ~/.claude so it can inspect the host's Claude agent processes and
-// session files. Ensure the node has the claude CLI installed at the path
-// configured in values.yaml (backend.claudeBinPath).
+// NOTE: The backend runs natively on the host (not in k8s) — see run.sh.
+// Only the frontend nginx image is deployed here.
 
 def REGISTRY = "registry.registry.svc.cluster.local:5000"
 
@@ -58,8 +56,6 @@ pipeline {
               --create-namespace \\
               --values ${WORKSPACE}/infrastructure/helm/claude-manager/values.yaml \\
               --set global.imageRegistry=${REGISTRY} \\
-              --set backend.image.tag=${params.IMAGE_TAG} \\
-              --set backend.image.pullPolicy=Always \\
               --set frontend.image.tag=${params.IMAGE_TAG} \\
               --set frontend.image.pullPolicy=Always \\
               --wait \\
@@ -73,7 +69,6 @@ pipeline {
       steps {
         container('helm') {
           sh """
-            kubectl rollout status deployment/backend  -n claude-manager --timeout=120s
             kubectl rollout status deployment/frontend -n claude-manager --timeout=120s
           """
         }

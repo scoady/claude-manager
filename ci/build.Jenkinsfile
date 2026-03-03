@@ -1,9 +1,8 @@
 // ci/build.Jenkinsfile
-// Builds the backend and frontend images with Kaniko, pushes them to the
-// in-cluster Docker registry, then triggers the deploy pipeline.
+// Builds the frontend image with Kaniko, pushes it to the in-cluster Docker
+// registry, then triggers the deploy pipeline.
 //
-// Each image builds in its own kaniko pod — kaniko mutates the root filesystem
-// so sharing a container across builds causes corruption.
+// The backend runs natively on the host (not in k8s) — see run.sh.
 
 def REGISTRY = "registry.registry.svc.cluster.local:5000"
 def IMAGE_TAG = ""
@@ -38,53 +37,25 @@ pipeline {
       }
     }
 
-    // ── Stage 2: Build and push both images in parallel ───────────────────────
+    // ── Stage 2: Build and push frontend image ────────────────────────────────
     stage('Build images') {
-      parallel {
-
-        stage('backend') {
-          agent { label 'kaniko' }
-          steps {
-            container('kaniko') {
-              sh """
-                /kaniko/executor \\
-                  --dockerfile=${WORKSPACE}/backend/Dockerfile \\
-                  --context=dir://${WORKSPACE} \\
-                  --destination=${REGISTRY}/claude-manager/backend:${IMAGE_TAG} \\
-                  --destination=${REGISTRY}/claude-manager/backend:latest \\
-                  --insecure \\
-                  --insecure-pull \\
-                  --skip-tls-verify \\
-                  --skip-tls-verify-pull \\
-                  --cache=false \\
-                  --verbosity=info
-              """
-            }
-          }
+      steps {
+        container('kaniko') {
+          sh """
+            /kaniko/executor \\
+              --dockerfile=${WORKSPACE}/frontend/Dockerfile \\
+              --context=dir://${WORKSPACE}/frontend \\
+              --destination=${REGISTRY}/claude-manager/frontend:${IMAGE_TAG} \\
+              --destination=${REGISTRY}/claude-manager/frontend:latest \\
+              --insecure \\
+              --insecure-pull \\
+              --skip-tls-verify \\
+              --skip-tls-verify-pull \\
+              --cache=false \\
+              --verbosity=info
+          """
         }
-
-        stage('frontend') {
-          agent { label 'kaniko' }
-          steps {
-            container('kaniko') {
-              sh """
-                /kaniko/executor \\
-                  --dockerfile=${WORKSPACE}/frontend/Dockerfile \\
-                  --context=dir://${WORKSPACE}/frontend \\
-                  --destination=${REGISTRY}/claude-manager/frontend:${IMAGE_TAG} \\
-                  --destination=${REGISTRY}/claude-manager/frontend:latest \\
-                  --insecure \\
-                  --insecure-pull \\
-                  --skip-tls-verify \\
-                  --skip-tls-verify-pull \\
-                  --cache=false \\
-                  --verbosity=info
-              """
-            }
-          }
-        }
-
-      } // end parallel
+      }
     }
 
     // ── Stage 3: Trigger deploy pipeline ──────────────────────────────────────
