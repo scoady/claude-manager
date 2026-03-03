@@ -29,6 +29,7 @@ from .services.agents import (
     read_session_messages,
 )
 from .services.message_sender import send_message
+from .services import settings as settings_svc
 from .ws_manager import WSManager
 
 # ─── State ───────────────────────────────────────────────────────────────────
@@ -229,6 +230,92 @@ async def send_agent_message(
 async def get_stats() -> GlobalStats:
     async with _cache_lock:
         return _compute_stats(_agent_cache)
+
+
+# ─── Settings API ─────────────────────────────────────────────────────────────
+
+@app.get("/api/settings/global")
+async def get_global_settings() -> dict[str, Any]:
+    """Read ~/.claude/settings.json."""
+    return settings_svc.get_global_settings()
+
+
+@app.put("/api/settings/global")
+async def put_global_settings(body: dict[str, Any]) -> dict[str, Any]:
+    """Overwrite ~/.claude/settings.json."""
+    try:
+        settings_svc.set_global_settings(body)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    return body
+
+
+@app.get("/api/settings/plugins")
+async def get_plugins() -> list[dict[str, Any]]:
+    """List installed plugins with their enabled state."""
+    return settings_svc.get_plugins()
+
+
+@app.post("/api/settings/plugins/{plugin_id:path}/enable")
+async def enable_plugin(plugin_id: str) -> dict[str, Any]:
+    settings_svc.set_plugin_enabled(plugin_id, True)
+    return {"id": plugin_id, "enabled": True}
+
+
+@app.post("/api/settings/plugins/{plugin_id:path}/disable")
+async def disable_plugin(plugin_id: str) -> dict[str, Any]:
+    settings_svc.set_plugin_enabled(plugin_id, False)
+    return {"id": plugin_id, "enabled": False}
+
+
+@app.get("/api/settings/projects")
+async def get_all_project_settings() -> list[dict[str, Any]]:
+    """List every known project with its .claude settings."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, settings_svc.list_project_settings)
+
+
+@app.get("/api/settings/projects/{project_key}")
+async def get_project_settings(project_key: str) -> dict[str, Any]:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, settings_svc.get_project_settings, project_key)
+
+
+@app.put("/api/settings/projects/{project_key}")
+async def put_project_settings(project_key: str, body: dict[str, Any]) -> dict[str, Any]:
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, settings_svc.set_project_settings, project_key, body)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    return body
+
+
+@app.post("/api/settings/projects/{project_key}/permissions/{kind}")
+async def add_permission(
+    project_key: str, kind: str, body: dict[str, str]
+) -> dict[str, Any]:
+    if kind not in ("allow", "deny"):
+        raise HTTPException(status_code=400, detail="kind must be 'allow' or 'deny'")
+    permission = body.get("permission", "").strip()
+    if not permission:
+        raise HTTPException(status_code=400, detail="permission is required")
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        None, settings_svc.add_permission, project_key, permission, kind
+    )
+
+
+@app.delete("/api/settings/projects/{project_key}/permissions/{kind}/{permission:path}")
+async def remove_permission(
+    project_key: str, kind: str, permission: str
+) -> dict[str, Any]:
+    if kind not in ("allow", "deny"):
+        raise HTTPException(status_code=400, detail="kind must be 'allow' or 'deny'")
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        None, settings_svc.remove_permission, project_key, permission, kind
+    )
 
 
 @app.get("/api/health")

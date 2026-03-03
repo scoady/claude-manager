@@ -1,6 +1,11 @@
 /** Claude Agent Manager — main application */
 import { api } from './api.js';
 import { WSClient } from './ws.js';
+import {
+  initSettingsTabs,
+  initGlobalSettingsEditor,
+  loadGlobalSettings,
+} from './settings.js';
 
 // ─── State ─────────────────────────────────────────────────────────────────────
 const state = {
@@ -604,6 +609,33 @@ async function init() {
     state.autoScroll = true;
     dom.messageList.scrollTop = dom.messageList.scrollHeight;
   });
+
+  // ── View switching (Agents ↔ Settings) ──────────────────────────────────
+  const agentsView   = document.getElementById('main-layout');
+  const settingsView = document.getElementById('settings-view');
+
+  document.querySelectorAll('.nav-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const view = tab.dataset.view;
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      if (view === 'settings') {
+        agentsView.classList.add('hidden');
+        settingsView.classList.remove('hidden');
+        loadGlobalSettings();
+      } else {
+        settingsView.classList.add('hidden');
+        agentsView.classList.remove('hidden');
+      }
+    });
+  });
+
+  // Default: agents tab active
+  document.getElementById('tab-agents').classList.add('active');
+
+  // Init settings panel
+  initSettingsTabs();
+  initGlobalSettingsEditor();
 
   dom.messageList.addEventListener('scroll', () => {
     const { scrollTop, scrollHeight, clientHeight } = dom.messageList;
