@@ -8,10 +8,22 @@ from pydantic import BaseModel
 
 
 class AgentStatus(str, Enum):
-    WORKING = "working"        # Currently processing a response
-    ACTIVE = "active"          # Recently active
-    IDLE = "idle"              # Process running but quiet
-    DISCONNECTED = "disconnected"  # Process not found
+    WORKING = "working"
+    ACTIVE = "active"
+    IDLE = "idle"
+    DISCONNECTED = "disconnected"
+
+
+class SessionPhase(str, Enum):
+    STARTING    = "starting"
+    THINKING    = "thinking"
+    GENERATING  = "generating"
+    TOOL_INPUT  = "tool_input"
+    TOOL_EXEC   = "tool_exec"
+    IDLE        = "idle"
+    INJECTING   = "injecting"
+    CANCELLED   = "cancelled"
+    ERROR       = "error"
 
 
 class MessageRole(str, Enum):
@@ -126,14 +138,21 @@ class GlobalStats(BaseModel):
 
 
 class WSMessageType(str, Enum):
-    PROJECT_LIST = "project_list"       # Full project list
-    PROJECT_UPDATE = "project_update"   # Single project changed
-    AGENT_SPAWNED = "agent_spawned"     # New agent started
-    AGENT_DONE = "agent_done"           # Agent finished
-    AGENT_STREAM = "agent_stream"       # Streaming chunk from subprocess
-    AGENT_UPDATE = "agent_update"       # Agent status changed
-    STATS_UPDATE = "stats_update"       # Global stats
-    ERROR = "error"
+    PROJECT_LIST    = "project_list"
+    PROJECT_UPDATE  = "project_update"
+    AGENT_SPAWNED   = "agent_spawned"
+    AGENT_DONE      = "agent_done"
+    AGENT_STREAM    = "agent_stream"
+    AGENT_UPDATE    = "agent_update"
+    AGENT_MILESTONE = "agent_milestone"
+    SESSION_PHASE   = "session_phase"
+    TOOL_START      = "tool_start"
+    TOOL_DONE       = "tool_done"
+    TURN_DONE       = "turn_done"
+    INJECTION_ACK   = "injection_ack"
+    RULE_FIRED      = "rule_fired"
+    STATS_UPDATE    = "stats_update"
+    ERROR           = "error"
 
 
 class WSMessage(BaseModel):

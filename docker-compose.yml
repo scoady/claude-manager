@@ -6,12 +6,13 @@ services:
     ports:
       - "4040:4040"
     volumes:
-      # Auth credentials + session JSONL files written by claude CLI
+      # ~/.claude mounted for session JSONL persistence
       - "${HOME}/.claude:/root/.claude"
-      # Managed projects root — same absolute path inside and outside so
-      # path strings displayed in the UI match what's on disk
+      # Managed projects — same absolute path inside and outside container
+      # so path strings in the UI match what's on disk
       - "${MANAGED_PROJECTS_DIR:-${HOME}/git/claude-managed-projects}:${MANAGED_PROJECTS_DIR:-${HOME}/git/claude-managed-projects}"
     environment:
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
       CLAUDE_DATA_DIR: /root/.claude
       MANAGED_PROJECTS_DIR: "${MANAGED_PROJECTS_DIR:-${HOME}/git/claude-managed-projects}"
     restart: unless-stopped
