@@ -51,9 +51,7 @@ frontend:
   ingress:
     enabled: true
     className: nginx
-    # Leave host empty to match all hostnames (default for kind / localhost).
-    # Set to a real hostname for production: claude-manager.example.com
-    host: ""
+    host: claude-manager.localhost
 
   resources:
     requests:
