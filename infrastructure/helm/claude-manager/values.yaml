@@ -25,11 +25,11 @@ backend:
 
   # Path to the claude CLI binary on the host node.
   # Mounted into the container so the backend can spawn `claude -p --resume`.
-  claudeBinPath: /home/ubuntu/.local/bin/claude
+  claudeBinPath: /Users/ayx106492/.local/bin/claude
 
   # Path to the user's .claude directory on the host node.
   # Contains session JSONL files read by the backend.
-  claudeDataPath: /home/ubuntu/.claude
+  claudeDataPath: /Users/ayx106492/.claude
 
   resources:
     requests:
