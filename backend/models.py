@@ -65,7 +65,6 @@ class ManagedProject(BaseModel):
 
 class BootstrapProjectRequest(BaseModel):
     name: str
-    goal: str
     description: str
 
 

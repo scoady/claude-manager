@@ -151,7 +151,7 @@ async function selectProject(name) {
   }
 
   // Render agents for this project
-  renderAgentsGrid(state.agents, name, selectAgent, killAgent);
+  renderAgentsGrid(state.agents, name, state.streamBuffers, selectAgent, killAgent, askStatus);
   updateDispatchBtn();
 }
 
@@ -343,6 +343,17 @@ async function injectMessage() {
   }
 }
 
+async function askStatus(sessionId) {
+  const id = sessionId || state.selectedAgentId;
+  if (!id) return;
+  try {
+    await api.injectMessage(id, 'Please give a brief status update: what have you completed, what are you working on right now, and what\'s next?');
+    toast('Status request sent', 'success', 2000);
+  } catch (e) {
+    toast(`Failed: ${e.message}`, 'error');
+  }
+}
+
 async function killAgent(sessionId) {
   try {
     await api.killAgent(sessionId);
@@ -352,7 +363,7 @@ async function killAgent(sessionId) {
     // Remove from local agents list
     state.agents = state.agents.filter(a => a.session_id !== sessionId);
     if (state.selectedProject) {
-      renderAgentsGrid(state.agents, state.selectedProject, selectAgent, killAgent);
+      renderAgentsGrid(state.agents, state.selectedProject, state.streamBuffers, selectAgent, killAgent, askStatus);
     }
     toast('Agent killed', 'warn', 2000);
   } catch (e) {
@@ -410,7 +421,7 @@ function onWSMessage(msg) {
         });
       }
       if (state.selectedProject === project_name) {
-        renderAgentsGrid(state.agents, project_name, selectAgent, killAgent);
+        renderAgentsGrid(state.agents, project_name, state.streamBuffers, selectAgent, killAgent, askStatus);
       }
       break;
     }
@@ -423,7 +434,7 @@ function onWSMessage(msg) {
         agent.last_chunk = null;
       }
       if (state.selectedProject) {
-        renderAgentsGrid(state.agents, state.selectedProject, selectAgent, killAgent);
+        renderAgentsGrid(state.agents, state.selectedProject, state.streamBuffers, selectAgent, killAgent, askStatus);
       }
       // If this agent is open in detail panel, reload history
       if (state.selectedAgentId === session_id) {
@@ -471,7 +482,7 @@ function onWSMessage(msg) {
         state.agents[idx] = { ...state.agents[idx], ...updated };
       }
       if (state.selectedProject === updated.project_name) {
-        renderAgentsGrid(state.agents, updated.project_name, selectAgent, killAgent);
+        renderAgentsGrid(state.agents, updated.project_name, state.streamBuffers, selectAgent, killAgent, askStatus);
       }
       if (state.selectedAgentId === updated.session_id) {
         if (dom.agentDetailStatus) {
@@ -498,7 +509,7 @@ function onWSMessage(msg) {
         }
       }
       if (state.selectedProject === project_name) {
-        renderAgentsGrid(state.agents, project_name, selectAgent, killAgent);
+        renderAgentsGrid(state.agents, project_name, state.streamBuffers, selectAgent, killAgent, askStatus);
       }
       break;
     }
@@ -530,40 +541,43 @@ function openNewProjectModal() {
 function closeNewProjectModal() {
   $('new-project-modal')?.classList.add('hidden');
   if ($('new-project-name')) $('new-project-name').value = '';
-  if ($('new-project-goal')) $('new-project-goal').value = '';
   if ($('new-project-description')) $('new-project-description').value = '';
 }
 
 async function createProject() {
   const name = $('new-project-name')?.value.trim();
-  const goal = $('new-project-goal')?.value.trim();
   const description = $('new-project-description')?.value.trim();
 
   if (!name) {
     toast('Project name is required', 'error');
     return;
   }
-  if (!goal) {
-    toast('Goal is required', 'error');
+  if (!description) {
+    toast('Please describe what you want to build', 'error');
     return;
   }
 
   const btn = $('modal-create-btn');
-  if (btn) btn.disabled = true;
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Starting agent…';
+  }
 
   try {
-    const project = await api.createProject(name, goal, description || goal);
+    const project = await api.createProject(name, description);
     state.projects.push(project);
     renderProjectList(state.projects, state.selectedProject, selectProject);
     renderProjectTileGrid(state.projects, selectProject);
     closeNewProjectModal();
-    toast(`Project "${name}" created`, 'success');
-    // Auto-select the new project
+    toast(`"${name}" created — agent starting`, 'success');
     await selectProject(name);
   } catch (e) {
     toast(`Create failed: ${e.message}`, 'error');
   } finally {
-    if (btn) btn.disabled = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Create & Start Agent';
+    }
   }
 }
 
@@ -685,6 +699,7 @@ async function init() {
   $('kill-agent-btn')?.addEventListener('click', () => {
     if (state.selectedAgentId) killAgent(state.selectedAgentId);
   });
+  $('ask-status-btn')?.addEventListener('click', () => askStatus());
 
   // ── New project modal ─────────────────────────────────────────────────────
   $('new-project-btn')?.addEventListener('click', openNewProjectModal);

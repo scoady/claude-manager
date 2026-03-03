@@ -1552,7 +1552,7 @@ pre {
 .inject-context {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   margin-bottom: 6px;
 }
 
@@ -1560,6 +1560,21 @@ pre {
   font-family: var(--font-mono);
   font-size: 9px;
   color: var(--text-muted);
+}
+
+.inject-quick-btn {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--accent-blue);
+  padding: 2px 7px;
+  border: 1px solid rgba(59,130,246,0.3);
+  border-radius: 3px;
+  background: rgba(59,130,246,0.08);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.inject-quick-btn:hover {
+  background: rgba(59,130,246,0.18);
 }
 
 .inject-row {
@@ -1978,7 +1993,7 @@ pre {
   gap: 8px;
 }
 
-.agent-card-status {
+.agent-card-status-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -1986,14 +2001,14 @@ pre {
   margin-top: 3px;
   background: var(--text-muted);
 }
-.agent-card-status.working {
+.agent-card-status-dot.working {
   background: var(--accent-amber);
   box-shadow: var(--shadow-glow-amber);
 }
-.agent-card-status.working.pulse { animation: pulse-amber 1.2s ease-in-out infinite; }
-.agent-card-status.idle    { background: var(--accent-blue); opacity: 0.5; }
-.agent-card-status.active  { background: var(--accent-green); }
-.agent-card-status.disconnected { background: var(--text-muted); }
+.agent-card-status-dot.working.pulse { animation: pulse-amber 1.2s ease-in-out infinite; }
+.agent-card-status-dot.idle    { background: var(--accent-blue); opacity: 0.5; }
+.agent-card-status-dot.active  { background: var(--accent-green); }
+.agent-card-status-dot.disconnected { background: var(--text-muted); }
 
 .agent-card-task {
   flex: 1;
@@ -2006,12 +2021,36 @@ pre {
   -webkit-box-orient: vertical;
 }
 
-.agent-card-kill {
+.agent-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   flex-shrink: 0;
   opacity: 0;
   transition: opacity var(--transition);
 }
-.agent-mini-card:hover .agent-card-kill { opacity: 1; }
+.agent-mini-card:hover .agent-card-actions { opacity: 1; }
+
+.agent-card-status-btn {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--accent-blue);
+  padding: 0 5px;
+  height: 18px;
+  border: 1px solid rgba(59,130,246,0.3);
+  border-radius: 3px;
+  background: rgba(59,130,246,0.08);
+}
+.agent-card-status-btn:hover {
+  background: rgba(59,130,246,0.18);
+}
+
+.agent-card-kill {
+  flex-shrink: 0;
+  opacity: 1;
+  transition: opacity var(--transition);
+}
+.agent-mini-card:hover .agent-card-kill { opacity: 1; }  /* kept for direct kill btn fallback */
 
 .agent-card-preview {
   font-family: var(--font-mono);

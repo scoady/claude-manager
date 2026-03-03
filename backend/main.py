@@ -144,16 +144,18 @@ async def create_project(body: BootstrapProjectRequest) -> ManagedProject:
             None,
             projects_svc.bootstrap_project,
             body.name,
-            body.goal,
             body.description,
         )
         await _broadcast_project_list()
 
-        # Auto-spawn an agent to start working on the project goals
+        # Auto-spawn an agent to start working immediately
         initial_task = (
-            "Read PROJECT.md to understand the project goals and scope. "
-            "Then create an initial plan, break the goal into actionable tasks, "
-            "and begin working on the first task. Report your progress as you go."
+            "Read PROJECT.md to understand the project goal. "
+            "Then open TASKS.md and replace the placeholder with a concrete checklist of tasks needed to accomplish the goal. "
+            "Then start working through the tasks immediately. "
+            "Before each task write '→ Starting: <task>' and after write '✓ Done: <task>'. "
+            "Update TASKS.md checkboxes as you complete each task. "
+            "Keep going until all tasks are done."
         )
         asyncio.create_task(
             spawner.dispatch_agent(

@@ -221,6 +221,7 @@
         <div id="inject-area" class="inject-area">
           <div class="inject-context">
             <span class="inject-hint">Inject message · Enter to send</span>
+            <button class="inject-quick-btn" id="ask-status-btn" title="Ask agent for a status update">Status?</button>
           </div>
           <div class="inject-row">
             <textarea
@@ -313,30 +314,21 @@
             autocomplete="off"
             spellcheck="false"
           />
-          <span class="form-hint">Lowercase letters, numbers, and hyphens only</span>
+          <span class="form-hint">Lowercase, numbers, hyphens</span>
         </div>
         <div class="form-group">
-          <label class="form-label" for="new-project-goal">Goal</label>
-          <textarea
-            id="new-project-goal"
-            class="form-textarea"
-            placeholder="What should this project accomplish?"
-            rows="3"
-          ></textarea>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="new-project-description">Scope / description</label>
+          <label class="form-label" for="new-project-description">What do you want to build?</label>
           <textarea
             id="new-project-description"
             class="form-textarea"
-            placeholder="What's in scope? What technologies? Any constraints?"
-            rows="3"
+            placeholder="Describe your idea — what it is, what it should do, any tech preferences or constraints. The agent will read this and get to work."
+            rows="6"
           ></textarea>
         </div>
       </div>
       <div class="modal-footer">
         <button class="settings-btn-secondary" id="modal-cancel-btn">Cancel</button>
-        <button class="settings-btn-primary" id="modal-create-btn">Bootstrap Project</button>
+        <button class="settings-btn-primary" id="modal-create-btn">Create &amp; Start Agent</button>
       </div>
     </div>
   </div>

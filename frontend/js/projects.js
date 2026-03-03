@@ -87,30 +87,36 @@ export function renderProjectTileGrid(projects, onSelect) {
 let _onSelectAgent = null;
 let _onKillAgent = null;
 
+// Grid-level event delegation (ask-status button added)
+let _onAskStatus = null;
+
 /**
  * Render the agent cards grid inside the project workbench.
- * Uses event delegation on the grid for click handling.
+ * streamBuffers: session_id → accumulated stream text (for card preview)
  */
-export function renderAgentsGrid(agents, projectName, onSelectAgent, onKillAgent) {
+export function renderAgentsGrid(agents, projectName, streamBuffers, onSelectAgent, onKillAgent, onAskStatus) {
   const grid = document.getElementById('agents-grid');
   const emptyEl = document.getElementById('agents-grid-empty');
   if (!grid) return;
 
-  // Store callbacks for delegation
   _onSelectAgent = onSelectAgent;
   _onKillAgent = onKillAgent;
+  _onAskStatus = onAskStatus;
 
-  // Attach delegated listeners once
   if (!grid._delegated) {
     grid._delegated = true;
     grid.addEventListener('click', (e) => {
       const killBtn = e.target.closest('.agent-card-kill');
+      const statusBtn = e.target.closest('.agent-card-status-btn');
       const card = e.target.closest('.agent-mini-card');
       if (!card) return;
       const sid = card.dataset.session;
       if (killBtn) {
         e.stopPropagation();
         _onKillAgent?.(sid);
+      } else if (statusBtn) {
+        e.stopPropagation();
+        _onAskStatus?.(sid);
       } else {
         _onSelectAgent?.(sid);
       }
@@ -126,7 +132,6 @@ export function renderAgentsGrid(agents, projectName, onSelectAgent, onKillAgent
   }
   emptyEl?.classList.add('hidden');
 
-  // Reconcile: update existing cards, add new, remove stale
   const existingCards = new Map(
     [...grid.querySelectorAll('.agent-mini-card')].map(el => [el.dataset.session, el])
   );
@@ -139,39 +144,44 @@ export function renderAgentsGrid(agents, projectName, onSelectAgent, onKillAgent
   for (const agent of projectAgents) {
     const sid = agent.session_id;
     if (!sid) continue;
+    const preview = ((streamBuffers || {})[sid] || '').slice(-200);
     const existing = existingCards.get(sid);
     if (existing) {
-      _updateAgentCard(existing, agent);
+      _updateAgentCard(existing, agent, preview);
     } else {
       const card = document.createElement('div');
       card.className = 'agent-mini-card';
       card.dataset.session = sid;
-      _updateAgentCard(card, agent);
+      _updateAgentCard(card, agent, preview);
       grid.insertBefore(card, emptyEl || null);
     }
   }
 }
 
-function _updateAgentCard(card, agent) {
+function _updateAgentCard(card, agent, preview = '') {
   const isWorking = agent.status === 'working';
   const milestone = agent.current_milestone || (agent.milestones && agent.milestones[agent.milestones.length - 1]) || null;
 
   card.className = `agent-mini-card status-${agent.status}`;
   card.innerHTML = `
     <div class="agent-card-top">
-      <div class="agent-card-status ${agent.status} ${isWorking ? 'pulse' : ''}"></div>
+      <div class="agent-card-status-dot ${agent.status} ${isWorking ? 'pulse' : ''}"></div>
       <span class="agent-card-task">${escapeHtml((agent.task || '').slice(0, 60))}${(agent.task || '').length > 60 ? '…' : ''}</span>
-      <button class="agent-card-kill icon-btn danger" title="Kill agent">
-        <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-          <path d="M2 2l7 7M9 2l-7 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-        </svg>
-      </button>
+      <div class="agent-card-actions">
+        <button class="agent-card-status-btn icon-btn" title="Ask for status">?</button>
+        <button class="agent-card-kill icon-btn danger" title="Kill agent">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+            <path d="M2 2l7 7M9 2l-7 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
     </div>
     ${milestone ? `<div class="agent-card-milestone">${escapeHtml(milestone)}</div>` : ''}
+    ${preview ? `<div class="agent-card-preview">${escapeHtml(preview)}</div>` : ''}
     <div class="agent-card-footer">
       <span class="agent-card-status-label">${agent.status}</span>
       ${agent.model ? `<span class="agent-card-model">${escapeHtml(agent.model.split('-').slice(-2).join('-'))}</span>` : ''}
-      ${agent.has_pending_injection ? '<span class="agent-card-pending">pending inject</span>' : ''}
+      ${agent.has_pending_injection ? '<span class="agent-card-pending">inject queued</span>' : ''}
     </div>`;
 }
 

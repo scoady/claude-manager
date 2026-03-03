@@ -15,22 +15,46 @@ MANAGED_DIR = Path(
 _PROJECT_MD_TEMPLATE = """\
 # {name}
 
-## Goal
-{goal}
-
-## Scope
 {description}
+"""
 
-## Constraints
-- (add constraints here)
+_TASKS_MD_TEMPLATE = """\
+# Tasks
+
+<!-- Agent: populate this checklist before starting work -->
+
+- [ ] (tasks will appear here)
 """
 
 _INSTRUCTIONS_TEMPLATE = """\
-# Working Preferences
+# Agent Instructions
 
-You are an AI agent working on the **{name}** project.
+You are an autonomous agent working on **{name}**.
+Your work is streamed live to the manager dashboard — your text output appears on the agent card in real time.
 
-Read PROJECT.md for full goals and scope before starting work.
+## Workflow
+
+1. Read `PROJECT.md` to fully understand the goal.
+2. Create (or update) `TASKS.md` with a concrete checklist before doing any work.
+3. Work through tasks one at a time. Keep working until all tasks are complete.
+
+## Status updates — IMPORTANT
+
+Write a short status line before and after each task so the dashboard stays current:
+
+  → Starting: <task name>
+  ✓ Done: <task name>
+  ⚠ Blocked: <reason>
+
+These lines appear live on your agent card. Keep them short and clear.
+
+## TASKS.md format
+
+  - [ ] task not started
+  - [~] task in progress
+  - [x] task complete
+
+Update checkboxes as you go so anyone can see overall progress at a glance.
 """
 
 _SETTINGS_TEMPLATE = {
@@ -121,48 +145,43 @@ def get_project(name: str, active_session_ids: list[str] | None = None) -> Manag
     )
 
 
-def bootstrap_project(name: str, goal: str, description: str) -> ManagedProject:
+def bootstrap_project(name: str, description: str) -> ManagedProject:
     """Create a new managed project directory with template files and git init."""
     project_dir = MANAGED_DIR / name
     if project_dir.exists():
         raise ValueError(f"Project '{name}' already exists")
 
-    # Create directory structure
     project_dir.mkdir(parents=True)
     claude_dir = project_dir / ".claude"
     claude_dir.mkdir()
 
-    # Write PROJECT.md
     (project_dir / "PROJECT.md").write_text(
-        _PROJECT_MD_TEMPLATE.format(name=name, goal=goal, description=description),
+        _PROJECT_MD_TEMPLATE.format(name=name, description=description),
         "utf-8",
     )
 
-    # Write .claude/INSTRUCTIONS.md
+    (project_dir / "TASKS.md").write_text(_TASKS_MD_TEMPLATE, "utf-8")
+
     (claude_dir / "INSTRUCTIONS.md").write_text(
         _INSTRUCTIONS_TEMPLATE.format(name=name),
         "utf-8",
     )
 
-    # Write .claude/settings.local.json
     (claude_dir / "settings.local.json").write_text(
         json.dumps(_SETTINGS_TEMPLATE, indent=2),
         "utf-8",
     )
 
-    # Write .claude/manager.json
     (claude_dir / "manager.json").write_text(
         json.dumps(_MANAGER_CONFIG_DEFAULT, indent=2),
         "utf-8",
     )
 
-    # Write .gitignore
     (project_dir / ".gitignore").write_text(
         "__pycache__/\n*.pyc\n.env\n.DS_Store\nnode_modules/\n",
         "utf-8",
     )
 
-    # Git init + initial commit
     try:
         subprocess.run(["git", "init"], cwd=project_dir, check=True, capture_output=True)
         subprocess.run(["git", "add", "."], cwd=project_dir, check=True, capture_output=True)
@@ -173,13 +192,14 @@ def bootstrap_project(name: str, goal: str, description: str) -> ManagedProject:
             capture_output=True,
         )
     except (subprocess.CalledProcessError, FileNotFoundError):
-        pass  # Git not available or failed — directory still created
+        pass
 
+    short_desc = description[:120] if description else None
     return ManagedProject(
         name=name,
         path=str(project_dir),
-        description=description[:120] if description else None,
-        goal=goal,
+        description=short_desc,
+        goal=description,
         config=ProjectConfig(),
         active_session_ids=[],
     )
