@@ -22,14 +22,14 @@
         </div>
         <div class="app-title">
           <span class="title-main">Claude Agent Manager</span>
-          <span class="title-sub">control plane</span>
+          <span class="title-sub">orchestration</span>
         </div>
       </div>
       <div class="header-center">
         <div class="stats-bar" id="stats-bar">
           <div class="stat-item">
-            <span class="stat-value" id="stat-total">—</span>
-            <span class="stat-label">agents</span>
+            <span class="stat-value" id="stat-projects">—</span>
+            <span class="stat-label">projects</span>
           </div>
           <div class="stat-divider"></div>
           <div class="stat-item">
@@ -40,13 +40,8 @@
           <div class="stat-divider"></div>
           <div class="stat-item">
             <span class="stat-dot active"></span>
-            <span class="stat-value" id="stat-active">—</span>
-            <span class="stat-label">active</span>
-          </div>
-          <div class="stat-divider"></div>
-          <div class="stat-item">
-            <span class="stat-value" id="stat-messages">—</span>
-            <span class="stat-label">messages</span>
+            <span class="stat-value" id="stat-agents">—</span>
+            <span class="stat-label">agents</span>
           </div>
           <div class="stat-divider"></div>
           <div class="stat-item">
@@ -56,12 +51,14 @@
         </div>
       </div>
       <div class="header-right">
-        <button class="nav-tab" id="tab-agents" data-view="agents">
+        <button class="nav-tab active" id="tab-projects" data-view="projects">
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-            <circle cx="6.5" cy="4" r="2.5" stroke="currentColor" stroke-width="1.3"/>
-            <path d="M1 12c0-3.038 2.462-5.5 5.5-5.5S12 8.962 12 12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+            <rect x="1" y="1" width="4.5" height="4.5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="7.5" y="1" width="4.5" height="4.5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="1" y="7.5" width="4.5" height="4.5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="7.5" y="7.5" width="4.5" height="4.5" rx="1" stroke="currentColor" stroke-width="1.3"/>
           </svg>
-          Agents
+          Projects
         </button>
         <button class="nav-tab" id="tab-settings" data-view="settings">
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
@@ -78,103 +75,166 @@
       </div>
     </header>
 
-    <!-- Main layout -->
+    <!-- Main layout (projects view) -->
     <div id="main-layout">
-      <!-- Sidebar: Agent list -->
+
+      <!-- Left sidebar: project navigator -->
       <aside id="sidebar">
         <div class="sidebar-header">
-          <span class="sidebar-title">Agents</span>
-          <button class="icon-btn" id="refresh-btn" title="Refresh agents">
+          <span class="sidebar-title">Projects</span>
+          <button class="icon-btn" id="new-project-btn" title="New project">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M12 7A5 5 0 1 1 7 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              <path d="M7 2L9.5 4.5L7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
           </button>
         </div>
-        <div id="agent-list" class="agent-list">
+        <div id="project-list" class="project-list">
           <div class="empty-state">
-            <div class="empty-icon">
-              <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                <circle cx="16" cy="16" r="12" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M12 16h8M16 12v8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-            </div>
-            <p>Scanning for agents…</p>
+            <p>Scanning for projects…</p>
           </div>
         </div>
       </aside>
 
-      <!-- Center: Conversation view -->
-      <main id="conversation-panel">
-        <div id="conversation-header" class="conversation-header hidden">
-          <div class="conv-agent-info">
-            <div class="conv-status-dot" id="conv-status-dot"></div>
-            <div class="conv-meta">
-              <span class="conv-project" id="conv-project"></span>
-              <div class="conv-details">
-                <span class="conv-detail" id="conv-pid"></span>
-                <span class="conv-detail" id="conv-branch"></span>
-                <span class="conv-detail" id="conv-model"></span>
-              </div>
-            </div>
-          </div>
-          <div class="conv-actions">
-            <button class="pill-btn" id="scroll-bottom-btn">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <!-- Center: project workbench -->
+      <main id="project-workbench">
+        <!-- Empty state: tile grid of all projects -->
+        <div id="workbench-empty" class="workbench-empty">
+          <div class="workbench-empty-header">
+            <span class="workbench-empty-title">Managed Projects</span>
+            <button class="pill-btn" id="new-project-tile-btn">
+              <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                <path d="M5.5 1v9M1 5.5h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               </svg>
-              Jump to bottom
+              New Project
             </button>
           </div>
-        </div>
-
-        <div id="message-list" class="message-list">
-          <div class="empty-state" id="empty-conversation">
+          <div id="project-tile-grid" class="project-tile-grid">
+            <!-- Populated by JS -->
+          </div>
+          <div id="tile-grid-empty" class="tile-grid-empty hidden">
             <div class="empty-icon">
               <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
                 <path d="M24 8L8 16V32L24 40L40 32V16L24 8Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" opacity="0.4"/>
-                <circle cx="24" cy="24" r="5" fill="currentColor" opacity="0.3"/>
-                <path d="M17 24h14M24 17v14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
+                <path d="M18 24h12M24 18v12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>
               </svg>
             </div>
-            <p class="empty-title">Select an agent</p>
-            <p class="empty-sub">Choose an agent from the sidebar to view its conversation</p>
+            <p class="empty-title">No managed projects</p>
+            <p class="empty-sub">Create your first project to get started</p>
+            <button class="pill-btn" id="new-project-empty-btn" style="margin-top:16px">New Project</button>
           </div>
         </div>
 
-        <!-- Input bar -->
-        <div id="message-input-area" class="message-input-area hidden">
-          <div class="input-context">
-            <span id="input-agent-label" class="input-agent-label"></span>
-            <span class="input-hint">Enter to send · Shift+Enter for newline</span>
+        <!-- Project workbench: shown when a project is selected -->
+        <div id="workbench-project" class="workbench-project hidden">
+
+          <!-- Project header -->
+          <div id="workbench-header" class="workbench-header">
+            <div class="workbench-project-info">
+              <span class="workbench-project-name" id="wb-project-name"></span>
+              <span class="workbench-project-desc" id="wb-project-desc"></span>
+            </div>
+            <div class="workbench-header-actions">
+              <span class="workbench-parallelism-label">
+                Parallelism:
+                <select id="wb-parallelism" class="parallelism-select" title="Max concurrent agents">
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                </select>
+              </span>
+              <span class="workbench-model-label">
+                Model:
+                <select id="wb-model" class="model-select" title="Model override (blank = project default)">
+                  <option value="">project default</option>
+                  <option value="claude-opus-4-6">opus-4-6</option>
+                  <option value="claude-sonnet-4-6">sonnet-4-6</option>
+                  <option value="claude-haiku-4-5-20251001">haiku-4-5</option>
+                </select>
+              </span>
+            </div>
           </div>
-          <div class="input-row">
-            <textarea
-              id="message-input"
-              class="message-input"
-              placeholder="Send a message to this agent…"
-              rows="1"
-            ></textarea>
-            <button id="send-btn" class="send-btn" disabled>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M2 8h12M9 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
+
+          <!-- Running agents grid -->
+          <div id="agents-grid" class="agents-grid">
+            <!-- Agent cards inserted here -->
+            <div id="agents-grid-empty" class="agents-grid-empty hidden">
+              <p>No agents running — dispatch a task below</p>
+            </div>
+          </div>
+
+          <!-- Dispatch form -->
+          <div id="dispatch-area" class="dispatch-area">
+            <div class="dispatch-context">
+              <span class="dispatch-label">Dispatch to <strong id="dispatch-project-label"></strong></span>
+              <span class="dispatch-hint">Enter to dispatch · Shift+Enter for newline</span>
+            </div>
+            <div class="dispatch-row">
+              <textarea
+                id="task-input"
+                class="task-input"
+                placeholder="Give this project a task…"
+                rows="1"
+              ></textarea>
+              <button id="dispatch-btn" class="dispatch-btn" disabled>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M2 8h12M9 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </main>
 
-      <!-- Right panel: Activity feed -->
-      <aside id="activity-panel">
-        <div class="sidebar-header">
-          <span class="sidebar-title">Activity</span>
-          <div class="activity-live-badge">
-            <span class="activity-dot"></span>
-            live
+      <!-- Right panel: agent detail -->
+      <aside id="agent-detail" class="agent-detail hidden">
+        <div id="agent-detail-header" class="agent-detail-header">
+          <div class="agent-detail-info">
+            <div class="agent-detail-status" id="agent-detail-status"></div>
+            <div class="agent-detail-meta">
+              <span class="agent-detail-project" id="agent-detail-project"></span>
+              <span class="agent-detail-task" id="agent-detail-task"></span>
+            </div>
+          </div>
+          <div class="agent-detail-actions">
+            <button class="icon-btn danger" id="kill-agent-btn" title="Kill agent">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                <path d="M2 2l9 9M11 2l-9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <button class="icon-btn" id="close-detail-btn" title="Close panel">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                <path d="M9 4L5 6.5L9 9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
           </div>
         </div>
-        <div id="activity-feed" class="activity-feed">
-          <div class="activity-empty">No activity yet</div>
+
+        <!-- Conversation / stream view -->
+        <div id="agent-messages" class="agent-messages">
+          <div class="empty-state" id="agent-messages-empty">
+            <p style="color:var(--text-muted);font-size:12px">Waiting for agent output…</p>
+          </div>
+        </div>
+
+        <!-- Injection form -->
+        <div id="inject-area" class="inject-area">
+          <div class="inject-context">
+            <span class="inject-hint">Inject message · Enter to send</span>
+          </div>
+          <div class="inject-row">
+            <textarea
+              id="inject-input"
+              class="inject-input"
+              placeholder="Send a message to this agent…"
+              rows="1"
+            ></textarea>
+            <button id="inject-btn" class="inject-btn" disabled>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M1.5 7h11M7 1.5l5.5 5.5-5.5 5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </aside>
     </div>
@@ -183,8 +243,6 @@
   <!-- Settings view (hidden by default) -->
   <div id="settings-view" class="settings-view hidden">
     <div class="settings-layout">
-
-      <!-- Settings sidebar -->
       <nav class="settings-nav">
         <button class="settings-nav-item active" data-tab="global">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -202,18 +260,9 @@
           </svg>
           Plugins
         </button>
-        <button class="settings-nav-item" data-tab="projects">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M1.5 3.5h11M1.5 7h11M1.5 10.5h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-          </svg>
-          Projects
-        </button>
       </nav>
 
-      <!-- Settings content -->
       <div class="settings-content">
-
-        <!-- Global tab -->
         <div class="settings-tab active" id="settings-tab-global">
           <div class="settings-section-header">
             <h2>Global Settings</h2>
@@ -228,7 +277,6 @@
           </div>
         </div>
 
-        <!-- Plugins tab -->
         <div class="settings-tab" id="settings-tab-plugins">
           <div class="settings-section-header">
             <h2>Plugins</h2>
@@ -238,18 +286,57 @@
             <div class="settings-loading">Loading…</div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
 
-        <!-- Projects tab -->
-        <div class="settings-tab" id="settings-tab-projects">
-          <div class="settings-section-header">
-            <h2>Project Permissions</h2>
-            <p>Per-project tool allow / deny lists from <code>.claude/settings.local.json</code></p>
-          </div>
-          <div id="projects-settings-list" class="projects-settings-list">
-            <div class="settings-loading">Loading…</div>
-          </div>
+  <!-- New Project Modal -->
+  <div id="new-project-modal" class="modal hidden">
+    <div class="modal-backdrop" id="modal-backdrop"></div>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <span class="modal-title">New Managed Project</span>
+        <button class="icon-btn" id="modal-close-btn">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <path d="M2 2l9 9M11 2l-9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label" for="new-project-name">Project name</label>
+          <input
+            type="text"
+            id="new-project-name"
+            class="form-input"
+            placeholder="my-project"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <span class="form-hint">Lowercase letters, numbers, and hyphens only</span>
         </div>
-
+        <div class="form-group">
+          <label class="form-label" for="new-project-goal">Goal</label>
+          <textarea
+            id="new-project-goal"
+            class="form-textarea"
+            placeholder="What should this project accomplish?"
+            rows="3"
+          ></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="new-project-description">Scope / description</label>
+          <textarea
+            id="new-project-description"
+            class="form-textarea"
+            placeholder="What's in scope? What technologies? Any constraints?"
+            rows="3"
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="settings-btn-secondary" id="modal-cancel-btn">Cancel</button>
+        <button class="settings-btn-primary" id="modal-create-btn">Bootstrap Project</button>
       </div>
     </div>
   </div>

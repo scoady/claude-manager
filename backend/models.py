@@ -8,9 +8,9 @@ from pydantic import BaseModel
 
 
 class AgentStatus(str, Enum):
-    ACTIVE = "active"      # Process running, recently active
-    WORKING = "working"    # Currently processing a response
-    IDLE = "idle"          # Process running but quiet
+    WORKING = "working"        # Currently processing a response
+    ACTIVE = "active"          # Recently active
+    IDLE = "idle"              # Process running but quiet
     DISCONNECTED = "disconnected"  # Process not found
 
 
@@ -46,20 +46,59 @@ class AgentMessage(BaseModel):
     model: str | None = None
 
 
+# ─── Managed Project models ────────────────────────────────────────────────────
+
+
+class ProjectConfig(BaseModel):
+    parallelism: int = 1
+    model: str | None = None
+
+
+class ManagedProject(BaseModel):
+    name: str
+    path: str
+    description: str | None = None   # First non-heading line of PROJECT.md
+    goal: str | None = None          # Full PROJECT.md content
+    config: ProjectConfig = ProjectConfig()
+    active_session_ids: list[str] = []
+
+
+class BootstrapProjectRequest(BaseModel):
+    name: str
+    goal: str
+    description: str
+
+
+class DispatchRequest(BaseModel):
+    task: str
+    model: str | None = None
+
+
+class InjectRequest(BaseModel):
+    message: str
+
+
+# ─── Agent (runtime) ──────────────────────────────────────────────────────────
+
+
 class Agent(BaseModel):
     session_id: str
     pid: int | None = None
     project_name: str
     project_path: str
     status: AgentStatus
-    last_activity: str | None = None
+    task: str | None = None           # The dispatch prompt
+    last_chunk: str | None = None     # Most recent streaming output line
     message_count: int = 0
-    current_task: str | None = None  # Last user message summary
     model: str | None = None
     git_branch: str | None = None
     cpu_percent: float | None = None
     mem_percent: float | None = None
     started_at: str | None = None
+    has_pending_injection: bool = False
+
+
+# ─── Legacy send/response (kept for inject endpoint) ──────────────────────────
 
 
 class SendMessageRequest(BaseModel):
@@ -73,23 +112,28 @@ class SendMessageResponse(BaseModel):
     error: str | None = None
 
 
+# ─── Stats ────────────────────────────────────────────────────────────────────
+
+
 class GlobalStats(BaseModel):
+    total_projects: int
     total_agents: int
-    active_agents: int
     working_agents: int
     idle_agents: int
-    total_messages: int
     uptime_seconds: float
 
 
+# ─── WebSocket ────────────────────────────────────────────────────────────────
+
+
 class WSMessageType(str, Enum):
-    AGENT_LIST = "agent_list"
-    AGENT_UPDATE = "agent_update"
-    NEW_MESSAGE = "new_message"
-    AGENT_CONNECTED = "agent_connected"
-    AGENT_DISCONNECTED = "agent_disconnected"
-    STATS_UPDATE = "stats_update"
-    ACTIVITY_EVENT = "activity_event"
+    PROJECT_LIST = "project_list"       # Full project list
+    PROJECT_UPDATE = "project_update"   # Single project changed
+    AGENT_SPAWNED = "agent_spawned"     # New agent started
+    AGENT_DONE = "agent_done"           # Agent finished
+    AGENT_STREAM = "agent_stream"       # Streaming chunk from subprocess
+    AGENT_UPDATE = "agent_update"       # Agent status changed
+    STATS_UPDATE = "stats_update"       # Global stats
     ERROR = "error"
 
 

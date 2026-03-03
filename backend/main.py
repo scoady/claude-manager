@@ -5,7 +5,6 @@ import asyncio
 import json
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -16,19 +15,18 @@ from fastapi.staticfiles import StaticFiles
 
 from .models import (
     Agent,
-    AgentMessage,
+    AgentStatus,
+    BootstrapProjectRequest,
+    DispatchRequest,
     GlobalStats,
-    SendMessageRequest,
-    SendMessageResponse,
+    InjectRequest,
+    ManagedProject,
+    ProjectConfig,
     WSMessageType,
 )
-from .services.agents import (
-    PROJECTS_DIR,
-    discover_agents,
-    poll_for_updates,
-    read_session_messages,
-)
-from .services.message_sender import send_message
+from .services import projects as projects_svc
+from .services import spawner
+from .services.agents import read_session_messages
 from .services import settings as settings_svc
 from .ws_manager import WSManager
 
@@ -36,98 +34,59 @@ from .ws_manager import WSManager
 
 ws_manager = WSManager()
 _start_time = time.time()
-_agent_cache: list[Agent] = []
-_cache_lock = asyncio.Lock()
-
-POLL_INTERVAL = 1.5   # seconds between file-change polls
-REFRESH_INTERVAL = 5.0  # seconds between full agent rediscovery
 
 # ─── Background tasks ─────────────────────────────────────────────────────────
 
 
-async def _refresh_agents_task() -> None:
-    """Periodically rediscover all agents and broadcast updates."""
-    global _agent_cache
+async def _broadcast_project_list() -> None:
+    """Broadcast current project list with active agent info."""
+    active_map: dict[str, list[str]] = {}
+    for agent in spawner.get_running_agents():
+        if agent.session_id:
+            active_map.setdefault(agent.project_name, []).append(agent.session_id)
+
+    project_list = projects_svc.list_projects(active_map)
+    await ws_manager.broadcast(
+        WSMessageType.PROJECT_LIST,
+        [p.model_dump() for p in project_list],
+    )
+
+
+async def _watch_agents_task() -> None:
+    """Monitor spawned agents, clean up finished ones, broadcast updates."""
     while True:
-        await asyncio.sleep(REFRESH_INTERVAL)
+        await asyncio.sleep(1.0)
         try:
-            agents = await discover_agents()
-            async with _cache_lock:
-                _agent_cache = agents
-            await ws_manager.broadcast(
-                WSMessageType.AGENT_LIST,
-                [a.model_dump() for a in agents],
-            )
-            stats = _compute_stats(agents)
-            await ws_manager.broadcast(
-                WSMessageType.STATS_UPDATE,
-                stats.model_dump(),
-            )
+            pruned = spawner.prune_finished()
+            if pruned:
+                await _broadcast_project_list()
+
+            stats = _compute_stats()
+            await ws_manager.broadcast(WSMessageType.STATS_UPDATE, stats.model_dump())
         except Exception as exc:
-            print(f"[refresh-agents] error: {exc}")
+            print(f"[watch-agents] error: {exc}")
 
 
-async def _poll_messages_task() -> None:
-    """Poll session files for new messages and broadcast them."""
-    known: dict[str, int] = {}
+async def _project_refresh_task() -> None:
+    """Periodically broadcast the project list."""
     while True:
-        await asyncio.sleep(POLL_INTERVAL)
+        await asyncio.sleep(5.0)
         try:
-            updates = await poll_for_updates(known)
-            for session_id, new_msgs in updates:
-                # Update known message counts
-                known[session_id] = known.get(session_id, 0) + len(new_msgs)
-
-                for msg in new_msgs:
-                    await ws_manager.broadcast(
-                        WSMessageType.NEW_MESSAGE,
-                        {"session_id": session_id, "message": msg.model_dump()},
-                    )
-                    # Build activity event
-                    activity_text = _summarize_message(msg)
-                    if activity_text:
-                        agent = _find_agent(session_id)
-                        await ws_manager.broadcast(
-                            WSMessageType.ACTIVITY_EVENT,
-                            {
-                                "session_id": session_id,
-                                "project": agent.project_name if agent else session_id[:8],
-                                "text": activity_text,
-                                "role": msg.role,
-                                "timestamp": msg.timestamp or datetime.now(timezone.utc).isoformat(),
-                            },
-                        )
+            await _broadcast_project_list()
         except Exception as exc:
-            print(f"[poll-messages] error: {exc}")
+            print(f"[project-refresh] error: {exc}")
 
 
-def _summarize_message(msg: AgentMessage) -> str | None:
-    """Generate a short activity line for a message."""
-    for c in msg.content:
-        if c.type == "text" and c.text:
-            text = c.text.strip()
-            return text[:72] + "…" if len(text) > 72 else text
-        if c.type == "tool_use" and c.tool_call:
-            return f"⚙ {c.tool_call.name}()"
-    return None
-
-
-def _find_agent(session_id: str) -> Agent | None:
-    return next((a for a in _agent_cache if a.session_id == session_id), None)
-
-
-def _compute_stats(agents: list[Agent]) -> GlobalStats:
-    from .models import AgentStatus
-    active = sum(1 for a in agents if a.status == AgentStatus.ACTIVE)
+def _compute_stats() -> GlobalStats:
+    agents = spawner.get_running_agents()
     working = sum(1 for a in agents if a.status == AgentStatus.WORKING)
     idle = sum(1 for a in agents if a.status == AgentStatus.IDLE)
-    total_msgs = sum(a.message_count for a in agents)
+    projects = projects_svc.list_projects()
     return GlobalStats(
+        total_projects=len(projects),
         total_agents=len(agents),
-        active_agents=active,
         working_agents=working,
         idle_agents=idle,
-        total_messages=total_msgs,
         uptime_seconds=time.time() - _start_time,
     )
 
@@ -137,13 +96,9 @@ def _compute_stats(agents: list[Agent]) -> GlobalStats:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _agent_cache
-    # Initial discovery
-    _agent_cache = await discover_agents()
-    # Start background tasks
     tasks = [
-        asyncio.create_task(_refresh_agents_task()),
-        asyncio.create_task(_poll_messages_task()),
+        asyncio.create_task(_watch_agents_task()),
+        asyncio.create_task(_project_refresh_task()),
     ]
     yield
     for t in tasks:
@@ -154,8 +109,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Claude Agent Manager",
-    description="Real-time control panel for local Claude agents",
-    version="1.0.0",
+    description="Agent orchestration dashboard for managed projects",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -166,73 +121,147 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ─── REST API ─────────────────────────────────────────────────────────────────
+# ─── Projects API ─────────────────────────────────────────────────────────────
+
+
+@app.get("/api/projects", response_model=list[ManagedProject])
+async def list_projects() -> list[ManagedProject]:
+    """List all managed projects with active agent counts."""
+    active_map: dict[str, list[str]] = {}
+    for agent in spawner.get_running_agents():
+        if agent.session_id:
+            active_map.setdefault(agent.project_name, []).append(agent.session_id)
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, projects_svc.list_projects, active_map)
+
+
+@app.post("/api/projects", response_model=ManagedProject, status_code=201)
+async def create_project(body: BootstrapProjectRequest) -> ManagedProject:
+    """Bootstrap a new managed project."""
+    try:
+        loop = asyncio.get_event_loop()
+        project = await loop.run_in_executor(
+            None,
+            projects_svc.bootstrap_project,
+            body.name,
+            body.goal,
+            body.description,
+        )
+        await _broadcast_project_list()
+        return project
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/projects/{name}", response_model=ManagedProject)
+async def get_project(name: str) -> ManagedProject:
+    active_sessions = [
+        a.session_id
+        for a in spawner.get_running_for_project(name)
+        if a.session_id
+    ]
+    loop = asyncio.get_event_loop()
+    project = await loop.run_in_executor(
+        None, projects_svc.get_project, name, active_sessions
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+@app.put("/api/projects/{name}/config", response_model=ProjectConfig)
+async def update_project_config(name: str, config: ProjectConfig) -> ProjectConfig:
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, projects_svc.update_project_config, name, config)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return config
+
+
+@app.post("/api/projects/{name}/dispatch", status_code=202)
+async def dispatch_task(name: str, body: DispatchRequest) -> dict[str, Any]:
+    """Spawn one or more agents for a project task."""
+    loop = asyncio.get_event_loop()
+    project = await loop.run_in_executor(None, projects_svc.get_project, name, [])
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    parallelism = project.config.parallelism
+    model = body.model or project.config.model
+
+    pending_keys = []
+    for _ in range(parallelism):
+        key = await spawner.dispatch_agent(
+            project_name=name,
+            project_path=project.path,
+            task=body.task,
+            model=model,
+            ws_manager=ws_manager,
+        )
+        pending_keys.append(key)
+
+    return {"status": "dispatched", "pending_keys": pending_keys, "parallelism": parallelism}
+
+
+# ─── Agents API ────────────────────────────────────────────────────────────────
 
 
 @app.get("/api/agents", response_model=list[Agent])
 async def list_agents() -> list[Agent]:
-    """List all discovered Claude agents."""
-    async with _cache_lock:
-        return _agent_cache
+    """List all currently running agents."""
+    agents = spawner.get_running_agents()
+    return [
+        Agent(
+            session_id=a.session_id or f"pending-{a.proc.pid}",
+            pid=a.proc.pid,
+            project_name=a.project_name,
+            project_path=a.project_path,
+            status=a.status,
+            task=a.task,
+            last_chunk=a.last_chunk(),
+            model=a.model,
+            started_at=a.started_at,
+            has_pending_injection=a.pending_injection is not None,
+        )
+        for a in agents
+    ]
 
 
-@app.get("/api/agents/{session_id}", response_model=Agent)
-async def get_agent(session_id: str) -> Agent:
-    agent = _find_agent(session_id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-    return agent
-
-
-@app.get("/api/agents/{session_id}/messages", response_model=list[AgentMessage])
-async def get_messages(session_id: str) -> list[AgentMessage]:
-    """Get full conversation history for an agent session."""
-    agent = _find_agent(session_id)
-    project_path = agent.project_path if agent else None
-
-    # Find the session file
-    session_file = _find_session_file(session_id)
+@app.get("/api/agents/{session_id}/messages")
+async def get_agent_messages(session_id: str) -> list[Any]:
+    """Get conversation history for an agent session from ~/.claude/projects/."""
+    from .services.agents import PROJECTS_DIR
+    session_file = _find_session_file(session_id, PROJECTS_DIR)
     if not session_file:
-        raise HTTPException(status_code=404, detail="Session file not found")
-
+        return []
     messages = await read_session_messages(session_file)
-    return messages
+    return [m.model_dump() for m in messages]
 
 
-@app.post("/api/agents/{session_id}/message", response_model=SendMessageResponse)
-async def send_agent_message(
-    session_id: str, request: SendMessageRequest
-) -> SendMessageResponse:
-    """Send a message to a Claude agent session."""
-    agent = _find_agent(session_id)
-    project_path = agent.project_path if agent else None
-
-    # Update status to working
-    if agent:
-        agent.status = __import__("backend.models", fromlist=["AgentStatus"]).AgentStatus.WORKING
-        await ws_manager.broadcast(WSMessageType.AGENT_UPDATE, agent.model_dump())
-
-    success, stdout, stderr = await send_message(
-        session_id=session_id,
-        message=request.message,
-        project_path=project_path,
-    )
-
-    return SendMessageResponse(
-        session_id=session_id,
-        success=success,
-        response=stdout if success else None,
-        error=stderr if not success else None,
-    )
+@app.post("/api/agents/{session_id}/inject")
+async def inject_message(session_id: str, body: InjectRequest) -> dict[str, Any]:
+    """Inject a message into a running or idle agent session."""
+    ok = await spawner.inject_message(session_id, body.message, ws_manager)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return {"status": "queued" if spawner.get_agent(session_id) and
+            spawner.get_agent(session_id).status == AgentStatus.WORKING else "sent"}
 
 
-@app.get("/api/stats", response_model=GlobalStats)
-async def get_stats() -> GlobalStats:
-    async with _cache_lock:
-        return _compute_stats(_agent_cache)
+@app.delete("/api/agents/{session_id}", status_code=204)
+async def kill_agent(session_id: str) -> None:
+    """Kill a running agent subprocess."""
+    ok = await spawner.kill_agent(session_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    await _broadcast_project_list()
 
 
 # ─── Settings API ─────────────────────────────────────────────────────────────
+
 
 @app.get("/api/settings/global")
 async def get_global_settings() -> dict[str, Any]:
@@ -268,54 +297,9 @@ async def disable_plugin(plugin_id: str) -> dict[str, Any]:
     return {"id": plugin_id, "enabled": False}
 
 
-@app.get("/api/settings/projects")
-async def get_all_project_settings() -> list[dict[str, Any]]:
-    """List every known project with its .claude settings."""
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, settings_svc.list_project_settings)
-
-
-@app.get("/api/settings/projects/{project_key}")
-async def get_project_settings(project_key: str) -> dict[str, Any]:
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, settings_svc.get_project_settings, project_key)
-
-
-@app.put("/api/settings/projects/{project_key}")
-async def put_project_settings(project_key: str, body: dict[str, Any]) -> dict[str, Any]:
-    try:
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, settings_svc.set_project_settings, project_key, body)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-    return body
-
-
-@app.post("/api/settings/projects/{project_key}/permissions/{kind}")
-async def add_permission(
-    project_key: str, kind: str, body: dict[str, str]
-) -> dict[str, Any]:
-    if kind not in ("allow", "deny"):
-        raise HTTPException(status_code=400, detail="kind must be 'allow' or 'deny'")
-    permission = body.get("permission", "").strip()
-    if not permission:
-        raise HTTPException(status_code=400, detail="permission is required")
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(
-        None, settings_svc.add_permission, project_key, permission, kind
-    )
-
-
-@app.delete("/api/settings/projects/{project_key}/permissions/{kind}/{permission:path}")
-async def remove_permission(
-    project_key: str, kind: str, permission: str
-) -> dict[str, Any]:
-    if kind not in ("allow", "deny"):
-        raise HTTPException(status_code=400, detail="kind must be 'allow' or 'deny'")
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(
-        None, settings_svc.remove_permission, project_key, permission, kind
-    )
+@app.get("/api/stats", response_model=GlobalStats)
+async def get_stats() -> GlobalStats:
+    return _compute_stats()
 
 
 @app.get("/api/health")
@@ -323,7 +307,7 @@ async def health() -> dict[str, Any]:
     return {
         "status": "ok",
         "uptime": time.time() - _start_time,
-        "agents": len(_agent_cache),
+        "agents": len(spawner.get_running_agents()),
         "ws_connections": ws_manager.connection_count,
     }
 
@@ -336,12 +320,18 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     await ws_manager.connect(websocket)
     try:
         # Send initial state
-        async with _cache_lock:
-            agents = _agent_cache.copy()
-        await ws_manager.send(websocket, WSMessageType.AGENT_LIST, [a.model_dump() for a in agents])
-        await ws_manager.send(websocket, WSMessageType.STATS_UPDATE, _compute_stats(agents).model_dump())
+        active_map: dict[str, list[str]] = {}
+        for agent in spawner.get_running_agents():
+            if agent.session_id:
+                active_map.setdefault(agent.project_name, []).append(agent.session_id)
 
-        # Keep alive — client sends pings
+        project_list = projects_svc.list_projects(active_map)
+        await ws_manager.send(
+            websocket, WSMessageType.PROJECT_LIST, [p.model_dump() for p in project_list]
+        )
+        await ws_manager.send(websocket, WSMessageType.STATS_UPDATE, _compute_stats().model_dump())
+
+        # Keep alive
         while True:
             data = await websocket.receive_text()
             try:
@@ -356,18 +346,21 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
 # ─── Static Files ─────────────────────────────────────────────────────────────
 
-_FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+_FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
+_FRONTEND_DEV = Path(__file__).parent.parent / "frontend"
+_FRONTEND_DIR = _FRONTEND_DIST if _FRONTEND_DIST.exists() else _FRONTEND_DEV
+
 if _FRONTEND_DIR.exists():
     app.mount("/", StaticFiles(directory=str(_FRONTEND_DIR), html=True), name="frontend")
 
 
 # ─── Helpers ───────────────────────────────────────────────────────────────────
 
-def _find_session_file(session_id: str) -> Path | None:
-    """Locate a session JSONL file by session ID across all project dirs."""
-    if not PROJECTS_DIR.exists():
+def _find_session_file(session_id: str, projects_dir: Path) -> Path | None:
+    """Locate a session JSONL file by session ID in ~/.claude/projects/."""
+    if not projects_dir.exists():
         return None
-    for project_dir in PROJECTS_DIR.iterdir():
+    for project_dir in projects_dir.iterdir():
         if not project_dir.is_dir():
             continue
         candidate = project_dir / f"{session_id}.jsonl"
