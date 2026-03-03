@@ -137,7 +137,7 @@ async def list_projects() -> list[ManagedProject]:
 
 @app.post("/api/projects", response_model=ManagedProject, status_code=201)
 async def create_project(body: BootstrapProjectRequest) -> ManagedProject:
-    """Bootstrap a new managed project."""
+    """Bootstrap a new managed project and spawn an initial agent."""
     try:
         loop = asyncio.get_event_loop()
         project = await loop.run_in_executor(
@@ -148,6 +148,23 @@ async def create_project(body: BootstrapProjectRequest) -> ManagedProject:
             body.description,
         )
         await _broadcast_project_list()
+
+        # Auto-spawn an agent to start working on the project goals
+        initial_task = (
+            "Read PROJECT.md to understand the project goals and scope. "
+            "Then create an initial plan, break the goal into actionable tasks, "
+            "and begin working on the first task. Report your progress as you go."
+        )
+        asyncio.create_task(
+            spawner.dispatch_agent(
+                project_name=project.name,
+                project_path=project.path,
+                task=initial_task,
+                model=project.config.model,
+                ws_manager=ws_manager,
+            )
+        )
+
         return project
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))

@@ -11,6 +11,7 @@ import {
   renderProjectTileGrid,
   renderAgentsGrid,
   updateAgentCardChunk,
+  updateAgentCardMilestone,
 } from './projects.js';
 import {
   escapeHtml,
@@ -225,6 +226,24 @@ function renderAgentMessages(sessionId) {
   }
   el.innerHTML = chunks.join('') || `<div class="empty-state"><p style="color:var(--text-muted);font-size:12px">No messages yet</p></div>`;
   el.scrollTop = el.scrollHeight;
+}
+
+function appendMilestoneToDetail(milestone) {
+  const feed = dom.agentMessages;
+  if (!feed) return;
+  let milestoneBar = feed.querySelector('.milestone-feed');
+  if (!milestoneBar) {
+    milestoneBar = document.createElement('div');
+    milestoneBar.className = 'milestone-feed';
+    feed.insertBefore(milestoneBar, feed.firstChild);
+  }
+  const item = document.createElement('div');
+  item.className = 'milestone-item';
+  item.textContent = milestone;
+  milestoneBar.appendChild(item);
+  // Keep last 10
+  const items = milestoneBar.querySelectorAll('.milestone-item');
+  if (items.length > 10) items[0].remove();
 }
 
 function appendStreamBuffer(sessionId) {
@@ -458,6 +477,43 @@ function onWSMessage(msg) {
         if (dom.agentDetailStatus) {
           dom.agentDetailStatus.className = `agent-detail-status ${updated.status}`;
         }
+      }
+      break;
+    }
+
+    case 'agent_id_assigned': {
+      // Backend promoted a pending-PID agent to a real session_id
+      const { old_session_id, session_id, project_name } = msg.data;
+      const agent = state.agents.find(a => a.session_id === old_session_id);
+      if (agent) {
+        agent.session_id = session_id;
+        // Update stream buffer key
+        if (state.streamBuffers[old_session_id]) {
+          state.streamBuffers[session_id] = state.streamBuffers[old_session_id];
+          delete state.streamBuffers[old_session_id];
+        }
+        // Update selected agent id if it was the pending one
+        if (state.selectedAgentId === old_session_id) {
+          state.selectedAgentId = session_id;
+        }
+      }
+      if (state.selectedProject === project_name) {
+        renderAgentsGrid(state.agents, project_name, selectAgent, killAgent);
+      }
+      break;
+    }
+
+    case 'agent_milestone': {
+      const { session_id, project_name, milestone, milestones } = msg.data;
+      const agent = state.agents.find(a => a.session_id === session_id);
+      if (agent) {
+        agent.current_milestone = milestone;
+        agent.milestones = milestones;
+      }
+      updateAgentCardMilestone(session_id, milestone);
+      // If this agent is open in the detail panel, append to milestone feed
+      if (state.selectedAgentId === session_id) {
+        appendMilestoneToDetail(milestone);
       }
       break;
     }

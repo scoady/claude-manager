@@ -154,9 +154,7 @@ export function renderAgentsGrid(agents, projectName, onSelectAgent, onKillAgent
 
 function _updateAgentCard(card, agent) {
   const isWorking = agent.status === 'working';
-  const preview = agent.last_chunk
-    ? escapeHtml(agent.last_chunk.slice(0, 100))
-    : '';
+  const milestone = agent.current_milestone || (agent.milestones && agent.milestones[agent.milestones.length - 1]) || null;
 
   card.className = `agent-mini-card status-${agent.status}`;
   card.innerHTML = `
@@ -169,7 +167,7 @@ function _updateAgentCard(card, agent) {
         </svg>
       </button>
     </div>
-    ${preview ? `<div class="agent-card-preview">${preview}</div>` : ''}
+    ${milestone ? `<div class="agent-card-milestone">${escapeHtml(milestone)}</div>` : ''}
     <div class="agent-card-footer">
       <span class="agent-card-status-label">${agent.status}</span>
       ${agent.model ? `<span class="agent-card-model">${escapeHtml(agent.model.split('-').slice(-2).join('-'))}</span>` : ''}
@@ -187,10 +185,24 @@ export function updateAgentCardChunk(sessionId, chunk) {
   if (!preview) {
     preview = document.createElement('div');
     preview.className = 'agent-card-preview';
-    card.querySelector('.agent-card-top')?.insertAdjacentElement('afterend', preview);
+    card.querySelector('.agent-card-footer')?.insertAdjacentElement('beforebegin', preview);
   }
-  // Show last 100 chars accumulated
   const current = preview.textContent || '';
   const updated = (current + chunk).slice(-200);
   preview.textContent = updated;
+}
+
+/**
+ * Update the milestone label on an existing agent card.
+ */
+export function updateAgentCardMilestone(sessionId, milestone) {
+  const card = document.querySelector(`.agent-mini-card[data-session="${CSS.escape(sessionId)}"]`);
+  if (!card) return;
+  let el = card.querySelector('.agent-card-milestone');
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'agent-card-milestone';
+    card.querySelector('.agent-card-top')?.insertAdjacentElement('afterend', el);
+  }
+  el.textContent = milestone;
 }

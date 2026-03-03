@@ -1514,6 +1514,33 @@ pre {
   scroll-behavior: smooth;
 }
 
+/* ─── Milestone feed (agent detail panel) ───────────────────────────────── */
+.milestone-feed {
+  padding: 8px 12px 4px;
+  border-bottom: 1px solid var(--bg-border-dim);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.milestone-item {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-secondary);
+  padding: 2px 6px;
+  background: rgba(59,130,246,0.06);
+  border-left: 2px solid var(--accent-blue);
+  border-radius: 0 3px 3px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.milestone-item:last-child {
+  color: var(--accent-blue);
+  background: rgba(59,130,246,0.12);
+}
+
 /* ─── Inject area ────────────────────────────────────────────────────────── */
 .inject-area {
   padding: 10px 12px 14px;
@@ -1999,6 +2026,18 @@ pre {
   border-radius: var(--radius-sm);
   padding: 5px 7px;
   word-break: break-all;
+}
+
+.agent-card-milestone {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--accent-blue);
+  padding: 3px 7px;
+  background: rgba(59,130,246,0.08);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .agent-card-footer {
