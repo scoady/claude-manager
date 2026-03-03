@@ -436,11 +436,14 @@ async def kill_agent(session_id: str) -> bool:
 
 
 def prune_finished() -> list[str]:
-    """Remove agents whose process has exited and have no pending injection."""
+    """Remove agents that were explicitly killed (DISCONNECTED).
+
+    Idle agents (finished naturally) are kept in the registry so the user
+    can inject follow-up messages via --resume at any time.
+    """
     pruned = []
     for sid, agent in list(_registry.items()):
-        if agent.proc.returncode is not None and agent.status != AgentStatus.WORKING:
-            if not agent.pending_injection:
-                pruned.append(sid)
-                _registry.pop(sid, None)
+        if agent.status == AgentStatus.DISCONNECTED:
+            pruned.append(sid)
+            _registry.pop(sid, None)
     return pruned
