@@ -31,6 +31,10 @@ backend:
   # Contains session JSONL files read by the backend.
   claudeDataPath: /Users/ayx106492/.claude
 
+  # Path to the managed projects root on the host node.
+  # Each subdirectory is a git repo representing a managed project.
+  managedProjectsPath: /Users/ayx106492/git/claude-managed-projects
+
   resources:
     requests:
       memory: "128Mi"

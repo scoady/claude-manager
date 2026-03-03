@@ -37,6 +37,12 @@ spec:
           hostPath:
             path: {{ .Values.backend.claudeBinPath }}
             type: File
+        # Mount the managed projects root so the backend can create/read
+        # project directories on the host filesystem.
+        - name: managed-projects
+          hostPath:
+            path: {{ .Values.backend.managedProjectsPath }}
+            type: DirectoryOrCreate
 
       containers:
         - name: backend
@@ -51,11 +57,16 @@ spec:
             - name: claude-bin
               mountPath: /usr/local/bin/claude
               readOnly: true
+            - name: managed-projects
+              mountPath: /home/claude/managed-projects
+              readOnly: false
           env:
             - name: CLAUDE_DATA_DIR
               value: /home/claude/.claude
             - name: CLAUDE_BIN
               value: /usr/local/bin/claude
+            - name: MANAGED_PROJECTS_DIR
+              value: /home/claude/managed-projects
           readinessProbe:
             httpGet:
               path: /api/health
