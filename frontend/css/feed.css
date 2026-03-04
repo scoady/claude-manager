@@ -1081,6 +1081,74 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
+/* ─── Project Status Card ──────────────────────────────────────────────────── */
+
+.project-status-card {
+  margin: 0 0 12px;
+  padding: 14px 18px;
+  background: var(--bg-surface);
+  border: 1px solid var(--bg-border);
+  border-radius: var(--radius-md);
+}
+
+.psc-description {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.psc-progress {
+  margin-bottom: 6px;
+}
+
+.psc-progress-bar {
+  height: 4px;
+  background: var(--bg-border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.psc-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-green), var(--accent-cyan));
+  border-radius: 2px;
+  transition: width 300ms ease;
+  box-shadow: 0 0 6px rgba(57, 255, 20, 0.25);
+}
+
+.psc-progress-label {
+  display: flex;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.psc-done {
+  color: var(--accent-green);
+}
+
+.psc-wip {
+  color: var(--accent-amber);
+}
+
+.psc-no-tasks {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.psc-milestone {
+  margin-top: 4px;
+}
+
+.psc-last-milestone {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
 /* ─── Feed Containers ──────────────────────────────────────────────────────── */
 
 .feed-agent-container {

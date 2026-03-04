@@ -50,6 +50,10 @@ export class FeedController {
     this._headerEl = this._buildHeader(project);
     this._el.appendChild(this._headerEl);
 
+    // Project status card (shown when no active work)
+    this._statusCard = this._buildStatusCard(project);
+    this._el.appendChild(this._statusCard);
+
     // Agent sections container (Feed tab content)
     this._agentContainer = document.createElement('div');
     this._agentContainer.className = 'feed-agent-container';
@@ -448,6 +452,62 @@ export class FeedController {
     }
   }
 
+  // ── Project status card ────────────────────────────────────────────────────
+
+  _buildStatusCard(project) {
+    const el = document.createElement('div');
+    el.className = 'project-status-card';
+
+    const desc = project.description || project.goal?.split('\n').find(l => l.trim() && !l.startsWith('#'))?.trim() || '';
+    el.innerHTML = `
+      <div class="psc-description">${escapeHtml(desc)}</div>
+      <div class="psc-progress"></div>
+      <div class="psc-milestone"></div>
+    `;
+
+    // Load task progress async
+    this._refreshStatusCard(project.name);
+    return el;
+  }
+
+  async _refreshStatusCard(projectName) {
+    if (!this._statusCard) return;
+    const progressEl = this._statusCard.querySelector('.psc-progress');
+    const milestoneEl = this._statusCard.querySelector('.psc-milestone');
+
+    try {
+      const tasks = await api.getTasks(projectName);
+      if (tasks.length) {
+        const done = tasks.filter(t => t.status === 'done').length;
+        const wip = tasks.filter(t => t.status === 'in_progress').length;
+        const pct = Math.round((done / tasks.length) * 100);
+        progressEl.innerHTML = `
+          <div class="psc-progress-bar"><div class="psc-progress-fill" style="width:${pct}%"></div></div>
+          <div class="psc-progress-label">
+            <span class="psc-done">${done}/${tasks.length} tasks complete</span>
+            ${wip ? `<span class="psc-wip">${wip} in progress</span>` : ''}
+          </div>
+        `;
+      } else {
+        progressEl.innerHTML = '<span class="psc-no-tasks">No tasks defined yet</span>';
+      }
+    } catch (_) {
+      progressEl.innerHTML = '';
+    }
+
+    try {
+      const milestones = await api.getMilestones(projectName);
+      if (milestones.length) {
+        const last = milestones[0]; // newest first
+        milestoneEl.innerHTML = `<span class="psc-last-milestone">Last completed: ${escapeHtml(last.task?.slice(0, 80) || 'Agent work')}</span>`;
+      } else {
+        milestoneEl.innerHTML = '';
+      }
+    } catch (_) {
+      milestoneEl.innerHTML = '';
+    }
+  }
+
   // ── Tab switching ──────────────────────────────────────────────────────────
 
   _bindTabEvents() {
@@ -465,6 +525,7 @@ export class FeedController {
         this._agentContainer?.classList.add('hidden');
         this._tasksContainer?.classList.add('hidden');
         this._milestonesContainer?.classList.add('hidden');
+        this._statusCard?.classList.add('hidden');
 
         // Feed-only UI elements
         const showFeedUI = (tabName === 'feed');
@@ -477,6 +538,7 @@ export class FeedController {
 
         if (tabName === 'feed') {
           this._agentContainer?.classList.remove('hidden');
+          this._statusCard?.classList.remove('hidden');
         } else if (tabName === 'tasks') {
           this._tasksContainer?.classList.remove('hidden');
           this._tasksPanel?.load();
@@ -492,15 +554,17 @@ export class FeedController {
 
   /** Handle tasks_updated WS event. */
   handleTasksUpdated(projectName, tasks) {
-    if (this._project && this._project.name === projectName && this._tasksPanel) {
-      this._tasksPanel.updateTasks(tasks);
+    if (this._project && this._project.name === projectName) {
+      this._tasksPanel?.updateTasks(tasks);
+      this._refreshStatusCard(projectName);
     }
   }
 
   /** Handle milestones_updated WS event. */
   handleMilestonesUpdated(projectName, milestones) {
-    if (this._project && this._project.name === projectName && this._milestonesPanel) {
-      this._milestonesPanel.updateMilestones(milestones);
+    if (this._project && this._project.name === projectName) {
+      this._milestonesPanel?.updateMilestones(milestones);
+      this._refreshStatusCard(projectName);
     }
   }
 
