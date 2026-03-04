@@ -68,6 +68,7 @@ async function selectProject(name) {
       feed.appendAgentSection(agent.session_id, agent.task || '', {
         phase: agent.phase,
         turnCount: agent.turn_count,
+        isController: agent.is_controller,
       });
     }
   }
@@ -120,6 +121,7 @@ function onWSMessage(msg) {
           turn_count: d.turn_count || 0,
           started_at: d.started_at || msg.timestamp,
           model: d.model,
+          is_controller: d.is_controller || false,
           latest_milestone: '',
         });
       }

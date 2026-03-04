@@ -37,12 +37,20 @@ class AgentBroker:
 
     # ── Session management ────────────────────────────────────────────────────
 
+    def get_controller_for_project(self, project_name: str) -> AgentSession | None:
+        """Return the controller session for a project, if one exists."""
+        for s in self._sessions.values():
+            if s.project_name == project_name and s.is_controller:
+                return s
+        return None
+
     async def create_session(
         self,
         project_name: str,
         project_path: str,
         initial_task: str,
         model: str | None = None,
+        is_controller: bool = False,
     ) -> AgentSession:
         session_id = str(uuid.uuid4())
 
@@ -51,6 +59,7 @@ class AgentBroker:
             project_name=project_name,
             project_path=project_path,
             model=model or self._default_model,
+            is_controller=is_controller,
         )
 
         # Wire callbacks
@@ -71,6 +80,7 @@ class AgentBroker:
             "task": initial_task,
             "started_at": session.started_at,
             "model": session.model,
+            "is_controller": is_controller,
         })
 
         # Persist session to DB (fire-and-forget)
@@ -170,10 +180,11 @@ class AgentBroker:
         })
 
     async def _on_session_done(self, session_id: str, reason: str) -> None:
-        # Keep idle sessions in registry for follow-up injections
-        if reason != "idle":
-            self._sessions.pop(session_id, None)
         session = self._sessions.get(session_id)
+        # Controllers stay in registry regardless of reason (persistent brain)
+        # Normal sessions stay on idle (for follow-up injections), removed otherwise
+        if reason != "idle" and not (session and session.is_controller):
+            self._sessions.pop(session_id, None)
         await self._ws.broadcast(WSMessageType.AGENT_DONE, {
             "session_id": session_id,
             "project_name": session.project_name if session else "",

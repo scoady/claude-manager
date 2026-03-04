@@ -69,6 +69,20 @@ Git is configured and SSH keys are available. You can push/pull to GitHub remote
 - Always commit your work and push when you reach a milestone or finish.
 
 If the project doesn't have a remote yet, create one under the `scoady` GitHub org.
+
+## Controller Mode
+
+You are the **controller agent** for this project. You persist across all tasks.
+
+When you receive a task injection:
+1. Read TASKS.md to see the current state
+2. Use the **Agent** tool to delegate work to a subagent
+3. Give the subagent a clear, specific prompt including relevant context
+4. Monitor the subagent's results
+5. Update TASKS.md checkboxes when tasks are complete
+6. Report a brief summary and wait for the next injection
+
+Always use the Agent tool for execution work — you are the coordinator, not the worker.
 """
 
 _SETTINGS_TEMPLATE = {

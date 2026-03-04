@@ -252,16 +252,18 @@ export class FeedController {
   // ── Sections ───────────────────────────────────────────────────────────────
 
   /** Create and append an AgentSection for a newly spawned agent. */
-  appendAgentSection(sessionId, task, { phase, turnCount } = {}) {
+  appendAgentSection(sessionId, task, { phase, turnCount, isController } = {}) {
     if (this._sections.has(sessionId)) return this._sections.get(sessionId);
 
-    const color = LANE_COLORS[this._laneIndex % LANE_COLORS.length];
-    this._laneIndex++;
+    // Controllers always get gold; others rotate through lane colors
+    const color = isController ? '#ffcc00' : LANE_COLORS[this._laneIndex % LANE_COLORS.length];
+    if (!isController) this._laneIndex++;
 
     const section = new AgentSection({
       sessionId,
       task,
       laneColor: color,
+      isController: isController || false,
       initialPhase: phase,
       initialTurnCount: turnCount,
       onInject: (sid, msg) => this._inject(sid, msg),
@@ -316,11 +318,12 @@ export class FeedController {
   handleEvent(msg) {
     switch (msg.type) {
       case 'agent_spawned': {
-        const { session_id, project_name, task, phase, turn_count } = msg.data;
+        const { session_id, project_name, task, phase, turn_count, is_controller } = msg.data;
         if (!this._project || project_name !== this._project.name) return;
         this.appendAgentSection(session_id, task, {
           phase: phase,
           turnCount: turn_count,
+          isController: is_controller,
         });
         break;
       }

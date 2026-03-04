@@ -31,6 +31,8 @@ EXPOSE 4040
 ENV CLAUDE_DATA_DIR=/root/.claude
 # npm install -g puts `claude` on PATH at /usr/local/bin/claude
 ENV CLAUDE_BIN=claude
+# GitHub PAT for gh CLI and git HTTPS inside agents — injected at runtime via docker-compose
+# ENV GH_TOKEN and GITHUB_TOKEN set in docker-compose.yml or scripts/start.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "4040", "--log-level", "info"]

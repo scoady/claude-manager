@@ -28,4 +28,7 @@ services:
       DATABASE_URL: "${DATABASE_URL:-}"
       # OAuth token for Pro subscription auth (extracted from macOS Keychain)
       CLAUDE_CODE_OAUTH_TOKEN: "${CLAUDE_CODE_OAUTH_TOKEN}"
+      # GitHub PAT for gh CLI and git HTTPS operations inside agents
+      GH_TOKEN: "${GH_TOKEN:-}"
+      GITHUB_TOKEN: "${GH_TOKEN:-}"
     restart: unless-stopped

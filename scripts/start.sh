@@ -32,5 +32,15 @@ SNAPSHOT_DIR="$PROJECT_DIR/.claude-snapshot"
 cp "$HOME/.claude.json" "$SNAPSHOT_DIR/claude.json"
 export CLAUDE_JSON_SNAPSHOT="$SNAPSHOT_DIR/claude.json"
 
+# GitHub PAT — read from env or file
+GH_TOKEN_FILE="$SNAPSHOT_DIR/gh-token"
+if [ -z "${GH_TOKEN:-}" ] && [ -f "$GH_TOKEN_FILE" ]; then
+  export GH_TOKEN
+  GH_TOKEN=$(cat "$GH_TOKEN_FILE")
+  echo "GitHub PAT loaded from file (${#GH_TOKEN} chars)"
+elif [ -n "${GH_TOKEN:-}" ]; then
+  echo "GitHub PAT loaded from env (${#GH_TOKEN} chars)"
+fi
+
 echo "OAuth token loaded from Keychain (${#CLAUDE_CODE_OAUTH_TOKEN} chars)"
 exec docker compose up --build "$@"

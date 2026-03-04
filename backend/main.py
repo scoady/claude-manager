@@ -183,19 +183,19 @@ async def create_project(body: BootstrapProjectRequest) -> ManagedProject:
 
     await _broadcast_project_list(broker)
 
-    initial_task = (
+    controller_task = (
+        "You are the CONTROLLER agent for this project. "
         "Read PROJECT.md to understand the project goal. "
         "Then open TASKS.md and replace the placeholder with a concrete checklist of tasks. "
-        "Work through the tasks one at a time. "
-        "Before each task write '→ Starting: <task>' and after write '✓ Done: <task>'. "
-        "Update TASKS.md checkboxes as you complete each task. "
-        "Keep going until all tasks are done."
+        "When done planning, report your plan and wait for instructions. "
+        "You will receive task injections — use the Agent tool to delegate work to subagents."
     )
     asyncio.create_task(broker.create_session(
         project_name=project.name,
         project_path=project.path,
-        initial_task=initial_task,
+        initial_task=controller_task,
         model=project.config.model,
+        is_controller=True,
     ))
 
     return project
@@ -230,6 +230,19 @@ async def dispatch_task(name: str, body: DispatchRequest) -> dict[str, Any]:
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    # Route through controller if available and idle
+    controller = broker.get_controller_for_project(name)
+    if controller and controller.phase == SessionPhase.IDLE:
+        task_prompt = (
+            f'Work on this task: "{body.task}"\n\n'
+            f'Use the Agent tool to delegate the work to a subagent. '
+            f'Give the subagent a clear, specific prompt including relevant context from PROJECT.md. '
+            f'Monitor the result and update TASKS.md if applicable.'
+        )
+        await broker.inject_message(controller.session_id, task_prompt)
+        return {"status": "delegated", "session_ids": [controller.session_id]}
+
+    # Fallback: controller busy or missing — spawn standalone agent
     model = body.model or project.config.model
     session_ids = []
     for _ in range(project.config.parallelism):
@@ -314,6 +327,13 @@ async def plan_task(name: str, body: PlanTaskRequest) -> dict[str, Any]:
         f'When done, write a brief summary of the plan.'
     )
 
+    # Route through controller if available and idle
+    controller = broker.get_controller_for_project(name)
+    if controller and controller.phase == SessionPhase.IDLE:
+        await broker.inject_message(controller.session_id, plan_prompt)
+        return {"status": "planning", "session_id": controller.session_id}
+
+    # Fallback: spawn standalone agent
     model = body.model or project.config.model
     session = await broker.create_session(
         project_name=name,
@@ -347,10 +367,23 @@ async def start_task(name: str, task_index: int, body: DispatchRequest | None = 
     task_prompt = (
         f'Work on this specific task from TASKS.md: "{task["text"]}"\n\n'
         f'Read PROJECT.md for context. Check TASKS.md for the full task list. '
-        f'Focus on completing this specific task. '
+        f'Use the Agent tool to delegate the work to a subagent. '
+        f'Give the subagent a clear, specific prompt. '
         f'Update the checkbox in TASKS.md when done (change [~] to [x]).'
     )
 
+    await ws_manager.broadcast(WSMessageType.TASKS_UPDATED, {
+        "project_name": name,
+        "tasks": tasks_svc.get_tasks(name),
+    })
+
+    # Route through controller if available and idle
+    controller = broker.get_controller_for_project(name)
+    if controller and controller.phase == SessionPhase.IDLE:
+        await broker.inject_message(controller.session_id, task_prompt)
+        return {"status": "delegated", "session_id": controller.session_id, "task": task["text"]}
+
+    # Fallback: spawn standalone agent
     model = (body.model if body else None) or project.config.model
     session = await broker.create_session(
         project_name=name,
@@ -358,11 +391,6 @@ async def start_task(name: str, task_index: int, body: DispatchRequest | None = 
         initial_task=task_prompt,
         model=model,
     )
-
-    await ws_manager.broadcast(WSMessageType.TASKS_UPDATED, {
-        "project_name": name,
-        "tasks": tasks_svc.get_tasks(name),
-    })
 
     return {"status": "started", "session_id": session.session_id, "task": task["text"]}
 

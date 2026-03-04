@@ -67,6 +67,7 @@ class AgentSession:
     project_path: str
     model: str
     task: str = ""
+    is_controller: bool = False
 
     # Runtime state
     phase: SessionPhase = SessionPhase.STARTING
@@ -152,6 +153,7 @@ class AgentSession:
             "turn_count": self.turn_count,
             "milestones": self.milestones[-10:],
             "last_chunk": self.last_text_chunk,
+            "is_controller": self.is_controller,
             "has_pending_injection": self._pending_injection is not None,
             "pid": self._proc.pid if self._proc else None,
         }

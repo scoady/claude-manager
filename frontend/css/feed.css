@@ -782,6 +782,40 @@
   100% { background-position: -200% 0; }
 }
 
+/* ─── Controller Agent ────────────────────────────────────────────────────── */
+
+.agent-section.controller .agent-section-header {
+  background: linear-gradient(135deg, rgba(255, 204, 0, 0.06), rgba(224, 64, 251, 0.04));
+}
+
+.agent-section.controller .agent-section-lane {
+  background: linear-gradient(180deg, #ffcc00, #e040fb);
+  box-shadow: 0 0 12px rgba(255, 204, 0, 0.3);
+}
+
+.agent-controller-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #ffcc00;
+  background: rgba(255, 204, 0, 0.1);
+  border: 1px solid rgba(255, 204, 0, 0.25);
+  box-shadow: 0 0 8px rgba(255, 204, 0, 0.15);
+  text-transform: uppercase;
+}
+
+.agent-section.controller:not(.completed) .agent-controller-badge {
+  animation: controller-glow 3s ease-in-out infinite;
+}
+
+@keyframes controller-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(255, 204, 0, 0.15); }
+  50%      { box-shadow: 0 0 16px rgba(255, 204, 0, 0.35), 0 0 4px rgba(224, 64, 251, 0.15); }
+}
+
 /* ─── Completed Agent Collapse ────────────────────────────────────────────── */
 
 .agent-section.completed:not(.expanded) .agent-section-body {

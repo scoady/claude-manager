@@ -52,10 +52,11 @@ export class AgentSection {
    * @param {Function} opts.onStatus — (sessionId) => void
    * @param {Function} [opts.onFocus] — (sessionId) => void — called when user expands this section
    */
-  constructor({ sessionId, task, laneColor, initialPhase, initialTurnCount, onInject, onKill, onStatus, onFocus }) {
+  constructor({ sessionId, task, laneColor, isController, initialPhase, initialTurnCount, onInject, onKill, onStatus, onFocus }) {
     this.sessionId  = sessionId;
     this.task       = task;
     this.laneColor  = laneColor;
+    this._isController = isController || false;
     this._onInject  = onInject;
     this._onKill    = onKill;
     this._onStatus  = onStatus;
@@ -90,14 +91,15 @@ export class AgentSection {
 
   _build() {
     const el = document.createElement('div');
-    el.className = 'agent-section';
+    el.className = `agent-section${this._isController ? ' controller' : ''}`;
     el.dataset.session = this.sessionId;
-    el.style.setProperty('--lane-color', this.laneColor);
+    el.style.setProperty('--lane-color', this._isController ? '#ffcc00' : this.laneColor);
     el.innerHTML = `
       <div class="agent-section-header">
         <div class="agent-section-lane"></div>
         <div class="agent-section-title">${escapeHtml(this._taskLabel())}</div>
         <div class="agent-section-badges">
+          ${this._isController ? '<span class="agent-controller-badge">\u2654 Controller</span>' : ''}
           <div class="agent-phase-timeline"></div>
           <span class="agent-phase-badge ${PHASE_CLASSES[this._phase] || ''}">${PHASE_LABELS[this._phase] || this._phase}</span>
           <span class="agent-turn-count" title="Turns">${this._turnCount}t</span>
@@ -461,6 +463,12 @@ export class AgentSection {
 
   /** Mark session as done — collapse and add duration badge. */
   markDone(reason) {
+    // Controllers going idle are NOT "done" — they persist
+    if (this._isController && reason === 'idle') {
+      this.setPhase('idle');
+      return;
+    }
+
     this._done = true;
     const phase = reason === 'cancelled' ? 'cancelled' : (reason === 'error' ? 'error' : 'idle');
     this.setPhase(phase);
@@ -468,8 +476,10 @@ export class AgentSection {
     // Remove blinking cursor
     this.el.querySelector('.stream-cursor')?.remove();
 
-    // Add completed class
-    this.el.classList.add('completed');
+    // Add completed class (controllers never get this)
+    if (!this._isController) {
+      this.el.classList.add('completed');
+    }
 
     // Add duration badge
     const duration = this._formatDuration(Date.now() - this._startTime);
@@ -481,10 +491,12 @@ export class AgentSection {
       badges.appendChild(durBadge);
     }
 
-    // Auto-collapse after delay
-    setTimeout(() => {
-      if (this._done) this.setExpanded(false);
-    }, 600);
+    // Auto-collapse after delay (not for controllers)
+    if (!this._isController) {
+      setTimeout(() => {
+        if (this._done) this.setExpanded(false);
+      }, 600);
+    }
   }
 
   /** Expand or collapse the body. */
