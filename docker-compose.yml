@@ -15,4 +15,5 @@ services:
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
       CLAUDE_DATA_DIR: /root/.claude
       MANAGED_PROJECTS_DIR: "${MANAGED_PROJECTS_DIR:-${HOME}/git/claude-managed-projects}"
+      DATABASE_URL: "${DATABASE_URL:-}"
     restart: unless-stopped

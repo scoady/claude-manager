@@ -1,11 +1,8 @@
-/** Project rendering — sidebar nav, tile grid, workbench */
-import { escapeHtml, relativeTime } from './utils.js';
+/** Project rendering — sidebar nav, tile grid */
+import { escapeHtml } from './utils.js';
 
 /**
  * Render compact project cards in the left sidebar.
- * @param {Array} projects - ManagedProject[]
- * @param {string|null} selectedName
- * @param {Function} onSelect - (name: string) => void
  */
 export function renderProjectList(projects, selectedName, onSelect) {
   const container = document.getElementById('project-list');
@@ -42,9 +39,7 @@ export function renderProjectList(projects, selectedName, onSelect) {
 }
 
 /**
- * Render the full project tile grid (empty state in workbench center).
- * @param {Array} projects - ManagedProject[]
- * @param {Function} onSelect
+ * Render the full project tile grid (empty state when no project selected).
  */
 export function renderProjectTileGrid(projects, onSelect) {
   const grid = document.getElementById('project-tile-grid');
@@ -81,138 +76,4 @@ export function renderProjectTileGrid(projects, onSelect) {
   grid.querySelectorAll('.project-tile').forEach(tile => {
     tile.addEventListener('click', () => onSelect(tile.dataset.name));
   });
-}
-
-// Grid-level event delegation callbacks (set when renderAgentsGrid is called)
-let _onSelectAgent = null;
-let _onKillAgent = null;
-
-// Grid-level event delegation (ask-status button added)
-let _onAskStatus = null;
-
-/**
- * Render the agent cards grid inside the project workbench.
- * streamBuffers: session_id → accumulated stream text (for card preview)
- */
-export function renderAgentsGrid(agents, projectName, streamBuffers, onSelectAgent, onKillAgent, onAskStatus) {
-  const grid = document.getElementById('agents-grid');
-  const emptyEl = document.getElementById('agents-grid-empty');
-  if (!grid) return;
-
-  _onSelectAgent = onSelectAgent;
-  _onKillAgent = onKillAgent;
-  _onAskStatus = onAskStatus;
-
-  if (!grid._delegated) {
-    grid._delegated = true;
-    grid.addEventListener('click', (e) => {
-      const killBtn = e.target.closest('.agent-card-kill');
-      const statusBtn = e.target.closest('.agent-card-status-btn');
-      const card = e.target.closest('.agent-mini-card');
-      if (!card) return;
-      const sid = card.dataset.session;
-      if (killBtn) {
-        e.stopPropagation();
-        _onKillAgent?.(sid);
-      } else if (statusBtn) {
-        e.stopPropagation();
-        _onAskStatus?.(sid);
-      } else {
-        _onSelectAgent?.(sid);
-      }
-    });
-  }
-
-  const projectAgents = agents.filter(a => a.project_name === projectName);
-
-  if (!projectAgents.length) {
-    grid.querySelectorAll('.agent-mini-card').forEach(el => el.remove());
-    emptyEl?.classList.remove('hidden');
-    return;
-  }
-  emptyEl?.classList.add('hidden');
-
-  const existingCards = new Map(
-    [...grid.querySelectorAll('.agent-mini-card')].map(el => [el.dataset.session, el])
-  );
-  const currentIds = new Set(projectAgents.map(a => a.session_id));
-
-  for (const [sid, el] of existingCards) {
-    if (!currentIds.has(sid)) el.remove();
-  }
-
-  for (const agent of projectAgents) {
-    const sid = agent.session_id;
-    if (!sid) continue;
-    const preview = ((streamBuffers || {})[sid] || '').slice(-200);
-    const existing = existingCards.get(sid);
-    if (existing) {
-      _updateAgentCard(existing, agent, preview);
-    } else {
-      const card = document.createElement('div');
-      card.className = 'agent-mini-card';
-      card.dataset.session = sid;
-      _updateAgentCard(card, agent, preview);
-      grid.insertBefore(card, emptyEl || null);
-    }
-  }
-}
-
-function _updateAgentCard(card, agent, preview = '') {
-  const isWorking = agent.status === 'working';
-  const milestone = agent.current_milestone || (agent.milestones && agent.milestones[agent.milestones.length - 1]) || null;
-
-  card.className = `agent-mini-card status-${agent.status}`;
-  card.innerHTML = `
-    <div class="agent-card-top">
-      <div class="agent-card-status-dot ${agent.status} ${isWorking ? 'pulse' : ''}"></div>
-      <span class="agent-card-task">${escapeHtml((agent.task || '').slice(0, 60))}${(agent.task || '').length > 60 ? '…' : ''}</span>
-      <div class="agent-card-actions">
-        <button class="agent-card-status-btn icon-btn" title="Ask for status">?</button>
-        <button class="agent-card-kill icon-btn danger" title="Kill agent">
-          <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-            <path d="M2 2l7 7M9 2l-7 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-        </button>
-      </div>
-    </div>
-    ${milestone ? `<div class="agent-card-milestone">${escapeHtml(milestone)}</div>` : ''}
-    ${preview ? `<div class="agent-card-preview">${escapeHtml(preview)}</div>` : ''}
-    <div class="agent-card-footer">
-      <span class="agent-card-status-label">${agent.status}</span>
-      ${agent.model ? `<span class="agent-card-model">${escapeHtml(agent.model.split('-').slice(-2).join('-'))}</span>` : ''}
-      ${agent.has_pending_injection ? '<span class="agent-card-pending">inject queued</span>' : ''}
-    </div>`;
-}
-
-/**
- * Update the live preview text on an existing agent card.
- */
-export function updateAgentCardChunk(sessionId, chunk) {
-  const card = document.querySelector(`.agent-mini-card[data-session="${CSS.escape(sessionId)}"]`);
-  if (!card) return;
-  let preview = card.querySelector('.agent-card-preview');
-  if (!preview) {
-    preview = document.createElement('div');
-    preview.className = 'agent-card-preview';
-    card.querySelector('.agent-card-footer')?.insertAdjacentElement('beforebegin', preview);
-  }
-  const current = preview.textContent || '';
-  const updated = (current + chunk).slice(-200);
-  preview.textContent = updated;
-}
-
-/**
- * Update the milestone label on an existing agent card.
- */
-export function updateAgentCardMilestone(sessionId, milestone) {
-  const card = document.querySelector(`.agent-mini-card[data-session="${CSS.escape(sessionId)}"]`);
-  if (!card) return;
-  let el = card.querySelector('.agent-card-milestone');
-  if (!el) {
-    el = document.createElement('div');
-    el.className = 'agent-card-milestone';
-    card.querySelector('.agent-card-top')?.insertAdjacentElement('afterend', el);
-  }
-  el.textContent = milestone;
 }

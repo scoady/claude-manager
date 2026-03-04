@@ -7,17 +7,22 @@ truth; no external JSONL files are read for managed sessions.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ..services.database import Database
 
 
 class HistoryStore:
-    def __init__(self, persist_dir: Path | None = None) -> None:
+    def __init__(self, persist_dir: Path | None = None, db: "Database | None" = None) -> None:
         self._sessions: dict[str, list[dict[str, Any]]] = {}
         self._persist_dir = persist_dir
+        self._db = db
 
     # ── Read ──────────────────────────────────────────────────────────────────
 
@@ -36,6 +41,14 @@ class HistoryStore:
     def append_user(self, session_id: str, message: dict[str, Any]) -> None:
         self._sessions.setdefault(session_id, []).append(message)
         self._persist(session_id, message)
+        if self._db:
+            asyncio.create_task(self._db.save_message(
+                uuid=str(uuid.uuid4()),
+                session_id=session_id,
+                role="user",
+                content=message.get("content", ""),
+                timestamp=datetime.now(timezone.utc).isoformat(),
+            ))
 
     def append_assistant(self, session_id: str, content_blocks: list[Any]) -> None:
         """Append assistant turn from raw SDK content block objects.
@@ -65,12 +78,28 @@ class HistoryStore:
         msg = {"role": "assistant", "content": block_dicts}
         self._sessions.setdefault(session_id, []).append(msg)
         self._persist(session_id, msg)
+        if self._db:
+            asyncio.create_task(self._db.save_message(
+                uuid=str(uuid.uuid4()),
+                session_id=session_id,
+                role="assistant",
+                content=block_dicts,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+            ))
 
     def append_tool_results(self, session_id: str, results: list[dict[str, Any]]) -> None:
         """Append tool_result blocks as a user turn."""
         msg = {"role": "user", "content": results}
         self._sessions.setdefault(session_id, []).append(msg)
         self._persist(session_id, msg)
+        if self._db:
+            asyncio.create_task(self._db.save_message(
+                uuid=str(uuid.uuid4()),
+                session_id=session_id,
+                role="user",
+                content=results,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+            ))
 
     def drop_session(self, session_id: str) -> None:
         self._sessions.pop(session_id, None)

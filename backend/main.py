@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -27,6 +28,7 @@ from .models import (
 )
 from .broker import AgentBroker, HistoryStore
 from .rules import RulesEngine
+from .services.database import Database
 from .rules.builtin_rules import SessionHealthRule
 from .services import projects as projects_svc
 from .services import settings as settings_svc
@@ -96,8 +98,15 @@ async def lifespan(app: FastAPI):
     claude_dir = Path.home() / ".claude"
     persist_dir = claude_dir / "projects" / "-managed-sessions"
 
-    history = HistoryStore(persist_dir=persist_dir)
-    broker = AgentBroker(ws_manager=ws_manager, history_store=history)
+    # Optional PostgreSQL persistence
+    db: Database | None = None
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url:
+        db = Database()
+        await db.init(database_url)
+
+    history = HistoryStore(persist_dir=persist_dir, db=db)
+    broker = AgentBroker(ws_manager=ws_manager, history_store=history, db=db)
     rules = RulesEngine(broker=broker, ws_manager=ws_manager, tick_interval=30.0)
 
     # Built-in rules
@@ -125,6 +134,8 @@ async def lifespan(app: FastAPI):
         s.cancel()
     for t in tasks:
         t.cancel()
+    if db:
+        await db.close()
 
 
 # ─── App ───────────────────────────────────────────────────────────────────────

@@ -10,6 +10,7 @@ Responsibilities:
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
@@ -20,6 +21,7 @@ from .history_store import HistoryStore
 
 if TYPE_CHECKING:
     from ..ws_manager import WSManager
+    from ..services.database import Database
 
 _DEFAULT_MODEL = "claude-opus-4-6"
 
@@ -38,10 +40,12 @@ class AgentBroker:
         ws_manager: "WSManager",
         history_store: HistoryStore,
         default_model: str = _DEFAULT_MODEL,
+        db: "Database | None" = None,
     ) -> None:
         self._ws = ws_manager
         self._history = history_store
         self._default_model = default_model
+        self._db = db
         self._sessions: dict[str, AgentSession] = {}
 
     # ── Session management ────────────────────────────────────────────────────
@@ -92,6 +96,17 @@ class AgentBroker:
             "started_at": session.started_at,
             "model": session.model,
         })
+
+        # Persist session to DB (fire-and-forget)
+        if self._db:
+            import asyncio
+            asyncio.create_task(self._db.save_session(
+                session_id=session_id,
+                project_name=project_name,
+                project_path=project_path,
+                task=initial_task,
+                model=session.model,
+            ))
 
         session.start(initial_task)
         return session
@@ -185,6 +200,13 @@ class AgentBroker:
             "project_name": session.project_name if session else "",
             "reason": reason,
         })
+        if self._db:
+            import asyncio
+            asyncio.create_task(self._db.update_session(
+                session_id,
+                status=reason,
+                ended_at=datetime.now(timezone.utc).isoformat(),
+            ))
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
