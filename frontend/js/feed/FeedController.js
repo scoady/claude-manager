@@ -1,7 +1,8 @@
-/** FeedController — owns the #feed DOM element and manages the narrative feed. */
+/** FeedController — owns the #feed DOM element and manages the task-centric narrative feed. */
 import { escapeHtml } from '../utils.js';
 import { AgentSection } from './AgentSection.js';
-import { TasksPanel } from './TasksPanel.js';
+import { OrchestratorBanner } from './OrchestratorBanner.js';
+import { TaskFeed } from './TaskFeed.js';
 import { MilestonesPanel } from './MilestonesPanel.js';
 import { WorkflowPanel } from './WorkflowPanel.js';
 import { renderMarkdown } from './MarkdownRenderer.js';
@@ -30,15 +31,16 @@ export class FeedController {
     this._laneIndex = 0;
     this._headerEl  = null;
     this._focusedSessionId = null;
-    this._activeTab = 'feed';    // 'feed' | 'tasks' | 'milestones'
+    this._activeTab = 'overview';
     this._agentContainer = null;
-    this._tasksContainer = null;
-    this._tasksPanel = null;
+    this._orchestratorBanner = null;
+    this._taskFeed = null;
     this._milestonesContainer = null;
     this._milestonesPanel = null;
     this._workflowContainer = null;
     this._workflowPanel = null;
     this._subagentMap = new Map(); // tool_use_id → subagent section id
+    this._taskAgentMap = new Map(); // taskIndex → sessionId
     this._onDeleteProject = onDeleteProject || null;
   }
 
@@ -49,52 +51,77 @@ export class FeedController {
     this._project = project;
     this._sections.clear();
     this._laneIndex = 0;
-    this._activeTab = 'feed';
+    this._activeTab = 'overview';
+    this._taskAgentMap.clear();
     this._el.innerHTML = '';
 
+    // 1. Header (tabs + dispatch composer)
     this._headerEl = this._buildHeader(project);
     this._el.appendChild(this._headerEl);
 
-    // Project status card (shown when no active work)
-    this._statusCard = this._buildStatusCard(project);
-    this._el.appendChild(this._statusCard);
+    // 2. Orchestrator banner (replaces old status card)
+    this._orchestratorBanner = new OrchestratorBanner();
+    this._el.appendChild(this._orchestratorBanner.el);
 
-    // Agent sections container (Feed tab content)
+    // 3. Agent container with TaskFeed (Overview tab content)
     this._agentContainer = document.createElement('div');
     this._agentContainer.className = 'feed-agent-container';
+
+    this._taskFeed = new TaskFeed(project.name, {
+      onStartTask: (idx) => this._startTask(idx),
+      onAddTask: (text) => {},
+    });
+    this._agentContainer.appendChild(this._taskFeed.el);
     this._el.appendChild(this._agentContainer);
 
-    // Tasks container (Tasks tab content, hidden by default)
-    this._tasksContainer = document.createElement('div');
-    this._tasksContainer.className = 'feed-tasks-container hidden';
-    this._el.appendChild(this._tasksContainer);
-
-    // Create tasks panel
-    if (this._tasksPanel) this._tasksPanel.destroy();
-    this._tasksPanel = new TasksPanel(project.name);
-    this._tasksContainer.appendChild(this._tasksPanel.el);
-
-    // Milestones container (hidden by default)
+    // 4. Milestones container (hidden by default)
     this._milestonesContainer = document.createElement('div');
     this._milestonesContainer.className = 'feed-milestones-container hidden';
     this._el.appendChild(this._milestonesContainer);
 
-    // Create milestones panel
     if (this._milestonesPanel) this._milestonesPanel.destroy();
     this._milestonesPanel = new MilestonesPanel(project.name);
     this._milestonesContainer.appendChild(this._milestonesPanel.el);
 
-    // Workflow container (hidden by default)
+    // 5. Workflow container (hidden by default)
     this._workflowContainer = document.createElement('div');
     this._workflowContainer.className = 'feed-workflow-container hidden';
     this._el.appendChild(this._workflowContainer);
 
-    // Create workflow panel
     if (this._workflowPanel) this._workflowPanel.destroy();
     this._workflowPanel = new WorkflowPanel(project.name);
     this._workflowContainer.appendChild(this._workflowPanel.el);
 
     this._bindTabEvents();
+
+    // 6. Load initial data
+    this._loadInitialData(project);
+  }
+
+  async _loadInitialData(project) {
+    // Fetch tasks
+    try {
+      const tasks = await api.getTasks(project.name);
+      this._taskFeed?.setTasks(tasks);
+      this._orchestratorBanner?.setProject(project, tasks);
+    } catch (_) {}
+
+    // Ensure orchestrator is alive
+    try {
+      const result = await api.ensureOrchestrator(project.name);
+      this._orchestratorBanner?.setControllerSession(result.session_id);
+    } catch (_) {
+      // Non-fatal — banner shows without live orchestrator
+    }
+  }
+
+  async _startTask(taskIndex) {
+    try {
+      const result = await api.startTask(this._project.name, taskIndex);
+      toast(`Agent started: ${result.task}`, 'success', 3000);
+    } catch (e) {
+      toast(`Failed: ${e.message}`, 'error');
+    }
   }
 
   _buildHeader(project) {
@@ -106,7 +133,7 @@ export class FeedController {
         <span class="feed-project-title">${escapeHtml(project.name)}</span>
         <div class="feed-project-meta">
           <span class="feed-meta-chip">${agentCount} agent${agentCount !== 1 ? 's' : ''}</span>
-          <span class="feed-meta-chip">×${project.config?.parallelism || 1} parallelism</span>
+          <span class="feed-meta-chip">&times;${project.config?.parallelism || 1} parallelism</span>
           ${project.config?.model ? `<span class="feed-meta-chip">${escapeHtml(project.config.model.split('-').slice(-2).join('-'))}</span>` : ''}
           <button class="feed-delete-project-btn" title="Delete project">
             <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
@@ -116,16 +143,15 @@ export class FeedController {
         </div>
       </div>
       <div class="feed-tab-bar">
-        <button class="feed-tab active" data-feed-tab="feed">Feed</button>
-        <button class="feed-tab" data-feed-tab="tasks">Tasks</button>
+        <button class="feed-tab active" data-feed-tab="overview">Overview</button>
         <button class="feed-tab" data-feed-tab="milestones">Milestones</button>
         <button class="feed-tab" data-feed-tab="workflow">Workflow</button>
       </div>
       <div class="feed-dispatch-composer">
         <div class="feed-dispatch-row">
-          <textarea class="feed-task-input" rows="1" placeholder="Dispatch a task…"></textarea>
+          <textarea class="feed-task-input" rows="1" placeholder="Dispatch a task\u2026"></textarea>
           <select class="feed-parallelism-select" title="Parallelism">
-            ${[1,2,3,4].map(n => `<option value="${n}" ${n === (project.config?.parallelism || 1) ? 'selected' : ''}>×${n}</option>`).join('')}
+            ${[1,2,3,4].map(n => `<option value="${n}" ${n === (project.config?.parallelism || 1) ? 'selected' : ''}>&times;${n}</option>`).join('')}
           </select>
           <select class="feed-model-select" title="Model override">
             <option value="">default</option>
@@ -304,7 +330,7 @@ export class FeedController {
   // ── Sections ───────────────────────────────────────────────────────────────
 
   /** Create and append an AgentSection for a newly spawned agent. */
-  appendAgentSection(sessionId, task, { phase, turnCount, isController } = {}) {
+  appendAgentSection(sessionId, task, { phase, turnCount, isController, taskIndex } = {}) {
     if (this._sections.has(sessionId)) return this._sections.get(sessionId);
 
     // Controllers always get gold; others rotate through lane colors
@@ -326,19 +352,24 @@ export class FeedController {
 
     this._sections.set(sessionId, section);
 
-    // Animate in
-    section.el.style.opacity = '0';
-    section.el.style.transform = 'translateY(12px)';
-    (this._agentContainer || this._el).appendChild(section.el);
-    requestAnimationFrame(() => {
-      section.el.style.transition = 'opacity 280ms ease, transform 280ms ease';
-      section.el.style.opacity = '1';
-      section.el.style.transform = 'translateY(0)';
-    });
-
-    // Adaptive layout: when 3+ agents, focus the newest one
-    if (this._sections.size >= 3) {
-      this._setFocused(sessionId);
+    // Determine where to mount this section
+    if (isController) {
+      // Controller → link to orchestrator banner (don't show in feed)
+      this._orchestratorBanner?.setControllerSession(sessionId);
+    } else if (taskIndex != null) {
+      // Worker with task_index → embed in task row
+      this._taskFeed?.attachAgent(taskIndex, section);
+      this._taskAgentMap.set(taskIndex, sessionId);
+    } else {
+      // Standalone agent with no task_index → append to agent container
+      section.el.style.opacity = '0';
+      section.el.style.transform = 'translateY(12px)';
+      (this._agentContainer || this._el).appendChild(section.el);
+      requestAnimationFrame(() => {
+        section.el.style.transition = 'opacity 280ms ease, transform 280ms ease';
+        section.el.style.opacity = '1';
+        section.el.style.transform = 'translateY(0)';
+      });
     }
 
     // Hydrate existing agent output on reconnect (agent already has turns)
@@ -363,6 +394,19 @@ export class FeedController {
     section.updateSessionId(newId);
     this._sections.delete(oldId);
     this._sections.set(newId, section);
+
+    // Update orchestrator banner reference
+    if (this._orchestratorBanner?.controllerSessionId === oldId) {
+      this._orchestratorBanner.setControllerSession(newId);
+    }
+
+    // Update task agent map
+    for (const [idx, sid] of this._taskAgentMap) {
+      if (sid === oldId) {
+        this._taskAgentMap.set(idx, newId);
+        break;
+      }
+    }
   }
 
   // ── WS event routing ───────────────────────────────────────────────────────
@@ -370,12 +414,13 @@ export class FeedController {
   handleEvent(msg) {
     switch (msg.type) {
       case 'agent_spawned': {
-        const { session_id, project_name, task, phase, turn_count, is_controller } = msg.data;
+        const { session_id, project_name, task, phase, turn_count, is_controller, task_index } = msg.data;
         if (!this._project || project_name !== this._project.name) return;
         this.appendAgentSection(session_id, task, {
           phase: phase,
           turnCount: turn_count,
           isController: is_controller,
+          taskIndex: task_index ?? null,
         });
         break;
       }
@@ -384,9 +429,10 @@ export class FeedController {
         if (done) return;
         const section = this._sections.get(session_id);
         section?.appendChunk(chunk);
-        // Forward stream to TasksPanel for expanded task detail views
-        if (this._tasksPanel && section) {
-          this._tasksPanel.updateAgentStream(section._streamText || '');
+
+        // If this is the controller, update orchestrator banner
+        if (this._orchestratorBanner?.controllerSessionId === session_id) {
+          this._orchestratorBanner.appendChunk(chunk);
         }
         break;
       }
@@ -394,6 +440,19 @@ export class FeedController {
         const { session_id, phase } = msg.data;
         const section = this._sections.get(session_id);
         section?.setPhase(phase);
+
+        // Update orchestrator banner phase
+        if (this._orchestratorBanner?.controllerSessionId === session_id) {
+          this._orchestratorBanner.setPhase(phase);
+        }
+
+        // Update task feed phase badge
+        for (const [idx, sid] of this._taskAgentMap) {
+          if (sid === session_id) {
+            this._taskFeed?.setAgentPhase(idx, phase);
+            break;
+          }
+        }
         break;
       }
       case 'tool_start': {
@@ -431,6 +490,14 @@ export class FeedController {
         const section = this._sections.get(session_id);
         section?.setTurnCount(turn_count);
         section?.updateStatusCard();
+
+        // Update task feed turn count
+        for (const [idx, sid] of this._taskAgentMap) {
+          if (sid === session_id) {
+            this._taskFeed?.setAgentTurns(idx, turn_count);
+            break;
+          }
+        }
         break;
       }
       case 'agent_done': {
@@ -512,62 +579,6 @@ export class FeedController {
     }
   }
 
-  // ── Project status card ────────────────────────────────────────────────────
-
-  _buildStatusCard(project) {
-    const el = document.createElement('div');
-    el.className = 'project-status-card';
-
-    const desc = project.description || project.goal?.split('\n').find(l => l.trim() && !l.startsWith('#'))?.trim() || '';
-    el.innerHTML = `
-      <div class="psc-description">${renderMarkdown(desc)}</div>
-      <div class="psc-progress"></div>
-      <div class="psc-milestone"></div>
-    `;
-
-    // Load task progress async
-    this._refreshStatusCard(project.name);
-    return el;
-  }
-
-  async _refreshStatusCard(projectName) {
-    if (!this._statusCard) return;
-    const progressEl = this._statusCard.querySelector('.psc-progress');
-    const milestoneEl = this._statusCard.querySelector('.psc-milestone');
-
-    try {
-      const tasks = await api.getTasks(projectName);
-      if (tasks.length) {
-        const done = tasks.filter(t => t.status === 'done').length;
-        const wip = tasks.filter(t => t.status === 'in_progress').length;
-        const pct = Math.round((done / tasks.length) * 100);
-        progressEl.innerHTML = `
-          <div class="psc-progress-bar"><div class="psc-progress-fill" style="width:${pct}%"></div></div>
-          <div class="psc-progress-label">
-            <span class="psc-done">${done}/${tasks.length} tasks complete</span>
-            ${wip ? `<span class="psc-wip">${wip} in progress</span>` : ''}
-          </div>
-        `;
-      } else {
-        progressEl.innerHTML = '<span class="psc-no-tasks">No tasks defined yet</span>';
-      }
-    } catch (_) {
-      progressEl.innerHTML = '';
-    }
-
-    try {
-      const milestones = await api.getMilestones(projectName);
-      if (milestones.length) {
-        const last = milestones[0]; // newest first
-        milestoneEl.innerHTML = `<span class="psc-last-milestone">Last completed: ${escapeHtml(last.task?.slice(0, 80) || 'Agent work')}</span>`;
-      } else {
-        milestoneEl.innerHTML = '';
-      }
-    } catch (_) {
-      milestoneEl.innerHTML = '';
-    }
-  }
-
   // ── Tab switching ──────────────────────────────────────────────────────────
 
   _bindTabEvents() {
@@ -583,26 +594,22 @@ export class FeedController {
 
         // Hide all containers
         this._agentContainer?.classList.add('hidden');
-        this._tasksContainer?.classList.add('hidden');
+        this._orchestratorBanner?.el?.classList.add('hidden');
         this._milestonesContainer?.classList.add('hidden');
         this._workflowContainer?.classList.add('hidden');
-        this._statusCard?.classList.add('hidden');
 
-        // Feed-only UI elements
-        const showFeedUI = (tabName === 'feed');
-        this._headerEl.querySelector('.feed-dispatch-composer')?.classList.toggle('hidden', !showFeedUI);
-        this._headerEl.querySelector('.skill-toggle-panel')?.classList.toggle('hidden', !showFeedUI);
+        // Overview-only UI elements
+        const showOverviewUI = (tabName === 'overview');
+        this._headerEl.querySelector('.feed-dispatch-composer')?.classList.toggle('hidden', !showOverviewUI);
+        this._headerEl.querySelector('.skill-toggle-panel')?.classList.toggle('hidden', !showOverviewUI);
 
-        // Stop panel refreshes (tasks uses backend polling via WS, no client timer)
+        // Stop panel refreshes
         this._milestonesPanel?.stopAutoRefresh();
         this._workflowPanel?.stopAutoRefresh();
 
-        if (tabName === 'feed') {
+        if (tabName === 'overview') {
+          this._orchestratorBanner?.el?.classList.remove('hidden');
           this._agentContainer?.classList.remove('hidden');
-          this._statusCard?.classList.remove('hidden');
-        } else if (tabName === 'tasks') {
-          this._tasksContainer?.classList.remove('hidden');
-          this._tasksPanel?.load();
         } else if (tabName === 'milestones') {
           this._milestonesContainer?.classList.remove('hidden');
           this._milestonesPanel?.load();
@@ -619,8 +626,8 @@ export class FeedController {
   /** Handle tasks_updated WS event. */
   handleTasksUpdated(projectName, tasks) {
     if (this._project && this._project.name === projectName) {
-      this._tasksPanel?.updateTasks(tasks);
-      this._refreshStatusCard(projectName);
+      this._taskFeed?.setTasks(tasks);
+      this._orchestratorBanner?.updateProgress(tasks);
     }
   }
 
@@ -635,7 +642,6 @@ export class FeedController {
   handleMilestonesUpdated(projectName, milestones) {
     if (this._project && this._project.name === projectName) {
       this._milestonesPanel?.updateMilestones(milestones);
-      this._refreshStatusCard(projectName);
     }
   }
 

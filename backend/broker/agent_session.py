@@ -68,6 +68,7 @@ class AgentSession:
     model: str
     task: str = ""
     is_controller: bool = False
+    task_index: int | None = None  # TASKS.md index if started via /tasks/{index}/start
 
     # Runtime state
     phase: SessionPhase = SessionPhase.STARTING
@@ -160,6 +161,7 @@ class AgentSession:
             "milestones": self.milestones[-10:],
             "last_chunk": self.last_text_chunk,
             "is_controller": self.is_controller,
+            "task_index": self.task_index,
             "has_pending_injection": self._pending_injection is not None,
             "pid": self._proc.pid if self._proc else None,
         }

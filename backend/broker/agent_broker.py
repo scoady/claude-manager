@@ -52,6 +52,7 @@ class AgentBroker:
         initial_task: str,
         model: str | None = None,
         is_controller: bool = False,
+        task_index: int | None = None,
     ) -> AgentSession:
         session_id = str(uuid.uuid4())
 
@@ -61,6 +62,7 @@ class AgentBroker:
             project_path=project_path,
             model=model or self._default_model,
             is_controller=is_controller,
+            task_index=task_index,
         )
 
         # Wire callbacks
@@ -85,6 +87,7 @@ class AgentBroker:
             "started_at": session.started_at,
             "model": session.model,
             "is_controller": is_controller,
+            "task_index": session.task_index,
         })
 
         # Persist session to DB (fire-and-forget)

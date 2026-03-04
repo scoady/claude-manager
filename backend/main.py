@@ -454,9 +454,53 @@ async def start_task(name: str, task_index: int, body: DispatchRequest | None = 
         project_path=project.path,
         initial_task=task_prompt,
         model=model,
+        task_index=task_index,
     )
 
     return {"status": "started", "session_id": session.session_id, "task": task["text"]}
+
+
+# ─── Orchestrator API ────────────────────────────────────────────────────────
+
+
+@app.post("/api/projects/{name}/orchestrator")
+async def ensure_orchestrator(name: str):
+    """Ensure a controller agent is alive and has a fresh status update."""
+    broker: AgentBroker = app.state.broker
+    loop = asyncio.get_event_loop()
+    project = await loop.run_in_executor(None, projects_svc.get_project, name, [])
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    controller = broker.get_controller_for_project(name)
+
+    if controller:
+        if controller.phase == SessionPhase.IDLE:
+            # Controller exists but idle — inject status check
+            await broker.inject_message(
+                controller.session_id,
+                "Give a brief project status update: Read TASKS.md. "
+                "What tasks are complete, what's in progress, what's next? "
+                "Be concise — 2-3 sentences max.",
+            )
+            return {"status": "refreshed", "session_id": controller.session_id}
+        else:
+            # Controller is already working
+            return {"status": "active", "session_id": controller.session_id}
+    else:
+        # No controller — spawn one
+        session = await broker.create_session(
+            project_name=name,
+            project_path=project.path,
+            initial_task=(
+                "You are the project orchestrator. Read PROJECT.md and TASKS.md. "
+                "Give a brief status summary: what's done, what's in progress, what's next. "
+                "Then wait for instructions."
+            ),
+            model=project.config.model if project.config else None,
+            is_controller=True,
+        )
+        return {"status": "spawned", "session_id": session.session_id}
 
 
 # ─── Milestones API ────────────────────────────────────────────────────────

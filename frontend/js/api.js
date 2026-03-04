@@ -68,6 +68,14 @@ export const api = {
     return res.json();
   },
 
+  // ─── Orchestrator ──────────────────────────────────────────────────────────
+
+  async ensureOrchestrator(projectName) {
+    const res = await fetch(`${BASE}/api/projects/${encodeURIComponent(projectName)}/orchestrator`, { method: 'POST' });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
   // ─── Agents ────────────────────────────────────────────────────────────────
 
   async getAgents() {

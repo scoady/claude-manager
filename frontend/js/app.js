@@ -75,6 +75,7 @@ async function selectProject(name) {
         phase: agent.phase,
         turnCount: agent.turn_count,
         isController: agent.is_controller,
+        taskIndex: agent.task_index ?? null,
       });
     }
   }
@@ -128,6 +129,7 @@ function onWSMessage(msg) {
           started_at: d.started_at || msg.timestamp,
           model: d.model,
           is_controller: d.is_controller || false,
+          task_index: d.task_index ?? null,
           latest_milestone: '',
         });
       }
