@@ -213,6 +213,12 @@ function onWSMessage(msg) {
       feed.handleTasksUpdated(project_name, tasks);
       break;
     }
+
+    case 'milestones_updated': {
+      const { project_name, milestones } = msg.data;
+      feed.handleMilestonesUpdated(project_name, milestones);
+      break;
+    }
   }
 }
 

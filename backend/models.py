@@ -183,8 +183,9 @@ class WSMessageType(str, Enum):
     INJECTION_ACK   = "injection_ack"
     RULE_FIRED      = "rule_fired"
     STATS_UPDATE    = "stats_update"
-    TASKS_UPDATED   = "tasks_updated"
-    ERROR           = "error"
+    TASKS_UPDATED       = "tasks_updated"
+    MILESTONES_UPDATED  = "milestones_updated"
+    ERROR               = "error"
 
 
 class WSMessage(BaseModel):

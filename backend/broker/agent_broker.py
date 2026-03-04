@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from typing import Any, TYPE_CHECKING
 
 from ..models import SessionPhase, WSMessageType
+from ..services import milestones as milestones_svc
 from .agent_session import AgentSession
 
 if TYPE_CHECKING:
@@ -192,6 +193,50 @@ class AgentBroker:
             "project_name": session.project_name if session else "",
             "reason": reason,
         })
+
+        # Capture milestone on idle completion
+        if session and reason == "idle":
+            # Skip if controller already had subagent milestone captured this cycle
+            should_capture = True
+            if session.is_controller and session._subagent_captured_this_cycle:
+                should_capture = False
+
+            if should_capture:
+                try:
+                    summary = ""
+                    for msg in reversed(session.output_buffer):
+                        if msg.get("type") == "text" and msg.get("content", "").strip():
+                            summary = msg["content"]
+                            break
+                    if summary:
+                        duration = None
+                        if session._cycle_start_time:
+                            try:
+                                start = datetime.fromisoformat(session._cycle_start_time)
+                                duration = (datetime.now(timezone.utc) - start).total_seconds()
+                            except Exception:
+                                pass
+                        agent_type = "controller" if session.is_controller else "standalone"
+                        milestones_svc.add_milestone(
+                            project_name=session.project_name,
+                            session_id=session_id,
+                            task=session.task or "",
+                            summary=summary,
+                            agent_type=agent_type,
+                            model=session.model,
+                            duration_seconds=duration,
+                        )
+                        all_milestones = milestones_svc.get_milestones(session.project_name)
+                        await self._ws.broadcast(WSMessageType.MILESTONES_UPDATED, {
+                            "project_name": session.project_name,
+                            "milestones": all_milestones,
+                        })
+                except Exception as exc:
+                    print(f"[milestone] capture error: {exc}")
+
+            # Reset for next cycle
+            session._subagent_captured_this_cycle = False
+
         if self._db:
             import asyncio
             asyncio.create_task(self._db.update_session(
@@ -223,3 +268,36 @@ class AgentBroker:
             "result": result_text,
             "is_error": is_error,
         })
+
+        # Capture subagent milestone (skip errors)
+        if session and result_text and not is_error:
+            try:
+                tool_info = session._pending_agent_tools.get(tool_use_id, {})
+                task_desc = tool_info.get("tool_input", {}).get("description", "Subagent task")
+
+                duration = None
+                if session._cycle_start_time:
+                    try:
+                        start = datetime.fromisoformat(session._cycle_start_time)
+                        duration = (datetime.now(timezone.utc) - start).total_seconds()
+                    except Exception:
+                        pass
+
+                milestones_svc.add_milestone(
+                    project_name=session.project_name,
+                    session_id=session_id,
+                    task=task_desc,
+                    summary=result_text,
+                    agent_type="subagent",
+                    model=session.model,
+                    duration_seconds=duration,
+                )
+                session._subagent_captured_this_cycle = True
+
+                all_milestones = milestones_svc.get_milestones(session.project_name)
+                await self._ws.broadcast(WSMessageType.MILESTONES_UPDATED, {
+                    "project_name": session.project_name,
+                    "milestones": all_milestones,
+                })
+            except Exception as exc:
+                print(f"[milestone] subagent capture error: {exc}")

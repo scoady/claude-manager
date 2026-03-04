@@ -1094,6 +1094,11 @@
   overflow-y: auto;
 }
 
+.feed-milestones-container {
+  flex: 1;
+  overflow-y: auto;
+}
+
 /* ─── Tasks Panel ──────────────────────────────────────────────────────────── */
 
 .tasks-panel {
@@ -1315,4 +1320,170 @@
   text-align: center;
   color: var(--text-muted);
   font-size: 13px;
+}
+
+/* ─── Milestones Panel ─────────────────────────────────────────────────────── */
+
+.milestones-panel {
+  padding: 0 20px 20px;
+}
+
+.milestones-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--bg-border-dim);
+  margin-bottom: 12px;
+}
+
+.milestones-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.milestones-clear-btn {
+  padding: 4px 12px;
+  background: transparent;
+  border: 1px solid rgba(255, 23, 68, 0.25);
+  border-radius: var(--radius-sm);
+  color: var(--accent-red);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.milestones-clear-btn:hover {
+  background: rgba(255, 23, 68, 0.1);
+  border-color: rgba(255, 23, 68, 0.4);
+}
+
+.milestones-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.milestones-empty {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* ─── Milestone Card ───────────────────────────────────────────────────────── */
+
+.milestone-card {
+  border: 1px solid var(--bg-border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  overflow: hidden;
+  transition: border-color var(--transition);
+}
+
+.milestone-card:hover {
+  border-color: var(--accent-purple);
+}
+
+.milestone-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--bg-border-dim);
+}
+
+.milestone-type-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.milestone-type-controller {
+  color: #ffcc00;
+  background: rgba(255, 204, 0, 0.1);
+  border: 1px solid rgba(255, 204, 0, 0.25);
+}
+
+.milestone-type-subagent {
+  color: var(--accent-purple);
+  background: rgba(179, 136, 255, 0.1);
+  border: 1px solid rgba(179, 136, 255, 0.25);
+}
+
+.milestone-type-standalone {
+  color: var(--accent-cyan);
+  background: rgba(0, 240, 255, 0.08);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+}
+
+.milestone-task {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.milestone-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.milestone-duration {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--accent-green);
+}
+
+.milestone-time {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.milestone-delete-btn {
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition);
+  opacity: 0;
+  flex-shrink: 0;
+}
+
+.milestone-card:hover .milestone-delete-btn {
+  opacity: 1;
+}
+
+.milestone-delete-btn:hover {
+  color: var(--accent-red);
+  background: rgba(255, 23, 68, 0.1);
+}
+
+.milestone-summary {
+  padding: 12px 14px;
+  max-height: 200px;
+  overflow: hidden;
+  position: relative;
+  -webkit-mask-image: linear-gradient(to bottom, black 65%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 65%, transparent 100%);
 }

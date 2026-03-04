@@ -35,6 +35,7 @@ from .broker import AgentBroker
 from .rules import RulesEngine
 from .services.database import Database
 from .rules.builtin_rules import SessionHealthRule
+from .services import milestones as milestones_svc
 from .services import projects as projects_svc
 from .services.projects import SUBAGENT_REPORT_INSTRUCTION
 from .services import settings as settings_svc
@@ -405,6 +406,41 @@ async def start_task(name: str, task_index: int, body: DispatchRequest | None = 
     )
 
     return {"status": "started", "session_id": session.session_id, "task": task["text"]}
+
+
+# ─── Milestones API ────────────────────────────────────────────────────────
+
+
+@app.get("/api/projects/{name}/milestones")
+async def get_milestones(name: str) -> list[dict[str, Any]]:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, milestones_svc.get_milestones, name)
+
+
+@app.delete("/api/projects/{name}/milestones/{milestone_id}")
+async def delete_milestone(name: str, milestone_id: str) -> list[dict[str, Any]]:
+    loop = asyncio.get_event_loop()
+    milestones = await loop.run_in_executor(
+        None, milestones_svc.delete_milestone, name, milestone_id
+    )
+    await ws_manager.broadcast(WSMessageType.MILESTONES_UPDATED, {
+        "project_name": name,
+        "milestones": milestones,
+    })
+    return milestones
+
+
+@app.delete("/api/projects/{name}/milestones")
+async def clear_milestones(name: str) -> list[dict[str, Any]]:
+    loop = asyncio.get_event_loop()
+    milestones = await loop.run_in_executor(
+        None, milestones_svc.clear_milestones, name
+    )
+    await ws_manager.broadcast(WSMessageType.MILESTONES_UPDATED, {
+        "project_name": name,
+        "milestones": milestones,
+    })
+    return milestones
 
 
 # ─── Agents API ────────────────────────────────────────────────────────────────

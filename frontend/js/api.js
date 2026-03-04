@@ -221,6 +221,36 @@ export const api = {
     return res.json();
   },
 
+  // ─── Milestones ──────────────────────────────────────────────────────────
+
+  async getMilestones(projectName) {
+    const res = await fetch(`${BASE}/api/projects/${encodeURIComponent(projectName)}/milestones`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
+  async deleteMilestone(projectName, milestoneId) {
+    const res = await fetch(`${BASE}/api/projects/${encodeURIComponent(projectName)}/milestones/${encodeURIComponent(milestoneId)}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
+  async clearMilestones(projectName) {
+    const res = await fetch(`${BASE}/api/projects/${encodeURIComponent(projectName)}/milestones`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
   // ─── Settings ──────────────────────────────────────────────────────────────
 
   async getStats() {

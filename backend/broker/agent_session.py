@@ -96,6 +96,8 @@ class AgentSession:
     _pending_injection: str | None = field(default=None, repr=False)
     _cancelled: bool = field(default=False, repr=False)
     _pending_agent_tools: dict[str, dict[str, Any]] = field(default_factory=dict, repr=False)
+    _subagent_captured_this_cycle: bool = field(default=False, repr=False)
+    _cycle_start_time: str | None = field(default=None, repr=False)
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -222,6 +224,9 @@ class AgentSession:
 
     async def _spawn_and_stream(self, message: str, resume: bool) -> None:
         """Spawn a claude subprocess and stream its output."""
+        self._cycle_start_time = datetime.now(timezone.utc).isoformat()
+        self._subagent_captured_this_cycle = False
+
         cmd = [CLAUDE_BIN, "--print", "--output-format", "stream-json", "--verbose"]
 
         if resume and self._cli_session_id:

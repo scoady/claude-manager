@@ -2,6 +2,7 @@
 import { escapeHtml } from '../utils.js';
 import { AgentSection } from './AgentSection.js';
 import { TasksPanel } from './TasksPanel.js';
+import { MilestonesPanel } from './MilestonesPanel.js';
 import { api } from '../api.js';
 import { toast } from '../utils.js';
 
@@ -27,10 +28,12 @@ export class FeedController {
     this._laneIndex = 0;
     this._headerEl  = null;
     this._focusedSessionId = null;
-    this._activeTab = 'feed';    // 'feed' | 'tasks'
+    this._activeTab = 'feed';    // 'feed' | 'tasks' | 'milestones'
     this._agentContainer = null;
     this._tasksContainer = null;
     this._tasksPanel = null;
+    this._milestonesContainer = null;
+    this._milestonesPanel = null;
     this._subagentMap = new Map(); // tool_use_id → subagent section id
   }
 
@@ -62,6 +65,16 @@ export class FeedController {
     this._tasksPanel = new TasksPanel(project.name);
     this._tasksContainer.appendChild(this._tasksPanel.el);
 
+    // Milestones container (hidden by default)
+    this._milestonesContainer = document.createElement('div');
+    this._milestonesContainer.className = 'feed-milestones-container hidden';
+    this._el.appendChild(this._milestonesContainer);
+
+    // Create milestones panel
+    if (this._milestonesPanel) this._milestonesPanel.destroy();
+    this._milestonesPanel = new MilestonesPanel(project.name);
+    this._milestonesContainer.appendChild(this._milestonesPanel.el);
+
     this._bindTabEvents();
   }
 
@@ -81,6 +94,7 @@ export class FeedController {
       <div class="feed-tab-bar">
         <button class="feed-tab active" data-feed-tab="feed">Feed</button>
         <button class="feed-tab" data-feed-tab="tasks">Tasks</button>
+        <button class="feed-tab" data-feed-tab="milestones">Milestones</button>
       </div>
       <div class="feed-dispatch-composer">
         <div class="feed-dispatch-row">
@@ -447,19 +461,30 @@ export class FeedController {
         tabs.forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
 
-        if (tabName === 'tasks') {
-          this._agentContainer?.classList.add('hidden');
+        // Hide all containers
+        this._agentContainer?.classList.add('hidden');
+        this._tasksContainer?.classList.add('hidden');
+        this._milestonesContainer?.classList.add('hidden');
+
+        // Feed-only UI elements
+        const showFeedUI = (tabName === 'feed');
+        this._headerEl.querySelector('.feed-dispatch-composer')?.classList.toggle('hidden', !showFeedUI);
+        this._headerEl.querySelector('.skill-toggle-panel')?.classList.toggle('hidden', !showFeedUI);
+
+        // Stop all panel refreshes
+        this._tasksPanel?.stopAutoRefresh();
+        this._milestonesPanel?.stopAutoRefresh();
+
+        if (tabName === 'feed') {
+          this._agentContainer?.classList.remove('hidden');
+        } else if (tabName === 'tasks') {
           this._tasksContainer?.classList.remove('hidden');
-          this._headerEl.querySelector('.feed-dispatch-composer')?.classList.add('hidden');
-          this._headerEl.querySelector('.skill-toggle-panel')?.classList.add('hidden');
           this._tasksPanel?.load();
           this._tasksPanel?.startAutoRefresh();
-        } else {
-          this._tasksContainer?.classList.add('hidden');
-          this._agentContainer?.classList.remove('hidden');
-          this._headerEl.querySelector('.feed-dispatch-composer')?.classList.remove('hidden');
-          this._headerEl.querySelector('.skill-toggle-panel')?.classList.remove('hidden');
-          this._tasksPanel?.stopAutoRefresh();
+        } else if (tabName === 'milestones') {
+          this._milestonesContainer?.classList.remove('hidden');
+          this._milestonesPanel?.load();
+          this._milestonesPanel?.startAutoRefresh();
         }
       });
     });
@@ -469,6 +494,13 @@ export class FeedController {
   handleTasksUpdated(projectName, tasks) {
     if (this._project && this._project.name === projectName && this._tasksPanel) {
       this._tasksPanel.updateTasks(tasks);
+    }
+  }
+
+  /** Handle milestones_updated WS event. */
+  handleMilestonesUpdated(projectName, milestones) {
+    if (this._project && this._project.name === projectName && this._milestonesPanel) {
+      this._milestonesPanel.updateMilestones(milestones);
     }
   }
 
