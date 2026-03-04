@@ -65,7 +65,10 @@ async function selectProject(name) {
   const running = state.agents.filter(a => a.project_name === name);
   for (const agent of running) {
     if (agent.session_id) {
-      feed.appendAgentSection(agent.session_id, agent.task || '');
+      feed.appendAgentSection(agent.session_id, agent.task || '', {
+        phase: agent.phase,
+        turnCount: agent.turn_count,
+      });
     }
   }
 }
