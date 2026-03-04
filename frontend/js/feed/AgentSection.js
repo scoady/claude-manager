@@ -1,6 +1,7 @@
 /** AgentSection — a collapsible agent node in the narrative feed. */
 import { escapeHtml, formatUptime } from '../utils.js';
 import { ToolBlock } from './ToolBlock.js';
+import { renderMarkdown } from './MarkdownRenderer.js';
 
 const PHASE_LABELS = {
   starting:   'starting',
@@ -50,6 +51,8 @@ export class AgentSection {
     this._turnCount = initialTurnCount || 0;
     this._expanded  = false;
     this._streamText = '';
+    this._lastCardIndex = 0; // offset into _streamText for last card update
+    this._detailsOpen = false;
     this._toolBlocks = new Map(); // toolId → ToolBlock
 
     this.el = this._build();
@@ -94,14 +97,20 @@ export class AgentSection {
         </div>
       </div>
       <div class="agent-section-body">
-        <div class="agent-stream-area"></div>
-        <div class="agent-tools-area"></div>
+        <div class="agent-status-card">
+          <div class="status-card-placeholder">Agent is starting...</div>
+        </div>
+        <button class="agent-detail-toggle">Show details</button>
+        <div class="agent-detail-section hidden">
+          <div class="agent-stream-area"></div>
+          <div class="agent-tools-area"></div>
+        </div>
         <div class="agent-inject-composer hidden">
           <div class="inject-hint-row">
             <span class="inject-hint-label">Send a message</span>
           </div>
           <div class="inject-input-row">
-            <textarea class="agent-inject-input" rows="1" placeholder="Inject a message to this agent…"></textarea>
+            <textarea class="agent-inject-input" rows="1" placeholder="Inject a message to this agent..."></textarea>
             <button class="inject-send-btn" disabled>
               <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
                 <path d="M1.5 6.5h10M7 2l4.5 4.5L7 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -114,7 +123,7 @@ export class AgentSection {
   }
 
   _taskLabel() {
-    return this.task && this.task.length > 80 ? this.task.slice(0, 80) + '…' : (this.task || 'Agent');
+    return this.task && this.task.length > 80 ? this.task.slice(0, 80) + '...' : (this.task || 'Agent');
   }
 
   // ── Events ─────────────────────────────────────────────────────────────────
@@ -137,6 +146,16 @@ export class AgentSection {
     this.el.querySelector('.agent-status-btn').addEventListener('click', e => {
       e.stopPropagation();
       this._onStatus?.(this.sessionId);
+    });
+
+    // Detail toggle
+    this.el.querySelector('.agent-detail-toggle').addEventListener('click', e => {
+      e.stopPropagation();
+      this._detailsOpen = !this._detailsOpen;
+      const section = this.el.querySelector('.agent-detail-section');
+      const btn = this.el.querySelector('.agent-detail-toggle');
+      section?.classList.toggle('hidden', !this._detailsOpen);
+      btn.textContent = this._detailsOpen ? 'Hide details' : 'Show details';
     });
 
     const textarea = this.el.querySelector('.agent-inject-input');
@@ -170,42 +189,48 @@ export class AgentSection {
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
-  /** Append a streaming text chunk. */
+  /** Append a streaming text chunk — goes to detail section raw stream only. */
   appendChunk(text) {
     this._streamText += text;
     const area = this.el.querySelector('.agent-stream-area');
     if (!area) return;
 
-    if (this._expanded) {
-      // In expanded mode show full text
-      let cursor = area.querySelector('.stream-cursor');
-      if (!cursor) {
-        area.textContent = '';
-        const pre = document.createElement('pre');
-        pre.className = 'agent-stream-pre';
-        area.appendChild(pre);
-        cursor = document.createElement('span');
-        cursor.className = 'stream-cursor';
-        area.appendChild(cursor);
-      }
-      const pre = area.querySelector('.agent-stream-pre');
-      if (pre) pre.textContent = this._streamText;
-    } else {
-      // Collapsed: show last N lines
-      const lines = this._streamText.split('\n');
-      const preview = lines.slice(-6).join('\n');
-      let pre = area.querySelector('.agent-stream-pre');
-      if (!pre) {
-        pre = document.createElement('pre');
-        pre.className = 'agent-stream-pre collapsed-preview';
-        area.appendChild(pre);
-      }
-      pre.textContent = preview;
+    // Update the raw stream <pre> in the detail section
+    let pre = area.querySelector('.agent-stream-pre');
+    if (!pre) {
+      pre = document.createElement('pre');
+      pre.className = 'agent-stream-pre';
+      area.appendChild(pre);
+      const cursor = document.createElement('span');
+      cursor.className = 'stream-cursor';
+      area.appendChild(cursor);
     }
-    // Auto-scroll if expanded
-    if (this._expanded) {
+    pre.textContent = this._streamText;
+
+    // Auto-scroll detail section if open
+    if (this._detailsOpen) {
       area.scrollTop = area.scrollHeight;
     }
+  }
+
+  /** Update the status card with rendered markdown from accumulated text. */
+  updateStatusCard() {
+    const card = this.el.querySelector('.agent-status-card');
+    if (!card) return;
+
+    // Extract text since last card update
+    const newText = this._streamText.slice(this._lastCardIndex).trim();
+    this._lastCardIndex = this._streamText.length;
+
+    if (!newText) return;
+
+    // Render markdown and replace card content
+    const html = renderMarkdown(newText);
+    card.innerHTML = html;
+    card.classList.add('card-fade-in');
+
+    // Remove animation class after it completes so it can re-trigger
+    setTimeout(() => card.classList.remove('card-fade-in'), 250);
   }
 
   /** Add a new ToolBlock for a tool_start event. */
@@ -272,20 +297,9 @@ export class AgentSection {
         : 'M3 5l3 3 3-3'
       );
     }
-    // If expanding, re-render full stream text
-    if (expanded && this._streamText) {
-      const area = this.el.querySelector('.agent-stream-area');
-      if (area) {
-        area.innerHTML = '';
-        const pre = document.createElement('pre');
-        pre.className = 'agent-stream-pre';
-        pre.textContent = this._streamText;
-        area.appendChild(pre);
-      }
-    }
   }
 
-  /** Update the session ID (pending-PID → real UUID). */
+  /** Update the session ID (pending-PID -> real UUID). */
   updateSessionId(newId) {
     this.sessionId = newId;
     this.el.dataset.session = newId;

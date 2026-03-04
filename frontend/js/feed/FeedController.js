@@ -5,14 +5,14 @@ import { api } from '../api.js';
 import { toast } from '../utils.js';
 
 const LANE_COLORS = [
-  '#4f8ef7', // blue
-  '#1fd679', // green
-  '#a78bfa', // purple
-  '#f59e0b', // amber
-  '#f53b57', // red
-  '#06b6d4', // cyan
-  '#ec4899', // pink
-  '#84cc16', // lime
+  '#00f0ff', // cyan
+  '#e040fb', // magenta
+  '#39ff14', // neon green
+  '#ff6ec7', // hot pink
+  '#ffcc00', // golden
+  '#ff1744', // hot red
+  '#00ffc8', // seafoam
+  '#b388ff', // lavender
 ];
 
 export class FeedController {
@@ -318,6 +318,7 @@ export class FeedController {
         const { session_id, turn_count } = msg.data;
         const section = this._sections.get(session_id);
         section?.setTurnCount(turn_count);
+        section?.updateStatusCard();
         break;
       }
       case 'agent_done': {
