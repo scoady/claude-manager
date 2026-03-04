@@ -4,39 +4,42 @@ import { ToolBlock } from './ToolBlock.js';
 import { renderMarkdown } from './MarkdownRenderer.js';
 
 const PHASE_LABELS = {
-  starting:   'starting',
-  thinking:   'thinking',
-  generating: 'responding',
-  tool_input: 'using tool',
-  tool_exec:  'using tool',
-  idle:       'idle',
-  injecting:  'injecting',
-  cancelled:  'cancelled',
-  error:      'error',
+  starting:    'starting',
+  thinking:    'thinking',
+  generating:  'responding',
+  tool_input:  'using tool',
+  tool_exec:   'using tool',
+  idle:        'idle',
+  injecting:   'injecting',
+  delegating:  'delegating',
+  cancelled:   'cancelled',
+  error:       'error',
 };
 
 const PHASE_CLASSES = {
-  starting:   'phase-starting',
-  thinking:   'phase-working',
-  generating: 'phase-working',
-  tool_input: 'phase-working',
-  tool_exec:  'phase-working',
-  idle:       'phase-idle',
-  injecting:  'phase-working',
-  cancelled:  'phase-done',
-  error:      'phase-error',
+  starting:    'phase-starting',
+  thinking:    'phase-working',
+  generating:  'phase-working',
+  tool_input:  'phase-working',
+  tool_exec:   'phase-working',
+  idle:        'phase-idle',
+  injecting:   'phase-working',
+  delegating:  'phase-delegating',
+  cancelled:   'phase-done',
+  error:       'phase-error',
 };
 
 const PHASE_COLORS = {
-  starting:   '#00f0ff',
-  thinking:   '#ffcc00',
-  generating: '#ffcc00',
-  tool_input: '#e040fb',
-  tool_exec:  '#e040fb',
-  idle:       '#39ff14',
-  injecting:  '#ffcc00',
-  cancelled:  '#ff1744',
-  error:      '#ff1744',
+  starting:    '#00f0ff',
+  thinking:    '#ffcc00',
+  generating:  '#ffcc00',
+  tool_input:  '#e040fb',
+  tool_exec:   '#e040fb',
+  idle:        '#39ff14',
+  injecting:   '#ffcc00',
+  delegating:  '#b388ff',
+  cancelled:   '#ff1744',
+  error:       '#ff1744',
 };
 
 export class AgentSection {
@@ -52,11 +55,13 @@ export class AgentSection {
    * @param {Function} opts.onStatus — (sessionId) => void
    * @param {Function} [opts.onFocus] — (sessionId) => void — called when user expands this section
    */
-  constructor({ sessionId, task, laneColor, isController, initialPhase, initialTurnCount, onInject, onKill, onStatus, onFocus }) {
+  constructor({ sessionId, task, laneColor, isController, isSubagent, subagentType, initialPhase, initialTurnCount, onInject, onKill, onStatus, onFocus }) {
     this.sessionId  = sessionId;
     this.task       = task;
     this.laneColor  = laneColor;
     this._isController = isController || false;
+    this._isSubagent = isSubagent || false;
+    this._subagentType = subagentType || '';
     this._onInject  = onInject;
     this._onKill    = onKill;
     this._onStatus  = onStatus;
@@ -91,7 +96,10 @@ export class AgentSection {
 
   _build() {
     const el = document.createElement('div');
-    el.className = `agent-section${this._isController ? ' controller' : ''}`;
+    const classes = ['agent-section'];
+    if (this._isController) classes.push('controller');
+    if (this._isSubagent) classes.push('subagent');
+    el.className = classes.join(' ');
     el.dataset.session = this.sessionId;
     el.style.setProperty('--lane-color', this._isController ? '#ffcc00' : this.laneColor);
     el.innerHTML = `
@@ -100,6 +108,7 @@ export class AgentSection {
         <div class="agent-section-title">${escapeHtml(this._taskLabel())}</div>
         <div class="agent-section-badges">
           ${this._isController ? '<span class="agent-controller-badge">\u2654 Controller</span>' : ''}
+          ${this._isSubagent ? `<span class="agent-subagent-badge">${escapeHtml(this._subagentType || 'agent')}</span>` : ''}
           <div class="agent-phase-timeline"></div>
           <span class="agent-phase-badge ${PHASE_CLASSES[this._phase] || ''}">${PHASE_LABELS[this._phase] || this._phase}</span>
           <span class="agent-turn-count" title="Turns">${this._turnCount}t</span>
@@ -148,8 +157,23 @@ export class AgentSection {
             </button>
           </div>
         </div>
-      </div>`;
+      </div>
+      ${this._isController ? '<div class="agent-children"></div>' : ''}`;
     return el;
+  }
+
+  /** Append a child AgentSection (subagent) into the nested tree area. */
+  appendChildSection(childSection) {
+    const container = this.el.querySelector('.agent-children');
+    if (!container) return;
+    childSection.el.style.opacity = '0';
+    childSection.el.style.transform = 'translateY(8px)';
+    container.appendChild(childSection.el);
+    requestAnimationFrame(() => {
+      childSection.el.style.transition = 'opacity 280ms ease, transform 280ms ease';
+      childSection.el.style.opacity = '1';
+      childSection.el.style.transform = 'translateY(0)';
+    });
   }
 
   _taskLabel() {

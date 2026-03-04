@@ -31,6 +31,7 @@ export class FeedController {
     this._agentContainer = null;
     this._tasksContainer = null;
     this._tasksPanel = null;
+    this._subagentMap = new Map(); // tool_use_id → subagent section id
   }
 
   // ── Project ────────────────────────────────────────────────────────────────
@@ -376,6 +377,58 @@ export class FeedController {
       }
       case 'agent_milestone': {
         // milestones are shown via tool blocks — no extra action needed
+        break;
+      }
+
+      case 'subagent_spawned': {
+        const { session_id, tool_use_id, description, subagent_type } = msg.data;
+        const controllerSection = this._sections.get(session_id);
+        if (!controllerSection) return;
+
+        // Show controller as delegating
+        controllerSection.setPhase('delegating');
+
+        // Create a child section nested under the controller
+        const subId = `subagent-${tool_use_id}`;
+        const color = LANE_COLORS[this._laneIndex % LANE_COLORS.length];
+        this._laneIndex++;
+
+        const childSection = new AgentSection({
+          sessionId: subId,
+          task: description,
+          laneColor: color,
+          isSubagent: true,
+          subagentType: subagent_type,
+          initialPhase: 'thinking',
+          onInject: () => {},
+          onKill:   () => {},
+          onStatus: () => {},
+        });
+
+        this._sections.set(subId, childSection);
+        this._subagentMap.set(tool_use_id, subId);
+
+        // Nest inside the controller section's child container
+        controllerSection.appendChildSection(childSection);
+
+        // Auto-expand controller to show the subagent
+        controllerSection.setExpanded(true);
+        break;
+      }
+
+      case 'subagent_done': {
+        const { session_id, tool_use_id, result, is_error } = msg.data;
+        const subId = this._subagentMap.get(tool_use_id);
+        if (!subId) return;
+
+        const section = this._sections.get(subId);
+        if (section) {
+          if (result) section.appendChunk(result);
+          section.updateStatusCard();
+          section.markDone(is_error ? 'error' : 'idle');
+        }
+
+        this._subagentMap.delete(tool_use_id);
         break;
       }
     }

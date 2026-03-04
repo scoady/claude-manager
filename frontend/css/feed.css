@@ -816,6 +816,54 @@
   50%      { box-shadow: 0 0 16px rgba(255, 204, 0, 0.35), 0 0 4px rgba(224, 64, 251, 0.15); }
 }
 
+/* ─── Subagent Section (nested under controller) ─────────────────────────── */
+
+.agent-children {
+  margin-left: 16px;
+  padding-left: 12px;
+  border-left: 2px solid rgba(179, 136, 255, 0.15);
+  margin-bottom: 4px;
+}
+
+.agent-section.subagent {
+  border-bottom: none;
+  background: rgba(179, 136, 255, 0.03);
+  border-radius: var(--radius-sm);
+  margin: 4px 0;
+}
+
+.agent-section.subagent .agent-section-header {
+  min-height: 38px;
+  padding: 8px 16px 8px 0;
+}
+
+.agent-section.subagent .agent-section-lane {
+  border-radius: 2px;
+}
+
+.agent-subagent-badge {
+  font-size: 9px;
+  padding: 2px 7px;
+  border-radius: 20px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--accent-purple);
+  background: rgba(179, 136, 255, 0.1);
+  border: 1px solid rgba(179, 136, 255, 0.25);
+  text-transform: uppercase;
+}
+
+/* ─── Delegating Phase ───────────────────────────────────────────────────── */
+
+.agent-phase-badge.phase-delegating {
+  color: var(--accent-purple);
+  background: rgba(179, 136, 255, 0.1);
+  border-color: rgba(179, 136, 255, 0.25);
+  animation: badge-pulse 1.8s ease-in-out infinite;
+  box-shadow: 0 0 8px rgba(179, 136, 255, 0.1);
+}
+
 /* ─── Completed Agent Collapse ────────────────────────────────────────────── */
 
 .agent-section.completed:not(.expanded) .agent-section-body {

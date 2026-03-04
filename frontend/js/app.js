@@ -194,7 +194,9 @@ function onWSMessage(msg) {
 
     case 'agent_stream':
     case 'tool_done':
-    case 'agent_milestone': {
+    case 'agent_milestone':
+    case 'subagent_spawned':
+    case 'subagent_done': {
       feed.handleEvent(msg);
       break;
     }

@@ -86,6 +86,8 @@ class AgentSession:
     on_tool_done:    Callable | None = field(default=None, repr=False)
     on_turn_done:    Callable | None = field(default=None, repr=False)
     on_session_done: Callable | None = field(default=None, repr=False)
+    on_subagent_spawned: Callable | None = field(default=None, repr=False)
+    on_subagent_done:    Callable | None = field(default=None, repr=False)
 
     # Internal — subprocess management
     _cli_session_id: str | None = field(default=None, repr=False)
@@ -93,6 +95,7 @@ class AgentSession:
     _stream_task: asyncio.Task | None = field(default=None, repr=False)
     _pending_injection: str | None = field(default=None, repr=False)
     _cancelled: bool = field(default=False, repr=False)
+    _pending_agent_tools: dict[str, dict[str, Any]] = field(default_factory=dict, repr=False)
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -390,11 +393,21 @@ class AgentSession:
                         "tool_input": tool_input,
                         "started_at": datetime.now(timezone.utc).isoformat(),
                     }
-                    if self.on_tool_start:
-                        await self.on_tool_start(self.session_id, tool_event)
-                    if self.on_tool_done:
-                        tool_event["finished_at"] = datetime.now(timezone.utc).isoformat()
-                        await self.on_tool_done(self.session_id, tool_event)
+
+                    # Agent tool → track for subagent lifecycle
+                    if tool_name == "Agent":
+                        self._pending_agent_tools[tool_id] = tool_event.copy()
+                        if self.on_subagent_spawned:
+                            await self.on_subagent_spawned(
+                                self.session_id, tool_id, tool_input
+                            )
+                    # Normal tools → fire start+done immediately
+                    else:
+                        if self.on_tool_start:
+                            await self.on_tool_start(self.session_id, tool_event)
+                        if self.on_tool_done:
+                            tool_event["finished_at"] = datetime.now(timezone.utc).isoformat()
+                            await self.on_tool_done(self.session_id, tool_event)
 
                     self.output_buffer.append({
                         "role": "assistant",
@@ -407,6 +420,35 @@ class AgentSession:
 
         # ── User message (tool results from CLI) ─────────────────────────────
         if etype == "user":
+            msg = event.get("message", {})
+            content = msg.get("content", [])
+            if isinstance(content, list):
+                for block in content:
+                    if block.get("type") != "tool_result":
+                        continue
+                    tid = block.get("tool_use_id", "")
+                    if tid not in self._pending_agent_tools:
+                        continue
+                    # Extract result text from subagent
+                    result_content = block.get("content", "")
+                    result_text = ""
+                    if isinstance(result_content, list):
+                        result_text = "\n".join(
+                            b.get("text", "")
+                            for b in result_content
+                            if isinstance(b, dict) and b.get("type") == "text"
+                        )
+                    elif isinstance(result_content, str):
+                        result_text = result_content
+
+                    if self.on_subagent_done:
+                        await self.on_subagent_done(
+                            self.session_id,
+                            tid,
+                            result_text,
+                            block.get("is_error", False),
+                        )
+                    del self._pending_agent_tools[tid]
             return
 
         # ── Result — final summary ────────────────────────────────────────────

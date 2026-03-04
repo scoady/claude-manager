@@ -63,12 +63,14 @@ class AgentBroker:
         )
 
         # Wire callbacks
-        session.on_phase_change = self._on_phase_change
-        session.on_text_delta   = self._on_text_delta
-        session.on_tool_start   = self._on_tool_start
-        session.on_tool_done    = self._on_tool_done
-        session.on_turn_done    = self._on_turn_done
-        session.on_session_done = self._on_session_done
+        session.on_phase_change     = self._on_phase_change
+        session.on_text_delta       = self._on_text_delta
+        session.on_tool_start       = self._on_tool_start
+        session.on_tool_done        = self._on_tool_done
+        session.on_turn_done        = self._on_turn_done
+        session.on_session_done     = self._on_session_done
+        session.on_subagent_spawned = self._on_subagent_spawned
+        session.on_subagent_done    = self._on_subagent_done
 
         self._sessions[session_id] = session
 
@@ -197,3 +199,27 @@ class AgentBroker:
                 status=reason,
                 ended_at=datetime.now(timezone.utc).isoformat(),
             ))
+
+    async def _on_subagent_spawned(
+        self, session_id: str, tool_use_id: str, tool_input: dict[str, Any]
+    ) -> None:
+        session = self._sessions.get(session_id)
+        await self._ws.broadcast("subagent_spawned", {
+            "session_id": session_id,
+            "project_name": session.project_name if session else "",
+            "tool_use_id": tool_use_id,
+            "description": tool_input.get("description", ""),
+            "subagent_type": tool_input.get("subagent_type", "general-purpose"),
+        })
+
+    async def _on_subagent_done(
+        self, session_id: str, tool_use_id: str, result_text: str, is_error: bool
+    ) -> None:
+        session = self._sessions.get(session_id)
+        await self._ws.broadcast("subagent_done", {
+            "session_id": session_id,
+            "project_name": session.project_name if session else "",
+            "tool_use_id": tool_use_id,
+            "result": result_text,
+            "is_error": is_error,
+        })
