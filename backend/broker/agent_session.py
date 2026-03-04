@@ -88,6 +88,7 @@ class AgentSession:
     on_session_done: Callable | None = field(default=None, repr=False)
     on_subagent_spawned: Callable | None = field(default=None, repr=False)
     on_subagent_done:    Callable | None = field(default=None, repr=False)
+    on_subagent_tasks:   Callable | None = field(default=None, repr=False)
 
     # Internal — subprocess management
     _cli_session_id: str | None = field(default=None, repr=False)
@@ -408,6 +409,25 @@ class AgentSession:
                             )
                     # Normal tools → fire start+done immediately
                     else:
+                        # TodoWrite/TaskCreate while subagent active → forward task list
+                        if (
+                            tool_name in ("TodoWrite", "TaskCreate", "TaskUpdate")
+                            and self._pending_agent_tools
+                            and self.on_subagent_tasks
+                        ):
+                            active_tool_id = next(iter(self._pending_agent_tools))
+                            todos = tool_input.get("todos", [])
+                            if not todos and tool_name in ("TaskCreate", "TaskUpdate"):
+                                todos = [{
+                                    "content": tool_input.get("subject", ""),
+                                    "status": tool_input.get("status", "pending"),
+                                    "activeForm": tool_input.get("activeForm", ""),
+                                }]
+                            if todos:
+                                await self.on_subagent_tasks(
+                                    self.session_id, active_tool_id, todos
+                                )
+
                         if self.on_tool_start:
                             await self.on_tool_start(self.session_id, tool_event)
                         if self.on_tool_done:

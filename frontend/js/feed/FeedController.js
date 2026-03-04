@@ -486,6 +486,15 @@ export class FeedController {
         this._subagentMap.delete(tool_use_id);
         break;
       }
+
+      case 'subagent_tasks': {
+        const { tool_use_id, todos } = msg.data;
+        const subId = this._subagentMap.get(tool_use_id);
+        if (!subId) return;
+        const section = this._sections.get(subId);
+        section?.updateTaskList(todos);
+        break;
+      }
     }
   }
 

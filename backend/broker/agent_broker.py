@@ -72,6 +72,7 @@ class AgentBroker:
         session.on_session_done     = self._on_session_done
         session.on_subagent_spawned = self._on_subagent_spawned
         session.on_subagent_done    = self._on_subagent_done
+        session.on_subagent_tasks   = self._on_subagent_tasks
 
         self._sessions[session_id] = session
 
@@ -324,3 +325,14 @@ class AgentBroker:
                 })
             except Exception as exc:
                 print(f"[milestone] subagent capture error: {exc}")
+
+    async def _on_subagent_tasks(
+        self, session_id: str, tool_use_id: str, todos: list[dict[str, Any]]
+    ) -> None:
+        session = self._sessions.get(session_id)
+        await self._ws.broadcast("subagent_tasks", {
+            "session_id": session_id,
+            "project_name": session.project_name if session else "",
+            "tool_use_id": tool_use_id,
+            "todos": todos,
+        })

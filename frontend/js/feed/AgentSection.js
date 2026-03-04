@@ -211,6 +211,7 @@ export class AgentSection {
         </div>
       </div>
       <div class="agent-section-body">
+        <div class="subagent-task-header hidden"></div>
         <div class="agent-live-content">
           <div class="agent-stream-area">
             <div class="skeleton-loader">
@@ -513,6 +514,39 @@ export class AgentSection {
       const open = body.classList.toggle('hidden');
       toggle.textContent = open ? 'Show full output' : 'Hide full output';
     });
+  }
+
+  /** Render live task list from TodoWrite events in the subagent task header. */
+  updateTaskList(todos) {
+    const header = this.el.querySelector('.subagent-task-header');
+    if (!header) return;
+    header.classList.remove('hidden');
+
+    // Hide skeleton loader since we now have real content
+    const skeleton = this.el.querySelector('.skeleton-loader');
+    if (skeleton) skeleton.classList.add('hidden');
+
+    header.innerHTML = `
+      <div class="sat-list">
+        ${todos.map((t, i) => {
+          const status = t.status || 'pending';
+          const text = t.content || t.subject || '';
+          const activeForm = t.activeForm || '';
+          const label = status === 'in_progress' && activeForm ? activeForm : text;
+          return `<div class="sat-item sat-${status}" data-index="${i}">
+            <span class="sat-icon">${this._taskIcon(status)}</span>
+            <span class="sat-label">${escapeHtml(label)}</span>
+          </div>`;
+        }).join('')}
+      </div>`;
+  }
+
+  _taskIcon(status) {
+    if (status === 'completed' || status === 'done')
+      return '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="12" rx="3" fill="var(--accent-green)" opacity="0.15" stroke="var(--accent-green)" stroke-width="1.3"/><path d="M4 7l2 2 4-4" stroke="var(--accent-green)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    if (status === 'in_progress')
+      return '<svg class="sat-spinner" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5" stroke="var(--accent-amber)" stroke-width="1.5" fill="none" stroke-dasharray="20 12" stroke-linecap="round"/></svg>';
+    return '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5" stroke="var(--text-muted)" stroke-width="1.3" fill="none"/></svg>';
   }
 
   /** Update the status card with rendered markdown from accumulated text. */

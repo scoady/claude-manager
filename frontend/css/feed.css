@@ -957,6 +957,70 @@
   color: var(--accent-cyan);
 }
 
+/* ─── Subagent Task Header (live TodoWrite) ──────────────────────────────── */
+
+.subagent-task-header {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--bg-border-dim);
+}
+
+.subagent-task-header.hidden {
+  display: none;
+}
+
+.sat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sat-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  transition: all 300ms ease;
+}
+
+.sat-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.sat-label {
+  color: var(--text-secondary);
+  line-height: 1.3;
+}
+
+.sat-in_progress {
+  background: rgba(255, 204, 0, 0.06);
+}
+
+.sat-in_progress .sat-label {
+  color: var(--accent-amber);
+  font-weight: 500;
+}
+
+.sat-completed .sat-label,
+.sat-done .sat-label {
+  color: var(--accent-green);
+}
+
+.sat-pending .sat-label {
+  color: var(--text-muted);
+}
+
+@keyframes sat-spin {
+  to { transform: rotate(360deg); }
+}
+
+.sat-spinner {
+  animation: sat-spin 1.2s linear infinite;
+}
+
 .sa-detail-body {
   margin-top: 6px;
 }
