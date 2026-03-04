@@ -24,5 +24,7 @@ frontend/dist/
 *.swo
 
 # Claude Code local settings (session/memory are machine-specific)
-.claude/
+.claude/*
+!.claude/skills/
+!.claude/INSTRUCTIONS.md
 .claude-snapshot/
