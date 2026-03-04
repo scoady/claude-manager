@@ -26,7 +26,7 @@ from .models import (
     SessionPhase,
     WSMessageType,
 )
-from .broker import AgentBroker, HistoryStore
+from .broker import AgentBroker
 from .rules import RulesEngine
 from .services.database import Database
 from .rules.builtin_rules import SessionHealthRule
@@ -94,10 +94,6 @@ def _compute_stats(broker: AgentBroker) -> GlobalStats:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Persistence directory for session history
-    claude_dir = Path.home() / ".claude"
-    persist_dir = claude_dir / "projects" / "-managed-sessions"
-
     # Optional PostgreSQL persistence
     db: Database | None = None
     database_url = os.environ.get("DATABASE_URL")
@@ -105,8 +101,7 @@ async def lifespan(app: FastAPI):
         db = Database()
         await db.init(database_url)
 
-    history = HistoryStore(persist_dir=persist_dir, db=db)
-    broker = AgentBroker(ws_manager=ws_manager, history_store=history, db=db)
+    broker = AgentBroker(ws_manager=ws_manager, db=db)
     rules = RulesEngine(broker=broker, ws_manager=ws_manager, tick_interval=30.0)
 
     # Built-in rules
@@ -118,7 +113,6 @@ async def lifespan(app: FastAPI):
     ))
 
     app.state.broker = broker
-    app.state.history = history
     app.state.rules = rules
 
     tasks = [
@@ -143,7 +137,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Claude Agent Manager",
     description="Agent orchestration dashboard for managed projects",
-    version="3.0.0",
+    version="3.1.0",
     lifespan=lifespan,
 )
 
@@ -254,9 +248,11 @@ async def list_agents() -> list[dict[str, Any]]:
 
 @app.get("/api/agents/{session_id}/messages")
 async def get_agent_messages(session_id: str) -> list[Any]:
-    history: HistoryStore = app.state.history
-    messages = history.get_messages(session_id)
-    return _format_messages_for_frontend(messages)
+    broker: AgentBroker = app.state.broker
+    session = broker.get_session(session_id)
+    if not session:
+        return []
+    return session.get_messages()
 
 
 @app.post("/api/agents/{session_id}/inject")
@@ -380,51 +376,6 @@ _FRONTEND_DIR  = _FRONTEND_DIST if _FRONTEND_DIST.exists() else _FRONTEND_DEV
 
 if _FRONTEND_DIR.exists():
     app.mount("/", StaticFiles(directory=str(_FRONTEND_DIR), html=True), name="frontend")
-
-
-# ─── Helpers ──────────────────────────────────────────────────────────────────
-
-def _format_messages_for_frontend(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Convert the raw Anthropic messages array to a UI-friendly format."""
-    result = []
-    for msg in messages:
-        role = msg.get("role", "user")
-        content = msg.get("content", "")
-
-        if isinstance(content, str):
-            result.append({"role": role, "content": content, "type": "text"})
-            continue
-
-        for block in content:
-            if isinstance(block, dict):
-                btype = block.get("type", "")
-            else:
-                btype = getattr(block, "type", "")
-                block = block.model_dump() if hasattr(block, "model_dump") else {}
-
-            if btype == "text":
-                result.append({
-                    "role": role,
-                    "type": "text",
-                    "content": block.get("text", ""),
-                })
-            elif btype == "tool_use":
-                result.append({
-                    "role": role,
-                    "type": "tool_use",
-                    "tool_name": block.get("name", ""),
-                    "tool_id": block.get("id", ""),
-                    "tool_input": block.get("input", {}),
-                })
-            elif btype == "tool_result":
-                result.append({
-                    "role": role,
-                    "type": "tool_result",
-                    "tool_use_id": block.get("tool_use_id", ""),
-                    "content": block.get("content", ""),
-                })
-
-    return result
 
 
 # ─── Entry point ──────────────────────────────────────────────────────────────

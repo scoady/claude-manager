@@ -15,8 +15,8 @@
 
 .feed-project-header {
   padding: 28px 32px 20px;
-  border-bottom: 1px solid var(--bg-border);
-  background: var(--bg-surface);
+  border-bottom: 1px solid rgba(91, 156, 255, 0.08);
+  background: linear-gradient(180deg, rgba(12, 12, 20, 0.98), var(--bg-surface));
   position: sticky;
   top: 0;
   z-index: 10;
@@ -24,11 +24,11 @@
 
 .feed-project-title {
   font-family: 'Instrument Serif', 'Georgia', serif;
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 400;
   color: var(--text-primary);
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
   margin-bottom: 4px;
 }
 
@@ -50,8 +50,8 @@
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--bg-border);
+  background: rgba(18, 18, 30, 0.8);
+  border: 1px solid rgba(91, 156, 255, 0.1);
   border-radius: 20px;
   font-size: 11px;
   color: var(--text-secondary);
@@ -61,9 +61,9 @@
 /* ─── Dispatch Composer ──────────────────────────────────────────────────────── */
 
 .feed-dispatch-composer {
-  border: 1px solid var(--bg-border);
+  border: 1px solid rgba(91, 156, 255, 0.12);
   border-radius: var(--radius-md);
-  background: var(--bg-elevated);
+  background: linear-gradient(160deg, rgba(18, 18, 30, 0.8), rgba(12, 12, 22, 0.9));
   overflow: hidden;
 }
 
@@ -132,7 +132,7 @@
   width: 32px;
   height: 32px;
   flex-shrink: 0;
-  background: var(--accent-blue);
+  background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
   border: none;
   border-radius: var(--radius-sm);
   color: #fff;
@@ -140,7 +140,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: opacity var(--transition), background var(--transition);
+  transition: all var(--transition);
+  box-shadow: 0 2px 6px rgba(91, 156, 255, 0.2);
 }
 
 .feed-dispatch-btn:disabled {
@@ -148,7 +149,8 @@
   cursor: not-allowed;
 }
 .feed-dispatch-btn:not(:disabled):hover {
-  background: var(--accent-blue-2);
+  filter: brightness(1.1);
+  box-shadow: 0 4px 12px rgba(91, 156, 255, 0.3);
 }
 .feed-dispatch-btn.sending {
   opacity: 0.5;
@@ -164,7 +166,7 @@
 }
 
 .agent-section:hover {
-  background: var(--bg-surface);
+  background: rgba(12, 12, 20, 0.6);
 }
 
 .agent-section-header {
@@ -181,14 +183,16 @@
   width: 3px;
   min-width: 3px;
   align-self: stretch;
-  background: var(--lane-color, var(--accent-blue));
+  background: var(--lane-color, var(--accent-cyan));
   border-radius: 0 2px 2px 0;
   margin-right: 2px;
-  transition: box-shadow 0.4s ease;
+  transition: box-shadow 0.4s ease, width 0.3s ease;
 }
 
 .agent-section-lane.pulsing {
-  box-shadow: 0 0 8px var(--lane-color, var(--accent-blue));
+  width: 4px;
+  min-width: 4px;
+  box-shadow: 0 0 10px var(--lane-color, var(--accent-cyan)), 0 0 3px var(--lane-color, var(--accent-cyan));
   animation: lane-pulse 2s ease-in-out infinite;
 }
 
@@ -200,12 +204,13 @@
 .agent-section-title {
   flex: 1;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   font-family: var(--font-ui);
+  letter-spacing: -0.01em;
 }
 
 .agent-section-badges {
@@ -218,40 +223,43 @@
 .agent-phase-badge {
   font-size: 10px;
   font-family: var(--font-mono);
-  padding: 2px 7px;
+  font-weight: 500;
+  padding: 2px 8px;
   border-radius: 20px;
   border: 1px solid transparent;
+  letter-spacing: 0.02em;
 }
 
 .agent-phase-badge.phase-working {
-  color: var(--accent-blue);
-  background: rgba(79, 142, 247, 0.1);
-  border-color: rgba(79, 142, 247, 0.2);
+  color: var(--accent-amber);
+  background: rgba(255, 178, 36, 0.08);
+  border-color: rgba(255, 178, 36, 0.2);
   animation: badge-pulse 1.8s ease-in-out infinite;
 }
 
 .agent-phase-badge.phase-idle {
   color: var(--accent-green);
-  background: rgba(31, 214, 121, 0.08);
-  border-color: rgba(31, 214, 121, 0.15);
+  background: rgba(0, 230, 138, 0.06);
+  border-color: rgba(0, 230, 138, 0.15);
 }
 
 .agent-phase-badge.phase-starting {
-  color: var(--text-secondary);
-  background: var(--bg-elevated);
-  border-color: var(--bg-border);
+  color: var(--accent-cyan);
+  background: rgba(0, 212, 255, 0.06);
+  border-color: rgba(0, 212, 255, 0.12);
+  animation: badge-pulse 2s ease-in-out infinite;
 }
 
 .agent-phase-badge.phase-done {
-  color: var(--text-muted);
-  background: var(--bg-elevated);
-  border-color: var(--bg-border-dim);
+  color: var(--accent-teal);
+  background: rgba(45, 212, 168, 0.06);
+  border-color: rgba(45, 212, 168, 0.1);
 }
 
 .agent-phase-badge.phase-error {
   color: var(--accent-red);
-  background: rgba(245, 59, 87, 0.08);
-  border-color: rgba(245, 59, 87, 0.2);
+  background: rgba(255, 77, 106, 0.08);
+  border-color: rgba(255, 77, 106, 0.2);
 }
 
 @keyframes badge-pulse {
@@ -330,12 +338,13 @@
   display: inline-block;
   width: 6px;
   height: 13px;
-  background: var(--accent-blue);
+  background: var(--accent-cyan);
   vertical-align: text-bottom;
   border-radius: 1px;
   animation: blink 1s step-end infinite;
-  opacity: 0.7;
+  opacity: 0.8;
   margin-left: 1px;
+  box-shadow: 0 0 4px rgba(0, 212, 255, 0.3);
 }
 
 @keyframes blink {
@@ -355,9 +364,9 @@
 /* ─── Tool Block ─────────────────────────────────────────────────────────────── */
 
 .tool-block {
-  border: 1px solid var(--bg-border-dim);
+  border: 1px solid rgba(179, 146, 255, 0.08);
   border-radius: var(--radius-sm);
-  background: var(--bg-surface);
+  background: linear-gradient(160deg, rgba(12, 12, 22, 0.9), var(--bg-surface));
   overflow: hidden;
   font-size: 11.5px;
 }
@@ -377,7 +386,8 @@
 }
 
 .tool-block-icon {
-  color: var(--text-muted);
+  color: var(--accent-purple);
+  opacity: 0.6;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -386,8 +396,8 @@
 .tool-block-name {
   font-family: var(--font-mono);
   font-size: 11px;
-  font-weight: 500;
-  color: var(--text-secondary);
+  font-weight: 600;
+  color: var(--accent-purple);
   flex-shrink: 0;
 }
 
@@ -509,6 +519,7 @@
 
 .agent-inject-input:focus {
   border-color: var(--accent-amber);
+  box-shadow: 0 0 0 2px rgba(255, 178, 36, 0.08);
 }
 
 .agent-inject-input::placeholder {
@@ -519,7 +530,7 @@
   width: 32px;
   height: 32px;
   flex-shrink: 0;
-  background: var(--accent-amber);
+  background: linear-gradient(135deg, var(--accent-amber), #ff8c00);
   border: none;
   border-radius: var(--radius-sm);
   color: #000;
@@ -527,7 +538,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: opacity var(--transition);
+  transition: all var(--transition);
+  box-shadow: 0 2px 6px rgba(255, 178, 36, 0.2);
 }
 
 .inject-send-btn:disabled {
@@ -536,7 +548,8 @@
 }
 
 .inject-send-btn:not(:disabled):hover {
-  opacity: 0.85;
+  filter: brightness(1.1);
+  box-shadow: 0 4px 12px rgba(255, 178, 36, 0.3);
 }
 
 /* ─── Feed empty state ───────────────────────────────────────────────────────── */

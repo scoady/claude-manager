@@ -5,9 +5,11 @@ import { ToolBlock } from './ToolBlock.js';
 const PHASE_LABELS = {
   starting:   'starting',
   thinking:   'thinking',
-  tool_use:   'using tool',
-  responding: 'responding',
+  generating: 'responding',
+  tool_input: 'using tool',
+  tool_exec:  'using tool',
   idle:       'idle',
+  injecting:  'injecting',
   cancelled:  'cancelled',
   error:      'error',
 };
@@ -15,9 +17,11 @@ const PHASE_LABELS = {
 const PHASE_CLASSES = {
   starting:   'phase-starting',
   thinking:   'phase-working',
-  tool_use:   'phase-working',
-  responding: 'phase-working',
+  generating: 'phase-working',
+  tool_input: 'phase-working',
+  tool_exec:  'phase-working',
   idle:       'phase-idle',
+  injecting:  'phase-working',
   cancelled:  'phase-done',
   error:      'phase-error',
 };
@@ -28,11 +32,13 @@ export class AgentSection {
    * @param {string} opts.sessionId
    * @param {string} opts.task
    * @param {string} opts.laneColor  — CSS color string for the left accent bar
+   * @param {string} [opts.initialPhase] — initial phase (default: 'starting')
+   * @param {number} [opts.initialTurnCount] — initial turn count (default: 0)
    * @param {Function} opts.onInject — (sessionId, message) => void
    * @param {Function} opts.onKill   — (sessionId) => void
    * @param {Function} opts.onStatus — (sessionId) => void
    */
-  constructor({ sessionId, task, laneColor, onInject, onKill, onStatus }) {
+  constructor({ sessionId, task, laneColor, initialPhase, initialTurnCount, onInject, onKill, onStatus }) {
     this.sessionId  = sessionId;
     this.task       = task;
     this.laneColor  = laneColor;
@@ -40,14 +46,22 @@ export class AgentSection {
     this._onKill    = onKill;
     this._onStatus  = onStatus;
 
-    this._phase     = 'starting';
-    this._turnCount = 0;
+    this._phase     = initialPhase || 'starting';
+    this._turnCount = initialTurnCount || 0;
     this._expanded  = false;
     this._streamText = '';
     this._toolBlocks = new Map(); // toolId → ToolBlock
 
     this.el = this._build();
     this._bindEvents();
+
+    // Apply initial phase styling (lane pulsing, inject composer visibility)
+    if (initialPhase) {
+      this.setPhase(initialPhase);
+    }
+    if (initialTurnCount) {
+      this.setTurnCount(initialTurnCount);
+    }
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
@@ -63,7 +77,7 @@ export class AgentSection {
         <div class="agent-section-title">${escapeHtml(this._taskLabel())}</div>
         <div class="agent-section-badges">
           <span class="agent-phase-badge ${PHASE_CLASSES[this._phase] || ''}">${PHASE_LABELS[this._phase] || this._phase}</span>
-          <span class="agent-turn-count" title="Turns">0t</span>
+          <span class="agent-turn-count" title="Turns">${this._turnCount}t</span>
         </div>
         <div class="agent-section-actions">
           <button class="icon-btn agent-status-btn" title="Ask status">?</button>

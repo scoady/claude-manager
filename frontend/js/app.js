@@ -104,14 +104,17 @@ function onWSMessage(msg) {
     }
 
     case 'agent_spawned': {
-      const { session_id, project_name, task } = msg.data;
-      if (!state.agents.find(a => a.session_id === session_id)) {
+      const d = msg.data;
+      if (!state.agents.find(a => a.session_id === d.session_id)) {
         state.agents.push({
-          session_id,
-          project_name,
-          task,
-          status: 'working',
-          started_at: msg.timestamp,
+          session_id: d.session_id,
+          project_name: d.project_name,
+          task: d.task,
+          status: d.status || 'working',
+          phase: d.phase,
+          turn_count: d.turn_count || 0,
+          started_at: d.started_at || msg.timestamp,
+          model: d.model,
         });
       }
       // Feed handles this via handleEvent if project matches
@@ -120,8 +123,15 @@ function onWSMessage(msg) {
     }
 
     case 'agent_done': {
-      const { session_id } = msg.data;
-      state.agents = state.agents.filter(a => a.session_id !== session_id);
+      const { session_id, reason } = msg.data;
+      if (reason !== 'idle') {
+        // Only remove agents that are truly done (cancelled, error)
+        state.agents = state.agents.filter(a => a.session_id !== session_id);
+      } else {
+        // Idle agents stay — update their status
+        const agent = state.agents.find(a => a.session_id === session_id);
+        if (agent) agent.status = 'idle';
+      }
       feed.handleEvent(msg);
       break;
     }

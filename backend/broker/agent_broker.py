@@ -11,13 +11,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
 from ..models import SessionPhase, WSMessageType
 from .agent_session import AgentSession
-from .tool_executor import ToolExecutor
-from .history_store import HistoryStore
 
 if TYPE_CHECKING:
     from ..ws_manager import WSManager
@@ -25,25 +22,15 @@ if TYPE_CHECKING:
 
 _DEFAULT_MODEL = "claude-opus-4-6"
 
-_DEFAULT_SYSTEM = """\
-You are an autonomous agent. Work through tasks methodically and completely.
-Write short status lines so the dashboard stays current:
-  → Starting: <task>
-  ✓ Done: <task>
-  ⚠ Blocked: <reason>
-"""
-
 
 class AgentBroker:
     def __init__(
         self,
         ws_manager: "WSManager",
-        history_store: HistoryStore,
         default_model: str = _DEFAULT_MODEL,
         db: "Database | None" = None,
     ) -> None:
         self._ws = ws_manager
-        self._history = history_store
         self._default_model = default_model
         self._db = db
         self._sessions: dict[str, AgentSession] = {}
@@ -56,25 +43,14 @@ class AgentBroker:
         project_path: str,
         initial_task: str,
         model: str | None = None,
-        system_prompt: str | None = None,
-        allowed_tools: list[str] | None = None,
     ) -> AgentSession:
         session_id = str(uuid.uuid4())
-
-        # Load project INSTRUCTIONS.md as system prompt if not provided
-        if system_prompt is None:
-            system_prompt = _load_instructions(project_path) or _DEFAULT_SYSTEM
-
-        tool_executor = ToolExecutor(allowed_tools=allowed_tools)
 
         session = AgentSession(
             session_id=session_id,
             project_name=project_name,
             project_path=project_path,
             model=model or self._default_model,
-            system_prompt=system_prompt,
-            tool_executor=tool_executor,
-            history_store=self._history,
         )
 
         # Wire callbacks
@@ -194,7 +170,10 @@ class AgentBroker:
         })
 
     async def _on_session_done(self, session_id: str, reason: str) -> None:
-        session = self._sessions.pop(session_id, None)
+        # Keep idle sessions in registry for follow-up injections
+        if reason != "idle":
+            self._sessions.pop(session_id, None)
+        session = self._sessions.get(session_id)
         await self._ws.broadcast(WSMessageType.AGENT_DONE, {
             "session_id": session_id,
             "project_name": session.project_name if session else "",
@@ -207,16 +186,3 @@ class AgentBroker:
                 status=reason,
                 ended_at=datetime.now(timezone.utc).isoformat(),
             ))
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _load_instructions(project_path: str) -> str | None:
-    """Load .claude/INSTRUCTIONS.md from a project directory as system prompt."""
-    try:
-        path = Path(project_path) / ".claude" / "INSTRUCTIONS.md"
-        if path.exists():
-            return path.read_text("utf-8")
-    except Exception:
-        pass
-    return None

@@ -25,3 +25,4 @@ frontend/dist/
 
 # Claude Code local settings (session/memory are machine-specific)
 .claude/
+.claude-snapshot/

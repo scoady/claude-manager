@@ -6,14 +6,22 @@ services:
     ports:
       - "4040:4040"
     volumes:
-      # ~/.claude mounted for session JSONL persistence
+      # ~/.claude mounted for CLI session persistence + config
       - "${HOME}/.claude:/root/.claude"
+      # ~/.claude.json config file (required by CLI)
+      # .claude.json is copied into the container at startup (not bind-mounted)
+      # because the CLI needs it writable and bind-mounts risk corruption
+      - "${CLAUDE_JSON_SNAPSHOT:-${HOME}/.claude.json}:/tmp/claude-config.json:ro"
       # Managed projects — same absolute path inside and outside container
       # so path strings in the UI match what's on disk
       - "${MANAGED_PROJECTS_DIR:-${HOME}/git/claude-managed-projects}:${MANAGED_PROJECTS_DIR:-${HOME}/git/claude-managed-projects}"
+      # SSH keys + git config for git push/pull inside agents
+      - "${HOME}/.ssh:/root/.ssh:ro"
+      - "${HOME}/.gitconfig:/root/.gitconfig:ro"
     environment:
-      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
       CLAUDE_DATA_DIR: /root/.claude
       MANAGED_PROJECTS_DIR: "${MANAGED_PROJECTS_DIR:-${HOME}/git/claude-managed-projects}"
       DATABASE_URL: "${DATABASE_URL:-}"
+      # OAuth token for Pro subscription auth (extracted from macOS Keychain)
+      CLAUDE_CODE_OAUTH_TOKEN: "${CLAUDE_CODE_OAUTH_TOKEN}"
     restart: unless-stopped

@@ -37,6 +37,7 @@ Your work is streamed live to the manager dashboard — your text output appears
 1. Read `PROJECT.md` to fully understand the goal.
 2. Create (or update) `TASKS.md` with a concrete checklist before doing any work.
 3. Work through tasks one at a time. Keep working until all tasks are complete.
+4. When ALL tasks are done, write a final summary and a clear "✅ All tasks complete" line.
 
 ## Status updates — IMPORTANT
 
@@ -45,8 +46,10 @@ Write a short status line before and after each task so the dashboard stays curr
   → Starting: <task name>
   ✓ Done: <task name>
   ⚠ Blocked: <reason>
+  ✅ All tasks complete — <brief summary of what was accomplished>
 
 These lines appear live on your agent card. Keep them short and clear.
+The final "✅ All tasks complete" line is critical — it signals to the dashboard that you are done.
 
 ## TASKS.md format
 
@@ -55,6 +58,17 @@ These lines appear live on your agent card. Keep them short and clear.
   - [x] task complete
 
 Update checkboxes as you go so anyone can see overall progress at a glance.
+
+## Git & Deployment
+
+Git is configured and SSH keys are available. You can push/pull to GitHub remotes.
+- Git user: configured globally (inherited from host)
+- SSH keys: mounted at `~/.ssh/` (ed25519 for GitHub, RSA for other hosts)
+- To create a new GitHub repo: `gh repo create <org>/<name> --private --source=. --push`
+- To add a remote: `git remote add origin git@github.com:<org>/<name>.git`
+- Always commit your work and push when you reach a milestone or finish.
+
+If the project doesn't have a remote yet, create one under the `scoady` GitHub org.
 """
 
 _SETTINGS_TEMPLATE = {
