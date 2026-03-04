@@ -399,9 +399,14 @@ export class FeedController {
       case 'tool_start': {
         const { session_id, tool } = msg.data;
         // Route to subagent section if this tool belongs to an active subagent
-        const subIdStart = tool.parent_tool_use_id
-          ? this._subagentMap.get(tool.parent_tool_use_id) : null;
-        const startSection = this._sections.get(subIdStart || session_id);
+        let startSection = null;
+        if (tool.parent_tool_use_id) {
+          const subId = this._subagentMap.get(tool.parent_tool_use_id);
+          const sub = subId ? this._sections.get(subId) : null;
+          // Only route to subagent if its element is actually in the DOM
+          if (sub?.el?.isConnected) startSection = sub;
+        }
+        if (!startSection) startSection = this._sections.get(session_id);
         startSection?.addToolBlock({
           toolId:    tool.tool_id,
           toolName:  tool.tool_name,
@@ -411,9 +416,13 @@ export class FeedController {
       }
       case 'tool_done': {
         const { session_id, tool } = msg.data;
-        const subIdDone = tool.parent_tool_use_id
-          ? this._subagentMap.get(tool.parent_tool_use_id) : null;
-        const doneSection = this._sections.get(subIdDone || session_id);
+        let doneSection = null;
+        if (tool.parent_tool_use_id) {
+          const subId = this._subagentMap.get(tool.parent_tool_use_id);
+          const sub = subId ? this._sections.get(subId) : null;
+          if (sub?.el?.isConnected) doneSection = sub;
+        }
+        if (!doneSection) doneSection = this._sections.get(session_id);
         doneSection?.updateToolBlock(tool.tool_id, tool.output);
         break;
       }

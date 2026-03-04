@@ -242,7 +242,7 @@ export class AgentSection {
           </div>
         </div>
       </div>
-      ${this._isController ? '<div class="agent-children"></div>' : ''}`;
+      <div class="agent-children"></div>`;
     return el;
   }
 
