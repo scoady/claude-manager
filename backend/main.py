@@ -18,12 +18,14 @@ from .models import (
     Agent,
     AgentStatus,
     BootstrapProjectRequest,
+    CreateSkillRequest,
     DispatchRequest,
     GlobalStats,
     InjectRequest,
     ManagedProject,
     ProjectConfig,
     SessionPhase,
+    SkillInfo,
     WSMessageType,
 )
 from .broker import AgentBroker
@@ -32,6 +34,7 @@ from .services.database import Database
 from .rules.builtin_rules import SessionHealthRule
 from .services import projects as projects_svc
 from .services import settings as settings_svc
+from .services import skills as skills_svc
 from .ws_manager import WSManager
 
 # ─── Singletons ───────────────────────────────────────────────────────────────
@@ -315,6 +318,56 @@ async def enable_plugin(plugin_id: str) -> dict[str, Any]:
 async def disable_plugin(plugin_id: str) -> dict[str, Any]:
     settings_svc.set_plugin_enabled(plugin_id, False)
     return {"id": plugin_id, "enabled": False}
+
+
+# ─── Skills API ──────────────────────────────────────────────────────────────
+
+
+@app.get("/api/skills", response_model=list[SkillInfo])
+async def list_skills() -> list[SkillInfo]:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, skills_svc.list_global_skills)
+
+
+@app.get("/api/skills/marketplace")
+async def list_marketplace() -> list[dict[str, Any]]:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, skills_svc.list_marketplace_plugins)
+
+
+@app.post("/api/skills", response_model=SkillInfo, status_code=201)
+async def create_skill(body: CreateSkillRequest) -> SkillInfo:
+    try:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, skills_svc.create_skill, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/api/projects/{name}/skills", response_model=list[SkillInfo])
+async def get_project_skills(name: str) -> list[SkillInfo]:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, skills_svc.list_available_for_project, name)
+
+
+@app.post("/api/projects/{name}/skills/{skill_name}/enable")
+async def enable_project_skill(name: str, skill_name: str) -> dict[str, Any]:
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, skills_svc.enable_skill_for_project, name, skill_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"project": name, "skill": skill_name, "enabled": True}
+
+
+@app.post("/api/projects/{name}/skills/{skill_name}/disable")
+async def disable_project_skill(name: str, skill_name: str) -> dict[str, Any]:
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, skills_svc.disable_skill_for_project, name, skill_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"project": name, "skill": skill_name, "enabled": False}
 
 
 @app.get("/api/stats", response_model=GlobalStats)

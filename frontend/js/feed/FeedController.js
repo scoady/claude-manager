@@ -73,8 +73,19 @@ export class FeedController {
             </svg>
           </button>
         </div>
+      </div>
+      <div class="skill-toggle-panel">
+        <div class="skill-toggle-header" title="Toggle skills for this project">
+          <svg class="skill-toggle-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <path d="M3 2l4 3-4 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="skill-toggle-title">Skills</span>
+          <span class="skill-toggle-count"></span>
+        </div>
+        <div class="skill-toggle-body hidden"></div>
       </div>`;
     this._bindHeaderEvents(el, project);
+    this._loadSkillsPanel(el, project);
     return el;
   }
 
@@ -141,6 +152,74 @@ export class FeedController {
     } finally {
       btn.classList.remove('sending');
       btn.disabled = !textarea?.value.trim();
+    }
+  }
+
+  // ── Skills panel ──────────────────────────────────────────────────────────
+
+  async _loadSkillsPanel(headerEl, project) {
+    const panel = headerEl.querySelector('.skill-toggle-panel');
+    const header = panel.querySelector('.skill-toggle-header');
+    const body = panel.querySelector('.skill-toggle-body');
+    const countEl = panel.querySelector('.skill-toggle-count');
+
+    // Toggle collapse
+    header.addEventListener('click', () => {
+      const open = body.classList.toggle('hidden');
+      panel.classList.toggle('open', !open);
+    });
+
+    // Load skills
+    try {
+      const skills = await api.getProjectSkills(project.name);
+      const enabledCount = skills.filter(s => s.enabled).length;
+      countEl.textContent = `(${enabledCount} of ${skills.length} enabled)`;
+
+      if (!skills.length) {
+        body.innerHTML = '<div class="skill-empty">No skills available. Create skills in Settings.</div>';
+        return;
+      }
+
+      body.innerHTML = skills.map(s => `
+        <div class="skill-row" data-skill="${escapeHtml(s.name)}" data-source="${escapeHtml(s.source)}">
+          <span class="skill-dot ${s.enabled ? 'on' : ''}"></span>
+          <span class="skill-name">${escapeHtml(s.name)}</span>
+          <span class="skill-desc">${escapeHtml(s.description || '')}</span>
+          <span class="skill-source-badge source-${escapeHtml(s.source)}">${escapeHtml(s.source)}</span>
+          ${s.source !== 'local' ? `
+            <label class="toggle-switch toggle-sm" title="${s.enabled ? 'Disable' : 'Enable'} skill">
+              <input type="checkbox" ${s.enabled ? 'checked' : ''} data-skill-name="${escapeHtml(s.name)}" />
+              <span class="toggle-track"></span>
+            </label>` : '<span class="skill-always-on">always on</span>'}
+        </div>`).join('');
+
+      // Bind toggles
+      body.querySelectorAll('input[data-skill-name]').forEach(cb => {
+        cb.addEventListener('change', async () => {
+          const skillName = cb.dataset.skillName;
+          const enabled = cb.checked;
+          try {
+            if (enabled) {
+              await api.enableProjectSkill(project.name, skillName);
+            } else {
+              await api.disableProjectSkill(project.name, skillName);
+            }
+            const dot = cb.closest('.skill-row').querySelector('.skill-dot');
+            dot.classList.toggle('on', enabled);
+            // Update count
+            const allCbs = body.querySelectorAll('input[data-skill-name]');
+            const localCount = body.querySelectorAll('.skill-always-on').length;
+            const checkedCount = Array.from(allCbs).filter(c => c.checked).length + localCount;
+            countEl.textContent = `(${checkedCount} of ${skills.length} enabled)`;
+            toast(`Skill ${skillName} ${enabled ? 'enabled' : 'disabled'}`, 'success', 2000);
+          } catch (e) {
+            cb.checked = !enabled;
+            toast(`Failed: ${e.message}`, 'error');
+          }
+        });
+      });
+    } catch (e) {
+      body.innerHTML = `<div class="skill-empty">Failed to load skills</div>`;
     }
   }
 

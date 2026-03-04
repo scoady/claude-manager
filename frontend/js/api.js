@@ -90,6 +90,61 @@ export const api = {
     return true;
   },
 
+  // ─── Skills ───────────────────────────────────────────────────────────────
+
+  async getSkills() {
+    const res = await fetch(`${BASE}/api/skills`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
+  async getMarketplaceSkills() {
+    const res = await fetch(`${BASE}/api/skills/marketplace`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
+  async createSkill(data) {
+    const res = await fetch(`${BASE}/api/skills`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
+  async getProjectSkills(projectName) {
+    const res = await fetch(`${BASE}/api/projects/${encodeURIComponent(projectName)}/skills`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
+  async enableProjectSkill(projectName, skillName) {
+    const res = await fetch(`${BASE}/api/projects/${encodeURIComponent(projectName)}/skills/${encodeURIComponent(skillName)}/enable`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
+  async disableProjectSkill(projectName, skillName) {
+    const res = await fetch(`${BASE}/api/projects/${encodeURIComponent(projectName)}/skills/${encodeURIComponent(skillName)}/disable`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
   // ─── Settings ──────────────────────────────────────────────────────────────
 
   async getStats() {

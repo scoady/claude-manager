@@ -75,6 +75,23 @@ class ManagedProject(BaseModel):
     active_session_ids: list[str] = []
 
 
+class SkillInfo(BaseModel):
+    name: str
+    description: str | None = None
+    source: str  # "global", "local", "plugin"
+    path: str
+    enabled: bool = False
+    frontmatter: dict[str, Any] = {}
+
+
+class CreateSkillRequest(BaseModel):
+    name: str
+    description: str
+    content: str
+    allowed_tools: list[str] = []
+    scope: str = "global"  # "global" or a project name
+
+
 class BootstrapProjectRequest(BaseModel):
     name: str
     description: str
