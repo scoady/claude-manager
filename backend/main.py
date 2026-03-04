@@ -181,6 +181,11 @@ async def create_project(body: BootstrapProjectRequest) -> ManagedProject:
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
+    # Apply model override from the create form
+    if body.model:
+        project.config.model = body.model
+        projects_svc.update_project_config(body.name, project.config)
+
     await _broadcast_project_list(broker)
 
     controller_task = (

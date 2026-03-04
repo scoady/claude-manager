@@ -95,6 +95,7 @@ class CreateSkillRequest(BaseModel):
 class BootstrapProjectRequest(BaseModel):
     name: str
     description: str
+    model: str | None = None
 
 
 class DispatchRequest(BaseModel):

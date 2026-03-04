@@ -11,11 +11,13 @@ export const api = {
     return res.json();
   },
 
-  async createProject(name, description) {
+  async createProject(name, description, model) {
+    const body = { name, description };
+    if (model) body.model = model;
     const res = await fetch(`${BASE}/api/projects`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, description }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));

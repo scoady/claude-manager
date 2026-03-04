@@ -227,11 +227,13 @@ function closeNewProjectModal() {
   $('new-project-modal')?.classList.add('hidden');
   if ($('new-project-name')) $('new-project-name').value = '';
   if ($('new-project-description')) $('new-project-description').value = '';
+  if ($('new-project-model')) $('new-project-model').value = '';
 }
 
 async function createProject() {
   const name = $('new-project-name')?.value.trim();
   const description = $('new-project-description')?.value.trim();
+  const model = $('new-project-model')?.value || null;
 
   if (!name) {
     toast('Project name is required', 'error');
@@ -249,7 +251,7 @@ async function createProject() {
   }
 
   try {
-    const project = await api.createProject(name, description);
+    const project = await api.createProject(name, description, model);
     state.projects.push(project);
     renderProjectList(state.projects, state.selectedProject, selectProject);
     renderProjectTileGrid(state.projects, state.agents, selectProject);
