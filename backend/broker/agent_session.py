@@ -22,6 +22,7 @@ from ..models import SessionPhase
 
 CLAUDE_BIN = os.environ.get("CLAUDE_BIN", "claude")
 OAUTH_TOKEN_FILE = "/run/claude-oauth-token"
+CLAUDE_DATA_DIR = Path(os.environ.get("CLAUDE_DATA_DIR", str(Path.home() / ".claude")))
 
 
 def _get_spawn_env() -> dict[str, str]:
@@ -156,8 +157,61 @@ class AgentSession:
         }
 
     def get_messages(self) -> list[dict[str, Any]]:
-        """Return collected output messages for the frontend."""
+        """Return messages — read from CLI's JSONL session file, fall back to in-memory buffer."""
+        jsonl_path = self._get_jsonl_path()
+        if jsonl_path:
+            try:
+                parsed = self._parse_jsonl(jsonl_path)
+                if parsed:
+                    return parsed
+            except Exception:
+                pass
         return list(self.output_buffer)
+
+    def _get_jsonl_path(self) -> Path | None:
+        """Compute the path to the CLI's persisted JSONL session file."""
+        if not self._cli_session_id or not self.project_path:
+            return None
+        encoded = self.project_path.replace("/", "-").replace(" ", "-")
+        jsonl_path = CLAUDE_DATA_DIR / "projects" / encoded / f"{self._cli_session_id}.jsonl"
+        return jsonl_path if jsonl_path.exists() else None
+
+    @staticmethod
+    def _parse_jsonl(filepath: Path) -> list[dict[str, Any]]:
+        """Parse a Claude CLI session JSONL file into frontend-compatible messages."""
+        messages: list[dict[str, Any]] = []
+        for line in filepath.read_text().splitlines():
+            if not line.strip():
+                continue
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            msg = obj.get("message", {})
+            if msg.get("role") != "assistant":
+                continue
+            content = msg.get("content", [])
+            if isinstance(content, str):
+                if content.strip():
+                    messages.append({"role": "assistant", "type": "text", "content": content})
+                continue
+            for block in content:
+                btype = block.get("type")
+                if btype == "text" and block.get("text", "").strip():
+                    messages.append({
+                        "role": "assistant",
+                        "type": "text",
+                        "content": block["text"],
+                    })
+                elif btype == "tool_use":
+                    messages.append({
+                        "role": "assistant",
+                        "type": "tool_use",
+                        "tool_name": block.get("name", "tool"),
+                        "tool_id": block.get("id", ""),
+                        "tool_input": block.get("input", {}),
+                    })
+        return messages
 
     # ── Subprocess management ──────────────────────────────────────────────────
 

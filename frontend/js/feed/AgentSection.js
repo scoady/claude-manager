@@ -240,24 +240,75 @@ export class AgentSection {
   hydrateMessages(messages) {
     if (!messages || !messages.length) return;
 
-    // Replay text and tool_use messages
+    // Remove skeleton
+    const skeleton = this.el.querySelector('.skeleton-loader');
+    if (skeleton) skeleton.remove();
+
+    // Accumulate all text for raw log
     for (const msg of messages) {
       if (msg.type === 'text' && msg.content) {
-        this.appendChunk(msg.content);
-      } else if (msg.type === 'tool_use') {
-        this.addToolBlock({
-          toolId: msg.tool_id || `hydrated-${Math.random().toString(36).slice(2, 8)}`,
-          toolName: msg.tool_name || 'tool',
-          toolInput: msg.tool_input || {},
-        });
+        this._streamText += msg.content;
       }
     }
+    this._lastCardIndex = this._streamText.length;
 
-    // If agent is idle/done, render the status card and mark appropriate state
+    // Populate raw log with full output
+    const rawPre = this.el.querySelector('.agent-raw-pre');
+    if (rawPre) rawPre.textContent = this._streamText;
+
     if (['idle', 'cancelled', 'error'].includes(this._phase)) {
-      this.updateStatusCard();
-      // Remove cursor since agent isn't actively streaming
+      // Find the last text message as a clean summary
+      let summary = '';
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].type === 'text' && messages[i].content?.trim()) {
+          summary = messages[i].content;
+          break;
+        }
+      }
+
+      if (summary) {
+        const card = this.el.querySelector('.agent-status-card');
+        if (card) {
+          card.innerHTML = renderMarkdown(summary);
+          card.classList.remove('hidden');
+        }
+      }
+
+      // Hide stream area, show raw log toggle
+      const streamArea = this.el.querySelector('.agent-stream-area');
+      if (streamArea) streamArea.classList.add('hidden');
+      const toggle = this.el.querySelector('.agent-detail-toggle');
+      if (toggle) toggle.classList.remove('hidden');
+
+      // Remove cursor — not streaming
       this.el.querySelector('.stream-cursor')?.remove();
+    } else {
+      // Agent still running — replay into live stream area
+      for (const msg of messages) {
+        if (msg.type === 'text' && msg.content) {
+          // Re-append to stream pre (appendChunk would double-count _streamText)
+          const streamArea = this.el.querySelector('.agent-stream-area');
+          const cursor = streamArea?.querySelector('.stream-cursor');
+          if (streamArea) {
+            if (!this._currentPre) {
+              this._currentPre = document.createElement('pre');
+              this._currentPre.className = 'agent-stream-pre';
+              if (cursor) {
+                streamArea.insertBefore(this._currentPre, cursor);
+              } else {
+                streamArea.appendChild(this._currentPre);
+              }
+            }
+            this._currentPre.textContent += msg.content;
+          }
+        } else if (msg.type === 'tool_use') {
+          this.addToolBlock({
+            toolId: msg.tool_id || `h-${Math.random().toString(36).slice(2, 8)}`,
+            toolName: msg.tool_name || 'tool',
+            toolInput: msg.tool_input || {},
+          });
+        }
+      }
     }
   }
 
