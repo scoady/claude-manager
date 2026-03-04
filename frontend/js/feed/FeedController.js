@@ -384,6 +384,10 @@ export class FeedController {
         if (done) return;
         const section = this._sections.get(session_id);
         section?.appendChunk(chunk);
+        // Forward stream to TasksPanel for expanded task detail views
+        if (this._tasksPanel && section) {
+          this._tasksPanel.updateAgentStream(section._streamText || '');
+        }
         break;
       }
       case 'session_phase': {
@@ -566,8 +570,7 @@ export class FeedController {
         this._headerEl.querySelector('.feed-dispatch-composer')?.classList.toggle('hidden', !showFeedUI);
         this._headerEl.querySelector('.skill-toggle-panel')?.classList.toggle('hidden', !showFeedUI);
 
-        // Stop all panel refreshes
-        this._tasksPanel?.stopAutoRefresh();
+        // Stop panel refreshes (tasks uses backend polling via WS, no client timer)
         this._milestonesPanel?.stopAutoRefresh();
         this._workflowPanel?.stopAutoRefresh();
 
@@ -577,7 +580,6 @@ export class FeedController {
         } else if (tabName === 'tasks') {
           this._tasksContainer?.classList.remove('hidden');
           this._tasksPanel?.load();
-          this._tasksPanel?.startAutoRefresh();
         } else if (tabName === 'milestones') {
           this._milestonesContainer?.classList.remove('hidden');
           this._milestonesPanel?.load();

@@ -85,6 +85,33 @@ async def _stats_task(broker: AgentBroker) -> None:
             print(f"[stats] error: {exc}")
 
 
+_task_cache: dict[str, list[dict]] = {}
+
+
+async def _task_poll_task(broker: AgentBroker) -> None:
+    """Poll TASKS.md every 3s for projects with active agents, broadcast changes."""
+    while True:
+        await asyncio.sleep(3.0)
+        try:
+            active_projects: set[str] = set()
+            for s in broker.get_all_sessions():
+                if s.phase not in (SessionPhase.CANCELLED, SessionPhase.ERROR):
+                    active_projects.add(s.project_name)
+
+            for name in active_projects:
+                loop = asyncio.get_event_loop()
+                tasks = await loop.run_in_executor(None, tasks_svc.get_tasks, name)
+                cached = _task_cache.get(name)
+                if tasks != cached:
+                    _task_cache[name] = tasks
+                    await ws_manager.broadcast(WSMessageType.TASKS_UPDATED, {
+                        "project_name": name,
+                        "tasks": tasks,
+                    })
+        except Exception as exc:
+            print(f"[task-poll] error: {exc}")
+
+
 def _compute_stats(broker: AgentBroker) -> GlobalStats:
     sessions = broker.get_all_sessions()
     working = sum(
@@ -131,6 +158,7 @@ async def lifespan(app: FastAPI):
     tasks = [
         asyncio.create_task(_project_refresh_task(broker)),
         asyncio.create_task(_stats_task(broker)),
+        asyncio.create_task(_task_poll_task(broker)),
         rules.start(),
     ]
 

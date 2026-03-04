@@ -1,5 +1,6 @@
 /** TasksPanel — renders and manages the tasks list from TASKS.md */
 import { escapeHtml, toast } from '../utils.js';
+import { renderMarkdown } from './MarkdownRenderer.js';
 import { api } from '../api.js';
 
 export class TasksPanel {
@@ -8,7 +9,8 @@ export class TasksPanel {
     this._tasks = [];
     this._el = document.createElement('div');
     this._el.className = 'tasks-panel';
-    this._refreshTimer = null;
+    this._expandedIndices = new Set();
+    this._lastStreamText = '';
     this._render();
   }
 
@@ -31,21 +33,16 @@ export class TasksPanel {
     this._renderList();
   }
 
-  startAutoRefresh() {
-    this.stopAutoRefresh();
-    this._refreshTimer = setInterval(() => this.load(), 10000);
+  /** Receive live agent stream text and push to expanded detail sections. */
+  updateAgentStream(streamText) {
+    this._lastStreamText = streamText;
+    this._el.querySelectorAll('.task-detail:not(.hidden) .task-detail-content').forEach(el => {
+      el.innerHTML = renderMarkdown(streamText);
+      el.scrollTop = el.scrollHeight;
+    });
   }
 
-  stopAutoRefresh() {
-    if (this._refreshTimer) {
-      clearInterval(this._refreshTimer);
-      this._refreshTimer = null;
-    }
-  }
-
-  destroy() {
-    this.stopAutoRefresh();
-  }
+  destroy() {}
 
   // ── Rendering ──────────────────────────────────────────────────
 
@@ -91,24 +88,31 @@ export class TasksPanel {
       </div>
     `;
 
-    listEl.innerHTML = this._tasks.map(t => `
-      <div class="task-row task-${t.status}" data-index="${t.index}" style="padding-left: ${12 + t.indent * 20}px">
-        <button class="task-checkbox" data-index="${t.index}" title="Toggle status">
-          ${this._checkboxIcon(t.status)}
-        </button>
-        <span class="task-text">${escapeHtml(t.text)}</span>
-        <div class="task-actions">
-          ${t.status === 'pending' ? `
-            <button class="task-start-btn" data-index="${t.index}" title="Start this task">Start</button>
-          ` : ''}
-          <button class="task-delete-btn" data-index="${t.index}" title="Remove task">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-            </svg>
+    listEl.innerHTML = this._tasks.map(t => {
+      const expanded = this._expandedIndices.has(t.index);
+      return `
+      <div class="task-row task-${t.status}${expanded ? ' expanded' : ''}" data-index="${t.index}" style="padding-left: ${12 + t.indent * 20}px">
+        <div class="task-row-header">
+          <button class="task-checkbox" data-index="${t.index}" title="Toggle status">
+            ${this._checkboxIcon(t.status)}
           </button>
+          <span class="task-text">${escapeHtml(t.text)}</span>
+          <div class="task-actions">
+            ${t.status === 'pending' ? `
+              <button class="task-start-btn" data-index="${t.index}" title="Start this task">Start</button>
+            ` : ''}
+            <button class="task-delete-btn" data-index="${t.index}" title="Remove task">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
         </div>
-      </div>
-    `).join('');
+        <div class="task-detail${expanded ? '' : ' hidden'}">
+          <div class="task-detail-content agent-status-card">${expanded && this._lastStreamText ? renderMarkdown(this._lastStreamText) : '<span class="text-muted">Live agent output will appear here…</span>'}</div>
+        </div>
+      </div>`;
+    }).join('');
 
     this._bindListEvents(listEl);
   }
@@ -152,8 +156,36 @@ export class TasksPanel {
   }
 
   _bindListEvents(listEl) {
+    // Expand/collapse on row header click
+    listEl.querySelectorAll('.task-row-header').forEach(header => {
+      header.addEventListener('click', (e) => {
+        // Don't toggle if clicking a button inside the header
+        if (e.target.closest('.task-checkbox') || e.target.closest('.task-actions')) return;
+        const row = header.closest('.task-row');
+        const idx = parseInt(row.dataset.index, 10);
+        const detail = row.querySelector('.task-detail');
+        const isExpanded = this._expandedIndices.has(idx);
+
+        if (isExpanded) {
+          this._expandedIndices.delete(idx);
+          row.classList.remove('expanded');
+          detail.classList.add('hidden');
+        } else {
+          this._expandedIndices.add(idx);
+          row.classList.add('expanded');
+          detail.classList.remove('hidden');
+          // Populate with latest stream text
+          const content = detail.querySelector('.task-detail-content');
+          if (this._lastStreamText) {
+            content.innerHTML = renderMarkdown(this._lastStreamText);
+          }
+        }
+      });
+    });
+
     listEl.querySelectorAll('.task-checkbox').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         const idx = parseInt(btn.dataset.index, 10);
         const task = this._tasks.find(t => t.index === idx);
         if (!task) return;
@@ -163,13 +195,15 @@ export class TasksPanel {
     });
 
     listEl.querySelectorAll('.task-start-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         this._startTask(parseInt(btn.dataset.index, 10));
       });
     });
 
     listEl.querySelectorAll('.task-delete-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         this._deleteTask(parseInt(btn.dataset.index, 10));
       });
     });
