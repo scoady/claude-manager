@@ -5,26 +5,55 @@ import { renderMarkdown } from './MarkdownRenderer.js';
 
 /**
  * Parse a subagent result into a structured checklist + remaining detail text.
- * Looks for lines matching `- [x] ...` or `- [ ] ...` patterns.
+ * Handles: - [x] checkboxes, numbered lists (1. ...), plain bullets (- ...)
+ * Strips metadata lines (agentId, total_tokens, duration_ms, tool_uses, <usage>).
  */
 function parseSubagentResult(text) {
   if (!text) return { items: [], detail: text || '' };
-  const lines = text.split('\n');
+
+  // Strip metadata noise from Claude Agent tool output
+  const metaRe = /^(agentId:|total_tokens:|tool_uses:|duration_ms:|<\/?usage>)/;
+  const cleaned = text.split('\n').filter(l => !metaRe.test(l.trim())).join('\n');
+
+  const lines = cleaned.split('\n');
   const items = [];
   const detailLines = [];
-  const checkRe = /^\s*-\s*\[([ xX✓✗×])\]\s*(.+)$/;
+
+  // Patterns: checkbox, numbered list, plain bullet
+  const checkRe   = /^\s*-\s*\[([ xX✓✗×])\]\s*(.+)$/;
+  const numberedRe = /^\s*\d+[.)]\s+(.+)$/;
+  const bulletRe   = /^\s*[-*]\s+(.+)$/;
+
+  // Headings like "## Summary" are structural, skip them for items
+  const headingRe = /^\s*#{1,4}\s/;
 
   for (const line of lines) {
-    const m = line.match(checkRe);
-    if (m) {
-      const done = m[1] !== ' ';
-      const ok = m[1] !== '✗' && m[1] !== '×';
-      items.push({ text: m[2].trim(), done, ok });
-    } else {
-      detailLines.push(line);
+    // Checkbox format (highest priority)
+    const cm = line.match(checkRe);
+    if (cm) {
+      const done = cm[1] !== ' ';
+      const ok = cm[1] !== '✗' && cm[1] !== '×';
+      items.push({ text: cm[2].trim(), done, ok });
+      continue;
     }
+
+    // Numbered list (treat as completed)
+    const nm = line.match(numberedRe);
+    if (nm && !headingRe.test(line)) {
+      items.push({ text: nm[1].trim(), done: true, ok: true });
+      continue;
+    }
+
+    // Plain bullet (treat as completed, but only if we haven't accumulated lots of detail)
+    const bm = line.match(bulletRe);
+    if (bm && !headingRe.test(line) && items.length < 20) {
+      items.push({ text: bm[1].trim(), done: true, ok: true });
+      continue;
+    }
+
+    detailLines.push(line);
   }
-  // Trim leading/trailing blank lines from detail
+
   const detail = detailLines.join('\n').trim();
   return { items, detail };
 }
