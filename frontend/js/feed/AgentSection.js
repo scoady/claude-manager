@@ -236,6 +236,31 @@ export class AgentSection {
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
+  /** Hydrate section from saved messages (on reconnect/refresh). */
+  hydrateMessages(messages) {
+    if (!messages || !messages.length) return;
+
+    // Replay text and tool_use messages
+    for (const msg of messages) {
+      if (msg.type === 'text' && msg.content) {
+        this.appendChunk(msg.content);
+      } else if (msg.type === 'tool_use') {
+        this.addToolBlock({
+          toolId: msg.tool_id || `hydrated-${Math.random().toString(36).slice(2, 8)}`,
+          toolName: msg.tool_name || 'tool',
+          toolInput: msg.tool_input || {},
+        });
+      }
+    }
+
+    // If agent is idle/done, render the status card and mark appropriate state
+    if (['idle', 'cancelled', 'error'].includes(this._phase)) {
+      this.updateStatusCard();
+      // Remove cursor since agent isn't actively streaming
+      this.el.querySelector('.stream-cursor')?.remove();
+    }
+  }
+
   /** Append a streaming text chunk — visible in live stream area. */
   appendChunk(text) {
     this._streamText += text;

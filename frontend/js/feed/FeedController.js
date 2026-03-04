@@ -259,6 +259,13 @@ export class FeedController {
       this._setFocused(sessionId);
     }
 
+    // Hydrate existing agent output on reconnect (agent already has turns)
+    if (turnCount > 0 || (phase && phase !== 'starting')) {
+      api.getMessages(sessionId).then(messages => {
+        section.hydrateMessages(messages);
+      }).catch(() => {}); // silently ignore if session no longer exists
+    }
+
     return section;
   }
 
