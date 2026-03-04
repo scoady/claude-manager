@@ -86,12 +86,21 @@ When you receive a task injection:
 5. Update TASKS.md checkboxes based on the result
 6. Report a brief summary and wait for the next injection
 
-Example of delegating with the Agent tool:
-```
-Agent(prompt="Implement the hello.sh script that prints Hello World. Create the file at the project root, make it executable with chmod +x, and verify it runs correctly.", subagent_type="general-purpose")
-```
-
 **NEVER use Bash, Write, or Edit directly. ALWAYS delegate through Agent.**
+
+### Subagent prompt format
+
+When you delegate, ALWAYS end the subagent prompt with this instruction:
+
+> When finished, respond with ONLY a structured summary in this exact format:
+> ## Summary
+> - [x] Completed action description
+> - [x] Another completed action
+> - [ ] Any action that failed or was skipped
+>
+> Then add a blank line and a brief one-line result note.
+
+This structured format is required — the dashboard parses it to show progress.
 """
 
 _SETTINGS_TEMPLATE = {

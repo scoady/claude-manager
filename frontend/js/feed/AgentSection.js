@@ -3,6 +3,32 @@ import { escapeHtml, formatUptime } from '../utils.js';
 import { ToolBlock } from './ToolBlock.js';
 import { renderMarkdown } from './MarkdownRenderer.js';
 
+/**
+ * Parse a subagent result into a structured checklist + remaining detail text.
+ * Looks for lines matching `- [x] ...` or `- [ ] ...` patterns.
+ */
+function parseSubagentResult(text) {
+  if (!text) return { items: [], detail: text || '' };
+  const lines = text.split('\n');
+  const items = [];
+  const detailLines = [];
+  const checkRe = /^\s*-\s*\[([ xX✓✗×])\]\s*(.+)$/;
+
+  for (const line of lines) {
+    const m = line.match(checkRe);
+    if (m) {
+      const done = m[1] !== ' ';
+      const ok = m[1] !== '✗' && m[1] !== '×';
+      items.push({ text: m[2].trim(), done, ok });
+    } else {
+      detailLines.push(line);
+    }
+  }
+  // Trim leading/trailing blank lines from detail
+  const detail = detailLines.join('\n').trim();
+  return { items, detail };
+}
+
 const PHASE_LABELS = {
   starting:    'starting',
   thinking:    'thinking',
@@ -372,6 +398,61 @@ export class AgentSection {
     if (this._autoFollow) {
       streamArea.scrollTop = streamArea.scrollHeight;
     }
+  }
+
+  /** Render a structured subagent result as checklist + collapsed detail. */
+  setSubagentResult(resultText) {
+    const { items, detail } = parseSubagentResult(resultText);
+    const card = this.el.querySelector('.agent-status-card');
+    if (!card) return;
+
+    // Hide stream area
+    const streamArea = this.el.querySelector('.agent-stream-area');
+    if (streamArea) streamArea.classList.add('hidden');
+
+    let html = '';
+
+    if (items.length) {
+      html += '<div class="subagent-checklist">';
+      for (const item of items) {
+        const icon = item.done
+          ? (item.ok
+            ? '<span class="sa-check ok">✓</span>'
+            : '<span class="sa-check fail">✗</span>')
+          : '<span class="sa-check pending">○</span>';
+        const cls = item.done ? (item.ok ? 'sa-done' : 'sa-fail') : 'sa-pending';
+        html += `<div class="sa-item ${cls}">${icon}<span class="sa-text">${escapeHtml(item.text)}</span></div>`;
+      }
+      html += '</div>';
+    }
+
+    if (detail) {
+      html += `
+        <div class="sa-detail-section">
+          <button class="sa-detail-toggle">Show full output</button>
+          <div class="sa-detail-body hidden">
+            <div class="sa-detail-content">${renderMarkdown(detail)}</div>
+          </div>
+        </div>`;
+    }
+
+    if (!html) {
+      // No checklist parsed — fall back to rendering as markdown
+      html = renderMarkdown(resultText);
+    }
+
+    card.innerHTML = html;
+    card.classList.remove('hidden');
+    card.classList.add('card-fade-in');
+    setTimeout(() => card.classList.remove('card-fade-in'), 250);
+
+    // Bind the detail toggle
+    const toggle = card.querySelector('.sa-detail-toggle');
+    const body = card.querySelector('.sa-detail-body');
+    toggle?.addEventListener('click', () => {
+      const open = body.classList.toggle('hidden');
+      toggle.textContent = open ? 'Show full output' : 'Hide full output';
+    });
   }
 
   /** Update the status card with rendered markdown from accumulated text. */

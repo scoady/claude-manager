@@ -854,6 +854,109 @@
   text-transform: uppercase;
 }
 
+/* ─── Subagent Checklist Result ───────────────────────────────────────────── */
+
+.subagent-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.sa-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition);
+}
+
+.sa-item:hover {
+  background: var(--bg-elevated);
+}
+
+.sa-check {
+  font-size: 13px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+  font-weight: 700;
+}
+
+.sa-check.ok {
+  color: var(--accent-green);
+  background: rgba(57, 255, 20, 0.1);
+  box-shadow: 0 0 6px rgba(57, 255, 20, 0.15);
+}
+
+.sa-check.fail {
+  color: var(--accent-red);
+  background: rgba(255, 23, 68, 0.1);
+  box-shadow: 0 0 6px rgba(255, 23, 68, 0.15);
+}
+
+.sa-check.pending {
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+}
+
+.sa-text {
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.sa-item.sa-fail .sa-text {
+  color: var(--accent-red);
+}
+
+.sa-item.sa-pending .sa-text {
+  color: var(--text-muted);
+}
+
+.sa-detail-section {
+  margin-top: 6px;
+  border-top: 1px solid var(--bg-border-dim);
+  padding-top: 6px;
+}
+
+.sa-detail-toggle {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: color var(--transition);
+  letter-spacing: 0.02em;
+}
+
+.sa-detail-toggle:hover {
+  color: var(--accent-cyan);
+}
+
+.sa-detail-body {
+  margin-top: 6px;
+}
+
+.sa-detail-content {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  padding: 8px;
+  background: var(--bg-base);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--bg-border-dim);
+}
+
 /* ─── Delegating Phase ───────────────────────────────────────────────────── */
 
 .agent-phase-badge.phase-delegating {

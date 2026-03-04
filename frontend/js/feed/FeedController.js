@@ -423,8 +423,8 @@ export class FeedController {
 
         const section = this._sections.get(subId);
         if (section) {
-          if (result) section.appendChunk(result);
-          section.updateStatusCard();
+          // Render structured checklist if available, else raw markdown
+          if (result) section.setSubagentResult(result);
           section.markDone(is_error ? 'error' : 'idle');
         }
 
