@@ -15,6 +15,8 @@ services:
       # Managed projects — same absolute path inside and outside container
       # so path strings in the UI match what's on disk
       - "${MANAGED_PROJECTS_DIR:-${HOME}/git/claude-managed-projects}:${MANAGED_PROJECTS_DIR:-${HOME}/git/claude-managed-projects}"
+      # Frontend dev mount — live reload without rebuilding image
+      - "./frontend:/app/frontend:ro"
       # SSH keys + git config for git push/pull inside agents
       - "${HOME}/.ssh:/root/.ssh:ro"
       - "${HOME}/.gitconfig:/root/.gitconfig:ro"

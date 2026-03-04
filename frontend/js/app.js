@@ -9,6 +9,8 @@ import {
 import {
   renderProjectList,
   renderProjectTileGrid,
+  updateTileAgentStrip,
+  updateTileForProject,
 } from './projects.js';
 import {
   formatUptime,
@@ -73,7 +75,7 @@ function showTileGrid() {
   dom.feedEl?.classList.add('hidden');
   dom.workbenchEmpty?.classList.remove('hidden');
   renderProjectList(state.projects, null, selectProject);
-  renderProjectTileGrid(state.projects, selectProject);
+  renderProjectTileGrid(state.projects, state.agents, selectProject);
 }
 
 // ─── Stats ─────────────────────────────────────────────────────────────────────
@@ -93,7 +95,7 @@ function onWSMessage(msg) {
     case 'project_list': {
       state.projects = msg.data;
       renderProjectList(state.projects, state.selectedProject, selectProject);
-      renderProjectTileGrid(state.projects, selectProject);
+      renderProjectTileGrid(state.projects, state.agents, selectProject);
       break;
     }
 
@@ -111,27 +113,32 @@ function onWSMessage(msg) {
           project_name: d.project_name,
           task: d.task,
           status: d.status || 'working',
-          phase: d.phase,
+          phase: d.phase || 'starting',
           turn_count: d.turn_count || 0,
           started_at: d.started_at || msg.timestamp,
           model: d.model,
+          latest_milestone: '',
         });
       }
-      // Feed handles this via handleEvent if project matches
+      updateTileForProject(d.project_name, state.agents);
       feed.handleEvent(msg);
       break;
     }
 
     case 'agent_done': {
-      const { session_id, reason } = msg.data;
+      const { session_id, reason, project_name } = msg.data;
+      // Grab project name before potentially removing the agent
+      const pName = project_name || state.agents.find(a => a.session_id === session_id)?.project_name;
       if (reason !== 'idle') {
-        // Only remove agents that are truly done (cancelled, error)
         state.agents = state.agents.filter(a => a.session_id !== session_id);
       } else {
-        // Idle agents stay — update their status
         const agent = state.agents.find(a => a.session_id === session_id);
-        if (agent) agent.status = 'idle';
+        if (agent) {
+          agent.status = 'idle';
+          agent.phase = 'idle';
+        }
       }
+      if (pName) updateTileForProject(pName, state.agents);
       feed.handleEvent(msg);
       break;
     }
@@ -140,15 +147,48 @@ function onWSMessage(msg) {
       const { old_session_id, session_id } = msg.data;
       const agent = state.agents.find(a => a.session_id === old_session_id);
       if (agent) agent.session_id = session_id;
+      // Update tile strip data-session attr
+      const strip = document.querySelector(`.agent-strip[data-session="${old_session_id}"]`);
+      if (strip) strip.dataset.session = session_id;
+      feed.handleEvent(msg);
+      break;
+    }
+
+    case 'session_phase': {
+      const { session_id, phase } = msg.data;
+      const agent = state.agents.find(a => a.session_id === session_id);
+      if (agent) {
+        agent.phase = phase;
+        updateTileAgentStrip(agent);
+      }
+      feed.handleEvent(msg);
+      break;
+    }
+
+    case 'turn_done': {
+      const { session_id, turn_count } = msg.data;
+      const agent = state.agents.find(a => a.session_id === session_id);
+      if (agent) {
+        agent.turn_count = turn_count;
+        updateTileAgentStrip(agent);
+      }
+      feed.handleEvent(msg);
+      break;
+    }
+
+    case 'tool_start': {
+      const { session_id, tool } = msg.data;
+      const agent = state.agents.find(a => a.session_id === session_id);
+      if (agent) {
+        agent.latest_milestone = tool.tool_name;
+        updateTileAgentStrip(agent);
+      }
       feed.handleEvent(msg);
       break;
     }
 
     case 'agent_stream':
-    case 'session_phase':
-    case 'tool_start':
     case 'tool_done':
-    case 'turn_done':
     case 'agent_milestone': {
       feed.handleEvent(msg);
       break;
@@ -199,7 +239,7 @@ async function createProject() {
     const project = await api.createProject(name, description);
     state.projects.push(project);
     renderProjectList(state.projects, state.selectedProject, selectProject);
-    renderProjectTileGrid(state.projects, selectProject);
+    renderProjectTileGrid(state.projects, state.agents, selectProject);
     closeNewProjectModal();
     toast(`"${name}" created — agent starting`, 'success');
     await selectProject(name);
@@ -225,16 +265,23 @@ async function init() {
     state.projects = projects;
     state.stats = stats;
     renderProjectList(projects, null, selectProject);
-    renderProjectTileGrid(projects, selectProject);
     renderStats(stats);
   } catch (e) {
     toast(`Failed to load: ${e.message}`, 'error');
   }
 
-  // Load running agents
+  // Load running agents and normalize phase
   try {
-    state.agents = await api.getAgents();
+    state.agents = (await api.getAgents()).map(a => ({
+      ...a,
+      phase: a.phase || (a.status === 'idle' ? 'idle' : 'thinking'),
+      turn_count: a.turn_count || 0,
+      latest_milestone: '',
+    }));
   } catch (_) {}
+
+  // Render tile grid after agents are loaded
+  renderProjectTileGrid(state.projects, state.agents, selectProject);
 
   // WebSocket
   new WSClient({
