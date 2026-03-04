@@ -1,8 +1,24 @@
 # Claude Manager
 
-An agent orchestration dashboard for running autonomous Claude agents against managed projects. Dispatch tasks, watch agents work in real time, inject follow-up messages mid-session, and define operator-style rules that automatically spawn or heal sessions.
+An agent orchestration dashboard for running autonomous Claude agents against managed projects. Dispatch tasks, watch agents work in real time, inject follow-up messages mid-session, and run full team workflows — sprint by sprint — with automatic planning, execution, and reporting.
 
-![v1.0.0](https://img.shields.io/badge/version-1.0.0-blue) ![Python 3.11](https://img.shields.io/badge/python-3.11-blue) ![FastAPI](https://img.shields.io/badge/FastAPI-0.133-green)
+![v1.2.0](https://img.shields.io/badge/version-1.2.0-blue) ![Python 3.11](https://img.shields.io/badge/python-3.11-blue) ![FastAPI](https://img.shields.io/badge/FastAPI-0.133-green)
+
+## Demo
+
+<video src="docs/demo/demo.mp4" controls muted autoplay loop width="100%"></video>
+
+### Dashboard — project tiles with live agent status
+![Dashboard](docs/demo/01-dashboard.png)
+
+### Live agent feed — real-time streaming with markdown rendering
+![Agent Feed](docs/demo/02-project-feed.png)
+
+### Autonomous team workflow — sprint phases with progress tracking
+![Workflow](docs/demo/05-workflow-setup.png)
+
+### Task management — checklist synced with agent work
+![Tasks](docs/demo/03-tasks-tab.png)
 
 ---
 
@@ -31,12 +47,16 @@ Each **managed project** is a git repo. You dispatch a task → an `AgentSession
 
 ## Features
 
-- **Dispatch & forget** — send a task prompt to a project, watch the agent work through it across as many turns as needed
-- **Live streaming** — text deltas, tool start/done events, phase transitions all pushed over WebSocket as they happen
+- **Autonomous team workflows** — define a team (engineers, QA, devops), set sprint count, and watch the system autonomously plan a quarter, execute sprints, review code, and generate retro reports — all without intervention
+- **Git worktree isolation** — each team role gets its own git worktree during sprint execution so parallel agents never conflict; worktrees are merged back to main after review
+- **Controller + subagent architecture** — a persistent controller agent (the "brain") delegates all work to ephemeral subagents via Claude's Agent tool, with structured checklist results
+- **Live streaming** — text deltas, tool start/done events, phase transitions, and rich markdown rendering all pushed over WebSocket in real time
+- **Task & milestone tracking** — TASKS.md synced checklist with progress bars; milestones auto-captured from completed work cycles
 - **Message injection** — send follow-up messages to a running or idle session; mid-turn injections are queued and delivered cleanly between tool calls
 - **Multi-agent parallelism** — configure a project to run N concurrent sessions per dispatch
+- **Skills system** — per-project skill toggles, marketplace browser, and skill creator
 - **Operator rules engine** — declarative reconciliation loop: `SessionHealthRule` cancels stuck sessions, `ProjectAutoSpawnRule` keeps N agents alive per project, `DirectoryWatchRule` triggers agents on file changes
-- **Bootstrap** — create a project from the UI; generates `PROJECT.md`, `TASKS.md`, `INSTRUCTIONS.md`, `.claude/settings.local.json`, and an initial git commit, then immediately spawns an agent to build out the task list
+- **Bootstrap** — create a project from the UI; generates `PROJECT.md`, `TASKS.md`, `INSTRUCTIONS.md`, `.claude/settings.local.json`, and an initial git commit, then immediately spawns a controller agent
 - **Settings UI** — view/edit `~/.claude/settings.json` and toggle installed plugins
 
 ---
@@ -62,6 +82,8 @@ backend/
 │
 └── services/
     ├── projects.py          Scan/bootstrap managed projects from disk
+    ├── workflows.py         Workflow state machine, worktree lifecycle, phase prompts
+    ├── skills.py            Skill discovery, per-project toggles, marketplace
     └── settings.py          Read/write ~/.claude/settings.json and plugins
 
 frontend/
@@ -72,8 +94,15 @@ frontend/
 │   ├── api.js               REST client
 │   ├── ws.js                WebSocket client (auto-reconnect, ping)
 │   ├── settings.js          Settings editor UI
-│   └── utils.js             escapeHtml, toast, formatters
-└── css/app.css              Dark theme, design tokens, responsive layout
+│   ├── utils.js             escapeHtml, toast, formatters
+│   └── feed/
+│       ├── FeedController.js  Tab switching, agent sections, stream rendering
+│       ├── TasksPanel.js      TASKS.md CRUD checklist
+│       ├── MilestonesPanel.js Auto-captured work cycle history
+│       └── WorkflowPanel.js   Team setup + sprint phase timeline
+└── css/
+    ├── app.css              Dark theme, design tokens, responsive layout
+    └── feed.css             Agent cards, tools, stream, workflow panel
 
 infrastructure/helm/claude-manager/   Helm chart (frontend only; backend runs on host)
 ci/
@@ -326,7 +355,26 @@ The Jenkins Helm chart lives at `/path/to/helm-platform/helm/jenkins/values.yaml
 | `POST` | `/api/projects` | Bootstrap a new project |
 | `GET` | `/api/projects/{name}` | Get project details |
 | `PUT` | `/api/projects/{name}/config` | Update parallelism / model |
+| `DELETE` | `/api/projects/{name}` | Soft-delete a project |
 | `POST` | `/api/projects/{name}/dispatch` | Spawn agent(s) with a task |
+| `GET` | `/api/projects/{name}/tasks` | List tasks from TASKS.md |
+| `POST` | `/api/projects/{name}/tasks` | Add a task |
+| `PUT` | `/api/projects/{name}/tasks/{i}` | Update task status |
+| `DELETE` | `/api/projects/{name}/tasks/{i}` | Delete a task |
+| `POST` | `/api/projects/{name}/tasks/plan` | AI-plan tasks from description |
+| `POST` | `/api/projects/{name}/tasks/{i}/start` | Start a task (dispatch agent) |
+| `GET` | `/api/projects/{name}/milestones` | List milestones |
+| `DELETE` | `/api/projects/{name}/milestones` | Clear milestones |
+| `GET` | `/api/projects/{name}/workflow` | Get workflow state |
+| `POST` | `/api/projects/{name}/workflow` | Create workflow (team + config) |
+| `POST` | `/api/projects/{name}/workflow/start` | Start workflow execution |
+| `POST` | `/api/projects/{name}/workflow/action` | Pause/resume/skip phase |
+| `DELETE` | `/api/projects/{name}/workflow` | Cancel workflow + cleanup worktrees |
+| `GET` | `/api/projects/{name}/skills` | List project skills |
+| `POST` | `/api/projects/{name}/skills/{s}/enable` | Enable a skill |
+| `POST` | `/api/projects/{name}/skills/{s}/disable` | Disable a skill |
+| `GET` | `/api/skills` | List all available skills |
+| `GET` | `/api/skills/marketplace` | Browse marketplace skills |
 | `GET` | `/api/agents` | List all active sessions |
 | `GET` | `/api/agents/{id}/messages` | Get conversation history |
 | `POST` | `/api/agents/{id}/inject` | Inject a user message |
@@ -360,8 +408,12 @@ The Vite dev server proxies API and WebSocket requests to `localhost:4040` — s
 
 ## Roadmap
 
-- [ ] Multi-agent orchestration — orchestrator + worker pattern (one agent coordinates N workers)
+- [x] Multi-agent orchestration — controller + subagent pattern with structured delegation
+- [x] Autonomous team workflows — sprint-based execution with git worktree isolation
+- [x] Task & milestone tracking — synced checklists and auto-captured work history
+- [x] Skills system — per-project skill management and marketplace
 - [ ] Persistent project memory — summarized context carried across sessions
 - [ ] GitHub integration — agents open PRs, request reviews, respond to comments
 - [ ] Event-driven triggers — cron schedules, webhooks, file watchers as rule conditions
 - [ ] Session replay — step through a past session and fork from any decision point
+- [ ] Cross-project dependencies — workflow phases that span multiple projects
