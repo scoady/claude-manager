@@ -237,6 +237,20 @@ async def update_project_config(name: str, config: ProjectConfig) -> ProjectConf
     return config
 
 
+@app.delete("/api/projects/{name}", status_code=204)
+async def delete_project(name: str) -> None:
+    broker: AgentBroker = app.state.broker
+    # Kill all agents for this project
+    for s in broker.get_sessions_for_project(name):
+        await broker.cancel_session(s.session_id)
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, projects_svc.delete_project, name)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    await _broadcast_project_list(broker)
+
+
 @app.post("/api/projects/{name}/dispatch", status_code=202)
 async def dispatch_task(name: str, body: DispatchRequest) -> dict[str, Any]:
     broker: AgentBroker = app.state.broker

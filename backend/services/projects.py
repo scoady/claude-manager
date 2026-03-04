@@ -167,7 +167,7 @@ def list_projects(active_session_ids: dict[str, list[str]] | None = None) -> lis
 
     projects: list[ManagedProject] = []
     for entry in sorted(MANAGED_DIR.iterdir()):
-        if not entry.is_dir() or entry.name.startswith("."):
+        if not entry.is_dir() or entry.name.startswith(".") or entry.name == "unmanaged":
             continue
         description, goal = _read_project_md(entry)
         config = _read_manager_config(entry)
@@ -259,6 +259,21 @@ def bootstrap_project(name: str, description: str) -> ManagedProject:
         config=ProjectConfig(),
         active_session_ids=[],
     )
+
+
+def delete_project(name: str) -> None:
+    """Soft-delete a project by moving it to the unmanaged/ subdirectory."""
+    project_dir = MANAGED_DIR / name
+    if not project_dir.exists():
+        raise ValueError(f"Project '{name}' not found")
+    unmanaged_dir = MANAGED_DIR / "unmanaged"
+    unmanaged_dir.mkdir(exist_ok=True)
+    dest = unmanaged_dir / name
+    if dest.exists():
+        # Append timestamp to avoid collision
+        import time
+        dest = unmanaged_dir / f"{name}-{int(time.time())}"
+    project_dir.rename(dest)
 
 
 def update_project_config(name: str, config: ProjectConfig) -> None:

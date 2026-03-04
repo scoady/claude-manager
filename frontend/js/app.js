@@ -40,7 +40,13 @@ const dom = {
 };
 
 // ─── Feed controller ───────────────────────────────────────────────────────────
-const feed = new FeedController(dom.feedEl);
+const feed = new FeedController(dom.feedEl, {
+  onDeleteProject(name) {
+    state.projects = state.projects.filter(p => p.name !== name);
+    state.agents = state.agents.filter(a => a.project_name !== name);
+    showTileGrid();
+  },
+});
 
 // ─── Project selection ─────────────────────────────────────────────────────────
 

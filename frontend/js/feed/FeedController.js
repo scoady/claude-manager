@@ -21,7 +21,7 @@ export class FeedController {
   /**
    * @param {HTMLElement} container — the #feed element
    */
-  constructor(container) {
+  constructor(container, { onDeleteProject } = {}) {
     this._el        = container;
     this._project   = null;      // current ManagedProject
     this._sections  = new Map(); // sessionId → AgentSection
@@ -35,6 +35,7 @@ export class FeedController {
     this._milestonesContainer = null;
     this._milestonesPanel = null;
     this._subagentMap = new Map(); // tool_use_id → subagent section id
+    this._onDeleteProject = onDeleteProject || null;
   }
 
   // ── Project ────────────────────────────────────────────────────────────────
@@ -93,6 +94,11 @@ export class FeedController {
           <span class="feed-meta-chip">${agentCount} agent${agentCount !== 1 ? 's' : ''}</span>
           <span class="feed-meta-chip">×${project.config?.parallelism || 1} parallelism</span>
           ${project.config?.model ? `<span class="feed-meta-chip">${escapeHtml(project.config.model.split('-').slice(-2).join('-'))}</span>` : ''}
+          <button class="feed-delete-project-btn" title="Delete project">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+              <path d="M3.5 3V2.5a1 1 0 011-1h4a1 1 0 011 1V3M2 3h9M4.5 5.5v4M6.5 5.5v4M8.5 5.5v4M3 3h7l-.5 7.5a1 1 0 01-1 .5h-4a1 1 0 01-1-.5L3 3z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
         </div>
       </div>
       <div class="feed-tab-bar">
@@ -173,6 +179,18 @@ export class FeedController {
           model: modelSel.value || null,
         });
       } catch (_) {}
+    });
+
+    // Delete project
+    el.querySelector('.feed-delete-project-btn')?.addEventListener('click', async () => {
+      if (!confirm(`Delete project "${project.name}"?\n\nThis will kill all running agents and move the project to unmanaged/.`)) return;
+      try {
+        await api.deleteProject(project.name);
+        toast(`"${project.name}" deleted`, 'success');
+        if (this._onDeleteProject) this._onDeleteProject(project.name);
+      } catch (e) {
+        toast(`Delete failed: ${e.message}`, 'error');
+      }
     });
   }
 

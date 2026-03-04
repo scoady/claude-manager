@@ -58,6 +58,27 @@
   font-family: var(--font-mono);
 }
 
+.feed-delete-project-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity 150ms, color 150ms, border-color 150ms;
+  margin-left: 4px;
+}
+.feed-delete-project-btn:hover {
+  opacity: 1;
+  color: var(--accent-red);
+  border-color: var(--accent-red);
+}
+
 /* ─── Dispatch Composer ──────────────────────────────────────────────────────── */
 
 .feed-dispatch-composer {

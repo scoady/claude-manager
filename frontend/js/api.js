@@ -26,6 +26,17 @@ export const api = {
     return res.json();
   },
 
+  async deleteProject(name) {
+    const res = await fetch(`${BASE}/api/projects/${encodeURIComponent(name)}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok && res.status !== 404) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return true;
+  },
+
   async getProject(name) {
     const res = await fetch(`${BASE}/api/projects/${encodeURIComponent(name)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
