@@ -133,6 +133,7 @@ export class AgentSection {
     this._done = false;
     this._startTime = Date.now();
     this._currentPre = null;
+    this._currentChunkText = '';
     this._autoFollow = true;
     this._phaseHistory = [{ phase: this._phase, startTime: Date.now() }];
 
@@ -367,20 +368,22 @@ export class AgentSection {
       // Agent still running — replay into live stream area
       for (const msg of messages) {
         if (msg.type === 'text' && msg.content) {
-          // Re-append to stream pre (appendChunk would double-count _streamText)
+          // Re-append as rich markdown (appendChunk would double-count _streamText)
           const streamArea = this.el.querySelector('.agent-stream-area');
           const cursor = streamArea?.querySelector('.stream-cursor');
           if (streamArea) {
             if (!this._currentPre) {
-              this._currentPre = document.createElement('pre');
-              this._currentPre.className = 'agent-stream-pre';
+              this._currentPre = document.createElement('div');
+              this._currentPre.className = 'agent-status-card';
               if (cursor) {
                 streamArea.insertBefore(this._currentPre, cursor);
               } else {
                 streamArea.appendChild(this._currentPre);
               }
+              this._currentChunkText = '';
             }
-            this._currentPre.textContent += msg.content;
+            this._currentChunkText += msg.content;
+            this._currentPre.innerHTML = renderMarkdown(this._currentChunkText);
           }
         } else if (msg.type === 'tool_use') {
           this.addToolBlock({
@@ -393,9 +396,10 @@ export class AgentSection {
     }
   }
 
-  /** Append a streaming text chunk — visible in live stream area. */
+  /** Append a streaming text chunk — rendered as rich markdown in stream area. */
   appendChunk(text) {
     this._streamText += text;
+    this._currentChunkText += text;
 
     // Update raw log
     const rawPre = this.el.querySelector('.agent-raw-pre');
@@ -409,11 +413,11 @@ export class AgentSection {
     if (!streamArea) return;
     streamArea.classList.remove('hidden');
 
-    // Ensure we have a current pre element (new one after each tool block)
+    // Render as rich markdown (reuses agent-status-card styles)
     const cursor = streamArea.querySelector('.stream-cursor');
     if (!this._currentPre) {
-      this._currentPre = document.createElement('pre');
-      this._currentPre.className = 'agent-stream-pre';
+      this._currentPre = document.createElement('div');
+      this._currentPre.className = 'agent-status-card';
       if (cursor) {
         streamArea.insertBefore(this._currentPre, cursor);
       } else {
@@ -421,7 +425,7 @@ export class AgentSection {
       }
     }
 
-    this._currentPre.textContent += text;
+    this._currentPre.innerHTML = renderMarkdown(this._currentChunkText);
 
     // Auto-scroll if following
     if (this._autoFollow) {
@@ -526,8 +530,9 @@ export class AgentSection {
       streamArea.appendChild(block.el);
     }
 
-    // Break current pre so next text chunk creates a new pre after tool block
+    // Break current block so next text chunk creates a new one after tool block
     this._currentPre = null;
+    this._currentChunkText = '';
 
     if (this._autoFollow) {
       streamArea.scrollTop = streamArea.scrollHeight;
