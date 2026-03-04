@@ -428,6 +428,12 @@ class AgentSession:
                                     self.session_id, active_tool_id, todos
                                 )
 
+                        # Tag with parent subagent tool_use_id for frontend routing
+                        if self._pending_agent_tools:
+                            tool_event["parent_tool_use_id"] = next(
+                                iter(self._pending_agent_tools)
+                            )
+
                         if self.on_tool_start:
                             await self.on_tool_start(self.session_id, tool_event)
                         if self.on_tool_done:

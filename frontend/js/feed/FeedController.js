@@ -398,8 +398,11 @@ export class FeedController {
       }
       case 'tool_start': {
         const { session_id, tool } = msg.data;
-        const section = this._sections.get(session_id);
-        section?.addToolBlock({
+        // Route to subagent section if this tool belongs to an active subagent
+        const subIdStart = tool.parent_tool_use_id
+          ? this._subagentMap.get(tool.parent_tool_use_id) : null;
+        const startSection = this._sections.get(subIdStart || session_id);
+        startSection?.addToolBlock({
           toolId:    tool.tool_id,
           toolName:  tool.tool_name,
           toolInput: tool.tool_input,
@@ -408,8 +411,10 @@ export class FeedController {
       }
       case 'tool_done': {
         const { session_id, tool } = msg.data;
-        const section = this._sections.get(session_id);
-        section?.updateToolBlock(tool.tool_id, tool.output);
+        const subIdDone = tool.parent_tool_use_id
+          ? this._subagentMap.get(tool.parent_tool_use_id) : null;
+        const doneSection = this._sections.get(subIdDone || session_id);
+        doneSection?.updateToolBlock(tool.tool_id, tool.output);
         break;
       }
       case 'turn_done': {
