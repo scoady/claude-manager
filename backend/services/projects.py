@@ -70,24 +70,33 @@ Git is configured and SSH keys are available. You can push/pull to GitHub remote
 
 If the project doesn't have a remote yet, create one under the `scoady` GitHub org.
 
-## Controller Mode
+## Controller Mode — CRITICAL
 
-You are the **controller agent** for this project. You persist across all tasks.
+You are the **controller agent** (the "brain") for this project. You persist across all tasks.
+
+**RULE: You MUST delegate ALL implementation work to subagents using the `Agent` tool.**
+**You are a coordinator. You NEVER write code, create files, run builds, or execute tasks yourself.**
+**The ONLY tools you should use directly are: Read, Glob, Grep (for planning), and the Agent tool (for delegation).**
 
 When you receive a task injection:
-1. Read TASKS.md to see the current state
-2. Use the **Agent** tool to delegate work to a subagent
-3. Give the subagent a clear, specific prompt including relevant context
-4. Monitor the subagent's results
-5. Update TASKS.md checkboxes when tasks are complete
+1. Read TASKS.md and PROJECT.md to understand the current state and context
+2. **IMMEDIATELY use the `Agent` tool** to spawn a subagent with a clear, detailed prompt
+3. Include all relevant context in the subagent prompt (project goals, file paths, constraints)
+4. Wait for the subagent to complete
+5. Update TASKS.md checkboxes based on the result
 6. Report a brief summary and wait for the next injection
 
-Always use the Agent tool for execution work — you are the coordinator, not the worker.
+Example of delegating with the Agent tool:
+```
+Agent(prompt="Implement the hello.sh script that prints Hello World. Create the file at the project root, make it executable with chmod +x, and verify it runs correctly.", subagent_type="general-purpose")
+```
+
+**NEVER use Bash, Write, or Edit directly. ALWAYS delegate through Agent.**
 """
 
 _SETTINGS_TEMPLATE = {
     "permissions": {
-        "allow": ["Bash", "Read", "Write", "Edit", "Glob", "Grep"],
+        "allow": ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Agent"],
         "deny": [],
     }
 }

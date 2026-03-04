@@ -188,7 +188,9 @@ async def create_project(body: BootstrapProjectRequest) -> ManagedProject:
         "Read PROJECT.md to understand the project goal. "
         "Then open TASKS.md and replace the placeholder with a concrete checklist of tasks. "
         "When done planning, report your plan and wait for instructions. "
-        "You will receive task injections — use the Agent tool to delegate work to subagents."
+        "IMPORTANT: You are a coordinator — you MUST NOT write code or implement anything yourself. "
+        "When you receive a task, ALWAYS use the Agent tool (subagent_type='general-purpose') to delegate the work to a subagent. "
+        "Your only job is to plan, delegate via Agent tool, review results, and update TASKS.md."
     )
     asyncio.create_task(broker.create_session(
         project_name=project.name,
@@ -234,10 +236,11 @@ async def dispatch_task(name: str, body: DispatchRequest) -> dict[str, Any]:
     controller = broker.get_controller_for_project(name)
     if controller and controller.phase == SessionPhase.IDLE:
         task_prompt = (
-            f'Work on this task: "{body.task}"\n\n'
-            f'Use the Agent tool to delegate the work to a subagent. '
-            f'Give the subagent a clear, specific prompt including relevant context from PROJECT.md. '
-            f'Monitor the result and update TASKS.md if applicable.'
+            f'New task dispatched: "{body.task}"\n\n'
+            f'IMMEDIATELY use the Agent tool (subagent_type="general-purpose") to delegate this work to a subagent. '
+            f'Do NOT implement anything yourself — you are the coordinator. '
+            f'Give the subagent a clear, detailed prompt with all context it needs from PROJECT.md. '
+            f'After the subagent finishes, update TASKS.md if applicable and report the result.'
         )
         await broker.inject_message(controller.session_id, task_prompt)
         return {"status": "delegated", "session_ids": [controller.session_id]}
@@ -365,11 +368,11 @@ async def start_task(name: str, task_index: int, body: DispatchRequest | None = 
     )
 
     task_prompt = (
-        f'Work on this specific task from TASKS.md: "{task["text"]}"\n\n'
-        f'Read PROJECT.md for context. Check TASKS.md for the full task list. '
-        f'Use the Agent tool to delegate the work to a subagent. '
-        f'Give the subagent a clear, specific prompt. '
-        f'Update the checkbox in TASKS.md when done (change [~] to [x]).'
+        f'Start this task from TASKS.md: "{task["text"]}"\n\n'
+        f'IMMEDIATELY use the Agent tool (subagent_type="general-purpose") to delegate this to a subagent. '
+        f'Do NOT implement anything yourself — you are the coordinator. '
+        f'Give the subagent a clear, detailed prompt including context from PROJECT.md and TASKS.md. '
+        f'After the subagent finishes, update the checkbox in TASKS.md (change [~] to [x]) and report the result.'
     )
 
     await ws_manager.broadcast(WSMessageType.TASKS_UPDATED, {
