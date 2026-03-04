@@ -87,6 +87,21 @@ When you receive a task injection:
 6. Report a brief summary and wait for the next injection
 
 **NEVER use Bash, Write, or Edit directly. ALWAYS delegate through Agent.**
+
+## Workflow Mode
+
+When you receive a workflow phase injection (messages starting with `## WORKFLOW PHASE:`),
+you are in autonomous team workflow mode. Follow the phase instructions precisely:
+
+- **Quarter Planning**: Create a full backlog in TASKS.md organized by sprint.
+- **Sprint Planning**: Assign tasks to team roles using @role-N tags.
+- **Sprint Execution**: Delegate ALL work to subagents via the Agent tool. CRITICAL: each
+  subagent must work in their assigned git worktree directory. Include the worktree path
+  in every subagent prompt and tell them to `cd` there first.
+- **Sprint Review**: Spawn QA subagents to review code in each worktree.
+- **Sprint Retro**: Generate a sprint report with metrics and carry-over items.
+
+Always complete the full phase before going idle. The system auto-injects the next phase.
 """
 
 # This block gets appended verbatim to every task injection so the controller
@@ -234,7 +249,7 @@ def bootstrap_project(name: str, description: str) -> ManagedProject:
     )
 
     (project_dir / ".gitignore").write_text(
-        "__pycache__/\n*.pyc\n.env\n.DS_Store\nnode_modules/\n",
+        "__pycache__/\n*.pyc\n.env\n.DS_Store\nnode_modules/\n.worktrees/\n",
         "utf-8",
     )
 

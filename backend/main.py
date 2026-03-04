@@ -20,6 +20,7 @@ from .models import (
     AgentStatus,
     BootstrapProjectRequest,
     CreateSkillRequest,
+    CreateWorkflowRequest,
     DispatchRequest,
     GlobalStats,
     InjectRequest,
@@ -29,6 +30,7 @@ from .models import (
     SessionPhase,
     SkillInfo,
     UpdateTaskRequest,
+    WorkflowActionRequest,
     WSMessageType,
 )
 from .broker import AgentBroker
@@ -36,6 +38,7 @@ from .rules import RulesEngine
 from .services.database import Database
 from .rules.builtin_rules import SessionHealthRule
 from .services import milestones as milestones_svc
+from .services import workflows as workflows_svc
 from .services import projects as projects_svc
 from .services.projects import SUBAGENT_REPORT_INSTRUCTION
 from .services import settings as settings_svc
@@ -460,6 +463,122 @@ async def clear_milestones(name: str) -> list[dict[str, Any]]:
         "milestones": milestones,
     })
     return milestones
+
+
+# ─── Workflow API ─────────────────────────────────────────────────────────────
+
+
+@app.get("/api/projects/{name}/workflow")
+async def get_workflow(name: str) -> dict[str, Any] | None:
+    loop = asyncio.get_event_loop()
+    wf = await loop.run_in_executor(None, workflows_svc.get_workflow, name)
+    return wf.model_dump() if wf else None
+
+
+@app.post("/api/projects/{name}/workflow", status_code=201)
+async def create_workflow(name: str, body: CreateWorkflowRequest) -> dict[str, Any]:
+    loop = asyncio.get_event_loop()
+    project = await loop.run_in_executor(None, projects_svc.get_project, name, [])
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    try:
+        wf = await loop.run_in_executor(
+            None, workflows_svc.create_workflow, name, body
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    return wf.model_dump()
+
+
+@app.post("/api/projects/{name}/workflow/start", status_code=200)
+async def start_workflow(name: str) -> dict[str, Any]:
+    broker: AgentBroker = app.state.broker
+    loop = asyncio.get_event_loop()
+
+    try:
+        wf, prompt = await loop.run_in_executor(
+            None, workflows_svc.start_workflow, name
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    # Inject first phase prompt into controller
+    controller = broker.get_controller_for_project(name)
+    if controller and controller.phase == SessionPhase.IDLE:
+        await broker.inject_message(controller.session_id, prompt)
+    else:
+        # No idle controller — create one
+        project = await loop.run_in_executor(None, projects_svc.get_project, name, [])
+        if project:
+            asyncio.create_task(broker.create_session(
+                project_name=name,
+                project_path=project.path,
+                initial_task=prompt,
+                model=project.config.model,
+                is_controller=True,
+            ))
+
+    await ws_manager.broadcast(WSMessageType.WORKFLOW_UPDATED, {
+        "project_name": name,
+        "workflow": wf.model_dump(),
+    })
+    return wf.model_dump()
+
+
+@app.post("/api/projects/{name}/workflow/action", status_code=200)
+async def workflow_action(name: str, body: WorkflowActionRequest) -> dict[str, Any]:
+    broker: AgentBroker = app.state.broker
+    loop = asyncio.get_event_loop()
+
+    try:
+        if body.action == "pause":
+            wf = await loop.run_in_executor(
+                None, workflows_svc.pause_workflow, name
+            )
+            result = wf.model_dump()
+        elif body.action == "resume":
+            wf, prompt = await loop.run_in_executor(
+                None, workflows_svc.resume_workflow, name
+            )
+            if prompt:
+                controller = broker.get_controller_for_project(name)
+                if controller and controller.phase == SessionPhase.IDLE:
+                    await broker.inject_message(controller.session_id, prompt)
+            result = wf.model_dump()
+        elif body.action == "skip_phase":
+            wf, prompt = await loop.run_in_executor(
+                None, workflows_svc.advance_phase, name
+            )
+            if prompt:
+                controller = broker.get_controller_for_project(name)
+                if controller and controller.phase == SessionPhase.IDLE:
+                    await broker.inject_message(controller.session_id, prompt)
+            result = wf.model_dump() if wf else {}
+        elif body.action == "cancel":
+            await loop.run_in_executor(
+                None, workflows_svc.delete_workflow, name
+            )
+            result = {"status": "cancelled"}
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown action: {body.action}")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    await ws_manager.broadcast(WSMessageType.WORKFLOW_UPDATED, {
+        "project_name": name,
+        "workflow": result,
+    })
+    return result
+
+
+@app.delete("/api/projects/{name}/workflow", status_code=204)
+async def delete_workflow(name: str) -> None:
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, workflows_svc.delete_workflow, name)
+    await ws_manager.broadcast(WSMessageType.WORKFLOW_UPDATED, {
+        "project_name": name,
+        "workflow": None,
+    })
 
 
 # ─── Agents API ────────────────────────────────────────────────────────────────

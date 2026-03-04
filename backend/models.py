@@ -120,6 +120,78 @@ class PlanTaskRequest(BaseModel):
     model: str | None = None
 
 
+# ─── Workflow models ─────────────────────────────────────────────────────────
+
+
+class WorkflowPhaseType(str, Enum):
+    QUARTER_PLANNING  = "quarter_planning"
+    SPRINT_PLANNING   = "sprint_planning"
+    SPRINT_EXECUTION  = "sprint_execution"
+    SPRINT_REVIEW     = "sprint_review"
+    SPRINT_RETRO      = "sprint_retrospective"
+    COMPLETE          = "complete"
+
+
+class WorkflowStatus(str, Enum):
+    DRAFT    = "draft"
+    RUNNING  = "running"
+    PAUSED   = "paused"
+    COMPLETE = "complete"
+
+
+class TeamRole(BaseModel):
+    role: str
+    count: int = 1
+    instructions: str = ""
+
+
+class WorkflowPhase(BaseModel):
+    phase_type: WorkflowPhaseType
+    sprint_number: int | None = None
+    status: str = "pending"
+    started_at: str | None = None
+    completed_at: str | None = None
+    summary: str | None = None
+
+
+class WorktreeInfo(BaseModel):
+    role: str
+    instance: int
+    branch: str
+    path: str
+    status: str = "active"
+
+
+class WorkflowConfig(BaseModel):
+    total_sprints: int = 4
+    auto_continue: bool = True
+    sprint_duration_hint: str = "1 week"
+    merge_strategy: str = "squash"
+
+
+class Workflow(BaseModel):
+    id: str
+    project_name: str
+    team: list[TeamRole]
+    config: WorkflowConfig = WorkflowConfig()
+    status: WorkflowStatus = WorkflowStatus.DRAFT
+    phases: list[WorkflowPhase] = []
+    current_phase_index: int = 0
+    worktrees: list[WorktreeInfo] = []
+    created_at: str | None = None
+    started_at: str | None = None
+    completed_at: str | None = None
+
+
+class CreateWorkflowRequest(BaseModel):
+    team: list[TeamRole]
+    config: WorkflowConfig = WorkflowConfig()
+
+
+class WorkflowActionRequest(BaseModel):
+    action: str
+
+
 # ─── Agent (runtime) ──────────────────────────────────────────────────────────
 
 
@@ -185,6 +257,7 @@ class WSMessageType(str, Enum):
     STATS_UPDATE    = "stats_update"
     TASKS_UPDATED       = "tasks_updated"
     MILESTONES_UPDATED  = "milestones_updated"
+    WORKFLOW_UPDATED    = "workflow_updated"
     ERROR               = "error"
 
 

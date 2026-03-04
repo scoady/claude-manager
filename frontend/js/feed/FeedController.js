@@ -3,6 +3,7 @@ import { escapeHtml } from '../utils.js';
 import { AgentSection } from './AgentSection.js';
 import { TasksPanel } from './TasksPanel.js';
 import { MilestonesPanel } from './MilestonesPanel.js';
+import { WorkflowPanel } from './WorkflowPanel.js';
 import { api } from '../api.js';
 import { toast } from '../utils.js';
 
@@ -34,6 +35,8 @@ export class FeedController {
     this._tasksPanel = null;
     this._milestonesContainer = null;
     this._milestonesPanel = null;
+    this._workflowContainer = null;
+    this._workflowPanel = null;
     this._subagentMap = new Map(); // tool_use_id → subagent section id
     this._onDeleteProject = onDeleteProject || null;
   }
@@ -80,6 +83,16 @@ export class FeedController {
     this._milestonesPanel = new MilestonesPanel(project.name);
     this._milestonesContainer.appendChild(this._milestonesPanel.el);
 
+    // Workflow container (hidden by default)
+    this._workflowContainer = document.createElement('div');
+    this._workflowContainer.className = 'feed-workflow-container hidden';
+    this._el.appendChild(this._workflowContainer);
+
+    // Create workflow panel
+    if (this._workflowPanel) this._workflowPanel.destroy();
+    this._workflowPanel = new WorkflowPanel(project.name);
+    this._workflowContainer.appendChild(this._workflowPanel.el);
+
     this._bindTabEvents();
   }
 
@@ -105,6 +118,7 @@ export class FeedController {
         <button class="feed-tab active" data-feed-tab="feed">Feed</button>
         <button class="feed-tab" data-feed-tab="tasks">Tasks</button>
         <button class="feed-tab" data-feed-tab="milestones">Milestones</button>
+        <button class="feed-tab" data-feed-tab="workflow">Workflow</button>
       </div>
       <div class="feed-dispatch-composer">
         <div class="feed-dispatch-row">
@@ -543,6 +557,7 @@ export class FeedController {
         this._agentContainer?.classList.add('hidden');
         this._tasksContainer?.classList.add('hidden');
         this._milestonesContainer?.classList.add('hidden');
+        this._workflowContainer?.classList.add('hidden');
         this._statusCard?.classList.add('hidden');
 
         // Feed-only UI elements
@@ -553,6 +568,7 @@ export class FeedController {
         // Stop all panel refreshes
         this._tasksPanel?.stopAutoRefresh();
         this._milestonesPanel?.stopAutoRefresh();
+        this._workflowPanel?.stopAutoRefresh();
 
         if (tabName === 'feed') {
           this._agentContainer?.classList.remove('hidden');
@@ -565,6 +581,10 @@ export class FeedController {
           this._milestonesContainer?.classList.remove('hidden');
           this._milestonesPanel?.load();
           this._milestonesPanel?.startAutoRefresh();
+        } else if (tabName === 'workflow') {
+          this._workflowContainer?.classList.remove('hidden');
+          this._workflowPanel?.load();
+          this._workflowPanel?.startAutoRefresh();
         }
       });
     });
@@ -575,6 +595,13 @@ export class FeedController {
     if (this._project && this._project.name === projectName) {
       this._tasksPanel?.updateTasks(tasks);
       this._refreshStatusCard(projectName);
+    }
+  }
+
+  /** Handle workflow_updated WS event. */
+  handleWorkflowUpdated(projectName, workflow) {
+    if (this._project && this._project.name === projectName) {
+      this._workflowPanel?.updateWorkflow(workflow);
     }
   }
 

@@ -1576,3 +1576,536 @@
   -webkit-mask-image: linear-gradient(to bottom, black 65%, transparent 100%);
   mask-image: linear-gradient(to bottom, black 65%, transparent 100%);
 }
+
+/* ─── Workflow Panel ──────────────────────────────────────────────────────── */
+
+.feed-workflow-container {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.workflow-panel {
+  padding: 0 20px 20px;
+}
+
+/* ── Setup Mode ──────────────────────────────────────────────────────────── */
+
+.wf-setup {
+  max-width: 620px;
+}
+
+.wf-setup-title {
+  font-family: var(--font-title);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent-purple);
+  margin: 0 0 6px;
+}
+
+.wf-setup-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0 0 20px;
+}
+
+.wf-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+/* Team rows */
+.wf-team-section {
+  margin-bottom: 20px;
+}
+
+.wf-team-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.wf-role-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wf-role-select {
+  width: 160px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--bg-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  padding: 6px 8px;
+  outline: none;
+}
+
+.wf-role-count {
+  width: 56px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--bg-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 8px;
+  text-align: center;
+  outline: none;
+}
+
+.wf-role-instructions {
+  flex: 1;
+  background: var(--bg-elevated);
+  border: 1px solid var(--bg-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  padding: 6px 10px;
+  outline: none;
+}
+
+.wf-role-instructions::placeholder {
+  color: var(--text-muted);
+}
+
+.wf-remove-role {
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.wf-remove-role:hover {
+  color: var(--accent-red);
+  border-color: rgba(255, 23, 68, 0.25);
+  background: rgba(255, 23, 68, 0.08);
+}
+
+.wf-add-role-btn {
+  background: transparent;
+  border: 1px dashed var(--bg-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.wf-add-role-btn:hover {
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  background: rgba(0, 240, 255, 0.04);
+}
+
+/* Config grid */
+.wf-config-section {
+  margin-bottom: 24px;
+}
+
+.wf-config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.wf-config-field label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.wf-config-field input[type="number"],
+.wf-config-field input[type="text"],
+.wf-config-field select {
+  width: 100%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--bg-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  padding: 6px 10px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.wf-checkbox-label {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+.wf-checkbox-label input[type="checkbox"] {
+  accent-color: var(--accent-purple);
+}
+
+/* Actions */
+.wf-actions {
+  padding-top: 8px;
+}
+
+.wf-start-btn {
+  padding: 10px 28px;
+  background: linear-gradient(135deg, var(--accent-purple), var(--accent-magenta));
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  box-shadow: 0 2px 12px rgba(179, 136, 255, 0.25);
+}
+
+.wf-start-btn:hover:not(:disabled) {
+  filter: brightness(1.15);
+  box-shadow: 0 4px 20px rgba(179, 136, 255, 0.4), 0 0 20px rgba(224, 64, 251, 0.15);
+}
+
+.wf-start-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Progress Mode ───────────────────────────────────────────────────────── */
+
+.wf-progress {
+  max-width: 620px;
+}
+
+.wf-progress-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.wf-progress-title {
+  font-family: var(--font-title);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent-purple);
+  margin: 0;
+}
+
+.wf-status-badge {
+  font-size: 10px;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.wf-status-running {
+  color: var(--accent-amber);
+  background: rgba(255, 204, 0, 0.1);
+  border: 1px solid rgba(255, 204, 0, 0.25);
+  animation: badge-pulse 1.8s ease-in-out infinite;
+}
+
+.wf-status-paused {
+  color: var(--accent-pink);
+  background: rgba(255, 110, 199, 0.1);
+  border: 1px solid rgba(255, 110, 199, 0.25);
+}
+
+.wf-status-complete {
+  color: var(--accent-green);
+  background: rgba(57, 255, 20, 0.08);
+  border: 1px solid rgba(57, 255, 20, 0.2);
+}
+
+.wf-status-draft {
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border: 1px solid var(--bg-border);
+}
+
+/* Team chips */
+.wf-team-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.wf-team-chip {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  padding: 3px 10px;
+  background: rgba(179, 136, 255, 0.08);
+  border: 1px solid rgba(179, 136, 255, 0.2);
+  border-radius: 20px;
+  color: var(--accent-purple);
+}
+
+/* Overall progress */
+.wf-overall-progress {
+  margin-bottom: 20px;
+}
+
+.wf-progress-bar {
+  height: 6px;
+  background: var(--bg-border);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.wf-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-purple), var(--accent-magenta));
+  border-radius: 3px;
+  transition: width 400ms ease;
+  box-shadow: 0 0 10px rgba(179, 136, 255, 0.35);
+}
+
+.wf-progress-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* Phase timeline */
+.wf-phase-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: 20px;
+  position: relative;
+  padding-left: 20px;
+}
+
+.wf-phase-timeline::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--bg-border);
+  border-radius: 1px;
+}
+
+.wf-phase-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 0;
+  position: relative;
+}
+
+.wf-phase-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 2px;
+  position: absolute;
+  left: -19px;
+  border: 2px solid var(--bg-border);
+  background: var(--bg-base);
+  z-index: 1;
+}
+
+.wf-phase-complete .wf-phase-dot {
+  background: var(--accent-green);
+  border-color: var(--accent-green);
+  box-shadow: 0 0 8px rgba(57, 255, 20, 0.3);
+}
+
+.wf-phase-active .wf-phase-dot {
+  background: var(--accent-amber);
+  border-color: var(--accent-amber);
+  box-shadow: 0 0 10px rgba(255, 204, 0, 0.4);
+  animation: phase-dot-pulse 2s ease-in-out infinite;
+}
+
+@keyframes phase-dot-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(255, 204, 0, 0.3); }
+  50%      { box-shadow: 0 0 16px rgba(255, 204, 0, 0.6), 0 0 4px rgba(255, 204, 0, 0.8); }
+}
+
+.wf-phase-pending .wf-phase-dot {
+  background: var(--bg-elevated);
+  border-color: var(--bg-border);
+}
+
+.wf-phase-label {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.wf-phase-pending .wf-phase-label {
+  color: var(--text-muted);
+}
+
+.wf-phase-complete .wf-phase-label {
+  color: var(--accent-green);
+}
+
+.wf-phase-active .wf-phase-label {
+  color: var(--accent-amber);
+  font-weight: 600;
+}
+
+.wf-phase-summary {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* Worktrees */
+.wf-worktrees {
+  margin-bottom: 20px;
+}
+
+.wf-worktree-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  transition: background var(--transition);
+}
+
+.wf-worktree-row:hover {
+  background: var(--bg-elevated);
+}
+
+.wf-wt-role {
+  width: 100px;
+  color: var(--accent-purple);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.wf-wt-branch {
+  flex: 1;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-wt-status {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.wf-wt-active .wf-wt-status {
+  color: var(--accent-amber);
+  background: rgba(255, 204, 0, 0.1);
+  border: 1px solid rgba(255, 204, 0, 0.2);
+}
+
+.wf-wt-merged .wf-wt-status {
+  color: var(--accent-green);
+  background: rgba(57, 255, 20, 0.08);
+  border: 1px solid rgba(57, 255, 20, 0.15);
+}
+
+.wf-wt-conflict .wf-wt-status {
+  color: var(--accent-red);
+  background: rgba(255, 23, 68, 0.1);
+  border: 1px solid rgba(255, 23, 68, 0.2);
+}
+
+/* Controls */
+.wf-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wf-controls button {
+  padding: 7px 18px;
+  border: 1px solid var(--bg-border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+}
+
+.wf-controls button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.wf-pause-btn:hover {
+  border-color: rgba(255, 110, 199, 0.4) !important;
+  color: var(--accent-pink) !important;
+}
+
+.wf-resume-btn:hover {
+  border-color: rgba(57, 255, 20, 0.4) !important;
+  color: var(--accent-green) !important;
+}
+
+.wf-skip-btn:hover {
+  border-color: rgba(255, 204, 0, 0.4) !important;
+  color: var(--accent-amber) !important;
+}
+
+.wf-new-btn:hover {
+  border-color: rgba(179, 136, 255, 0.4) !important;
+  color: var(--accent-purple) !important;
+}
+
+.wf-cancel-btn.danger {
+  border-color: rgba(255, 23, 68, 0.25);
+  color: var(--accent-red);
+}
+
+.wf-cancel-btn.danger:hover {
+  background: rgba(255, 23, 68, 0.1) !important;
+  border-color: rgba(255, 23, 68, 0.5) !important;
+  color: var(--accent-red) !important;
+}
+
+.wf-error {
+  padding: 20px;
+  color: var(--accent-red);
+  font-size: 13px;
+  text-align: center;
+}

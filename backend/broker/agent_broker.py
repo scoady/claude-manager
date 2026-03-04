@@ -237,6 +237,29 @@ class AgentBroker:
             # Reset for next cycle
             session._subagent_captured_this_cycle = False
 
+        # ── Workflow auto-continuation ─────────────────────────────────────
+        if session and session.is_controller and reason == "idle":
+            try:
+                from ..services import workflows as workflows_svc
+                from ..models import WorkflowStatus
+                import asyncio
+
+                wf = workflows_svc.get_workflow(session.project_name)
+                if wf and wf.status == WorkflowStatus.RUNNING:
+                    loop = asyncio.get_event_loop()
+                    updated_wf, next_prompt = await loop.run_in_executor(
+                        None, workflows_svc.advance_phase, session.project_name
+                    )
+                    await self._ws.broadcast(WSMessageType.WORKFLOW_UPDATED, {
+                        "project_name": session.project_name,
+                        "workflow": updated_wf.model_dump() if updated_wf else None,
+                    })
+                    if next_prompt:
+                        await asyncio.sleep(1.0)
+                        await session.inject_message(next_prompt)
+            except Exception as exc:
+                print(f"[workflow] auto-continue error: {exc}")
+
         if self._db:
             import asyncio
             asyncio.create_task(self._db.update_session(

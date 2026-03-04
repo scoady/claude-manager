@@ -225,6 +225,12 @@ function onWSMessage(msg) {
       feed.handleMilestonesUpdated(project_name, milestones);
       break;
     }
+
+    case 'workflow_updated': {
+      const { project_name, workflow } = msg.data;
+      feed.handleWorkflowUpdated(project_name, workflow);
+      break;
+    }
   }
 }
 
