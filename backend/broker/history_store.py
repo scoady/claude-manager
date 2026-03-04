@@ -38,11 +38,30 @@ class HistoryStore:
         self._persist(session_id, message)
 
     def append_assistant(self, session_id: str, content_blocks: list[Any]) -> None:
-        """Append assistant turn from raw SDK content block objects."""
-        block_dicts = [
-            b.model_dump() if hasattr(b, "model_dump") else b
-            for b in content_blocks
-        ]
+        """Append assistant turn from raw SDK content block objects.
+
+        Manually serialize only the fields the API accepts — model_dump() includes
+        internal SDK fields (e.g. parsed_output) that cause 400 errors on replay.
+        """
+        block_dicts = []
+        for b in content_blocks:
+            btype = getattr(b, "type", None)
+            if btype == "text":
+                block_dicts.append({"type": "text", "text": b.text})
+            elif btype == "tool_use":
+                block_dicts.append({
+                    "type": "tool_use",
+                    "id": b.id,
+                    "name": b.name,
+                    "input": b.input,
+                })
+            elif btype == "thinking":
+                block_dicts.append({"type": "thinking", "thinking": b.thinking})
+            elif isinstance(b, dict):
+                block_dicts.append(b)
+            else:
+                # fallback for unknown block types
+                block_dicts.append(b.model_dump() if hasattr(b, "model_dump") else b)
         msg = {"role": "assistant", "content": block_dicts}
         self._sessions.setdefault(session_id, []).append(msg)
         self._persist(session_id, msg)
