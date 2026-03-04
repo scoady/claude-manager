@@ -4,6 +4,7 @@ import { AgentSection } from './AgentSection.js';
 import { TasksPanel } from './TasksPanel.js';
 import { MilestonesPanel } from './MilestonesPanel.js';
 import { WorkflowPanel } from './WorkflowPanel.js';
+import { renderMarkdown } from './MarkdownRenderer.js';
 import { api } from '../api.js';
 import { toast } from '../utils.js';
 
@@ -492,7 +493,7 @@ export class FeedController {
 
     const desc = project.description || project.goal?.split('\n').find(l => l.trim() && !l.startsWith('#'))?.trim() || '';
     el.innerHTML = `
-      <div class="psc-description">${escapeHtml(desc)}</div>
+      <div class="psc-description">${renderMarkdown(desc)}</div>
       <div class="psc-progress"></div>
       <div class="psc-milestone"></div>
     `;

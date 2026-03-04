@@ -770,14 +770,8 @@
 }
 
 .agent-raw-pre {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  line-height: 1.6;
-  color: var(--text-muted);
-  white-space: pre-wrap;
-  word-break: break-word;
   margin: 0;
-  max-height: 300px;
+  max-height: 400px;
   overflow-y: auto;
 }
 

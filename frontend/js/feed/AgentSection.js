@@ -225,7 +225,7 @@ export class AgentSection {
         </div>
         <button class="agent-detail-toggle hidden">Show raw log</button>
         <div class="agent-raw-log hidden">
-          <pre class="agent-raw-pre"></pre>
+          <div class="agent-raw-pre agent-status-card"></div>
         </div>
         <div class="agent-inject-composer hidden">
           <div class="inject-hint-row">
@@ -363,7 +363,7 @@ export class AgentSection {
 
     // Populate raw log with full output
     const rawPre = this.el.querySelector('.agent-raw-pre');
-    if (rawPre) rawPre.textContent = this._streamText;
+    if (rawPre) rawPre.innerHTML = renderMarkdown(this._streamText);
 
     if (['idle', 'cancelled', 'error'].includes(this._phase)) {
       // Find the last text message as a clean summary
@@ -430,7 +430,7 @@ export class AgentSection {
 
     // Update raw log
     const rawPre = this.el.querySelector('.agent-raw-pre');
-    if (rawPre) rawPre.textContent = this._streamText;
+    if (rawPre) rawPre.innerHTML = renderMarkdown(this._streamText);
 
     // Remove skeleton if present
     const skeleton = this.el.querySelector('.skeleton-loader');
