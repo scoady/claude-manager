@@ -44,6 +44,7 @@ from .services.projects import SUBAGENT_REPORT_INSTRUCTION
 from .services import settings as settings_svc
 from .services import skills as skills_svc
 from .services import tasks as tasks_svc
+from .services import templates as templates_svc
 from .ws_manager import WSManager
 
 # ─── Singletons ───────────────────────────────────────────────────────────────
@@ -465,6 +466,37 @@ async def clear_milestones(name: str) -> list[dict[str, Any]]:
     return milestones
 
 
+# ─── Templates API ────────────────────────────────────────────────────────────
+
+
+@app.get("/api/templates")
+async def list_templates() -> list[dict[str, Any]]:
+    loop = asyncio.get_event_loop()
+    templates = await loop.run_in_executor(None, templates_svc.list_templates)
+    return [t.model_dump() for t in templates]
+
+
+@app.get("/api/templates/{template_id}")
+async def get_template(template_id: str) -> dict[str, Any]:
+    loop = asyncio.get_event_loop()
+    tpl = await loop.run_in_executor(None, templates_svc.get_template, template_id)
+    if not tpl:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return tpl.model_dump()
+
+
+@app.post("/api/templates", status_code=201)
+async def create_template(body: dict[str, Any]) -> dict[str, Any]:
+    from .models import WorkflowTemplate
+    try:
+        tpl = WorkflowTemplate(**body)
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, templates_svc.create_custom_template, tpl)
+        return tpl.model_dump()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 # ─── Workflow API ─────────────────────────────────────────────────────────────
 
 
@@ -501,6 +533,13 @@ async def start_workflow(name: str) -> dict[str, Any]:
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+    # Update INSTRUCTIONS.md with template's workflow overlay
+    tpl = templates_svc.get_template(wf.template_id)
+    if tpl and tpl.instructions_overlay:
+        await loop.run_in_executor(
+            None, projects_svc.update_instructions_overlay, name, tpl.instructions_overlay
+        )
 
     # Inject first phase prompt into controller
     controller = broker.get_controller_for_project(name)

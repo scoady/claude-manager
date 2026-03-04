@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -289,6 +290,26 @@ def delete_project(name: str) -> None:
         import time
         dest = unmanaged_dir / f"{name}-{int(time.time())}"
     project_dir.rename(dest)
+
+
+def update_instructions_overlay(name: str, overlay: str) -> None:
+    """Replace the Workflow Mode section in INSTRUCTIONS.md with a template's overlay."""
+    project_dir = MANAGED_DIR / name
+    instructions_path = project_dir / ".claude" / "INSTRUCTIONS.md"
+    if not instructions_path.exists():
+        return
+
+    content = instructions_path.read_text("utf-8")
+
+    # Pattern: from "## Workflow Mode" to the next heading of same/higher level, or end of file
+    pattern = r"(## Workflow Mode\n).*?(?=\n## |\Z)"
+    if re.search(pattern, content, re.DOTALL):
+        new_content = re.sub(pattern, overlay, content, flags=re.DOTALL)
+    else:
+        # No existing workflow section — append
+        new_content = content.rstrip() + "\n\n" + overlay + "\n"
+
+    instructions_path.write_text(new_content, "utf-8")
 
 
 def update_project_config(name: str, config: ProjectConfig) -> None:

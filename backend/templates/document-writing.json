@@ -1,0 +1,70 @@
+{
+  "id": "document-writing",
+  "name": "Document Writing",
+  "description": "Structured writing workflow with outline, iterative draft rounds, editorial review, and final assembly.",
+  "category": "writing",
+  "icon": "edit",
+  "version": 1,
+
+  "role_presets": [
+    { "role": "writer", "label": "Writer", "is_worker": true },
+    { "role": "editor", "label": "Editor", "is_worker": true },
+    { "role": "reviewer", "label": "Reviewer", "is_worker": false }
+  ],
+  "default_team": [
+    { "role": "writer", "count": 2, "instructions": "" },
+    { "role": "editor", "count": 1, "instructions": "" }
+  ],
+
+  "isolation_strategy": "subdirectory",
+
+  "config_schema": {
+    "total_iterations": { "type": "number", "label": "Draft Rounds", "default": 3, "min": 1, "max": 6 },
+    "iteration_duration_hint": { "type": "string", "label": "Round Duration", "default": "1 session" },
+    "document_type": { "type": "select", "label": "Document Type", "options": ["report", "article", "documentation", "proposal", "guide"], "default": "report" },
+    "auto_continue": { "type": "boolean", "label": "Auto-continue between phases", "default": true }
+  },
+
+  "phases": [
+    {
+      "id": "planning",
+      "label": "Outline & Structure",
+      "repeats": false,
+      "prompt": "## WORKFLOW PHASE: Outline & Structure\n\nYou are running an autonomous writing workflow. Your team: {{team_summary}}.\nDocument type: {{config.document_type}}\n\n**Your task:**\n1. Read PROJECT.md to understand the document goals, audience, and scope.\n2. Create a detailed outline with section structure.\n3. Plan {{config.total_iterations}} draft rounds.\n4. Assign sections to writers in TASKS.md organized by round.\n   Use headings: `## Round 1`, `## Round 2`, etc.\n5. Round 1: first draft of all sections. Later rounds: revision and refinement.\n\n**Output format:**\n## Outline Complete\n- Document type: {{config.document_type}}\n- Sections: N\n- Draft rounds: {{config.total_iterations}}\n- Round 1 focus: (brief)\n\nDo NOT start writing. Planning and outlining only."
+    },
+    {
+      "id": "iteration_planning",
+      "label": "Round {{iteration_number}} Planning",
+      "repeats": true,
+      "prompt": "## WORKFLOW PHASE: Draft Round {{iteration_number}} Planning\n\nYour team: {{team_summary}}.\n\n**Your task:**\n1. Read TASKS.md — find the Round {{iteration_number}} section.\n2. Review any feedback from previous rounds.\n3. Assign writing/revision tasks to team members.\n4. Update TASKS.md with assignments.\n\n**Output format:**\n## Round {{iteration_number}} Plan\n- Writing tasks: N\n- Sections to draft/revise: (list)\n\nDo NOT start writing. Planning only."
+    },
+    {
+      "id": "iteration_execution",
+      "label": "Round {{iteration_number}} Drafting",
+      "repeats": true,
+      "creates_isolation": true,
+      "prompt": "## WORKFLOW PHASE: Draft Round {{iteration_number}}\n\nYour team: {{team_summary}}.\n{{role_instructions}}\n\n**Workspaces:**\nEach team member writes in their isolated workspace:\n\n{{isolation_table}}\n\n{{isolation_instructions}}\n\n**Your task:**\n1. Read TASKS.md — find Round {{iteration_number}} tasks.\n2. For each assigned writer, spawn a subagent with the Agent tool.\n3. Give each subagent: their sections to write/revise, their workspace path, the outline, and relevant context.\n4. Writers should save drafts as markdown files in their workspace.\n5. Wait for all subagents to complete.\n6. Update TASKS.md checkboxes based on results.\n\nDelegate ALL work. You are the coordinator.{{subagent_report_instruction}}"
+    },
+    {
+      "id": "iteration_review",
+      "label": "Round {{iteration_number}} Editorial Review",
+      "repeats": true,
+      "cleanup_isolation": true,
+      "prompt": "## WORKFLOW PHASE: Round {{iteration_number}} Editorial Review\n\nDraft round is complete. Now review the writing.\n\n**Workspaces with draft content:**\n{{isolation_table}}\n\n**Your task:**\n1. For each workspace with writing, spawn an editor subagent to review.\n2. Editors should check: clarity, accuracy, consistency, tone, grammar, structure.\n3. Collect editorial feedback from all subagents.\n4. Compile feedback into FEEDBACK.md (append a section for Round {{iteration_number}}).\n5. Merge polished sections into the main DRAFT.md.\n\n**Output format:**\n## Round {{iteration_number}} Editorial Review\n- Sections reviewed: N\n- [x] Sections that passed review\n- [ ] Sections needing revision\n{{subagent_report_instruction}}"
+    },
+    {
+      "id": "iteration_retro",
+      "label": "Round {{iteration_number}} Assessment",
+      "repeats": true,
+      "prompt": "## WORKFLOW PHASE: Round {{iteration_number}} Assessment\n\nRound {{iteration_number}} is complete. Drafts have been consolidated.\n\n**Your task:**\n1. Read DRAFT.md and FEEDBACK.md for Round {{iteration_number}}.\n2. Assess writing progress:\n   - Sections completed / remaining\n   - Quality assessment\n   - Items for next round\n3. If there are remaining rounds, prioritize revisions.\n\n**Output format:**\n## Round {{iteration_number}} Assessment\n**Progress**: N/M sections drafted\n**Quality**: strong / needs work / draft stage\n**Next round focus**: ..."
+    },
+    {
+      "id": "complete",
+      "label": "Final Assembly",
+      "repeats": false,
+      "prompt": "## WORKFLOW COMPLETE: Final Assembly\n\nAll {{config.total_iterations}} draft rounds are finished.\n\n**Your task:**\n1. Read DRAFT.md — assemble all sections into the final document.\n2. Ensure consistency in tone, formatting, and structure.\n3. Add front matter (title, author, date, table of contents).\n4. Write the final document to OUTPUT.md.\n5. Update TASKS.md with final status.\n\n**Output:**\n## Document Complete\n**Type**: {{config.document_type}}\n**Rounds**: {{config.total_iterations}}\n**Output**: OUTPUT.md"
+    }
+  ],
+
+  "instructions_overlay": "## Workflow Mode\n\nWhen you receive a workflow phase injection (messages starting with `## WORKFLOW PHASE:`),\nyou are in autonomous writing workflow mode. Follow the phase instructions precisely:\n\n- **Outline & Structure**: Create document outline, plan rounds, update TASKS.md.\n- **Round Planning**: Assign writing/revision tasks to team members.\n- **Round Drafting**: Delegate writing to subagents in isolated workspaces.\n- **Editorial Review**: Review drafts, provide feedback, consolidate into DRAFT.md.\n- **Round Assessment**: Assess progress, identify what needs revision.\n- **Final Assembly**: Compile all sections into final OUTPUT.md.\n\nAlways complete the full phase before going idle. The system auto-injects the next phase."
+}

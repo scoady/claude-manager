@@ -120,9 +120,51 @@ class PlanTaskRequest(BaseModel):
     model: str | None = None
 
 
+# ─── Workflow Template models ────────────────────────────────────────────────
+
+
+class RolePreset(BaseModel):
+    role: str
+    label: str
+    is_worker: bool = True
+
+
+class ConfigField(BaseModel):
+    type: str           # "number" | "string" | "boolean" | "select"
+    label: str
+    default: Any = None
+    min: int | None = None
+    max: int | None = None
+    options: list[str] | None = None
+
+
+class PhaseDefinition(BaseModel):
+    id: str
+    label: str          # supports {{iteration_number}} interpolation
+    repeats: bool = False
+    creates_isolation: bool = False
+    cleanup_isolation: bool = False
+    prompt: str
+
+
+class WorkflowTemplate(BaseModel):
+    id: str
+    name: str
+    description: str
+    category: str = "general"
+    icon: str = "default"
+    version: int = 1
+    role_presets: list[RolePreset] = []
+    default_team: list["TeamRole"] = []
+    isolation_strategy: str = "none"   # "git_worktree" | "subdirectory" | "none"
+    config_schema: dict[str, ConfigField] = {}
+    phases: list[PhaseDefinition] = []
+    instructions_overlay: str = ""
+
+
 # ─── Workflow models ─────────────────────────────────────────────────────────
 
-
+# Kept for migration compatibility — new code uses phase_id/phase_label
 class WorkflowPhaseType(str, Enum):
     QUARTER_PLANNING  = "quarter_planning"
     SPRINT_PLANNING   = "sprint_planning"
@@ -146,12 +188,16 @@ class TeamRole(BaseModel):
 
 
 class WorkflowPhase(BaseModel):
-    phase_type: WorkflowPhaseType
-    sprint_number: int | None = None
+    phase_id: str = ""
+    phase_label: str = ""
+    iteration_number: int | None = None
     status: str = "pending"
     started_at: str | None = None
     completed_at: str | None = None
     summary: str | None = None
+    # Legacy fields — used during migration from old workflow.json
+    phase_type: WorkflowPhaseType | None = None
+    sprint_number: int | None = None
 
 
 class WorktreeInfo(BaseModel):
@@ -162,28 +208,43 @@ class WorktreeInfo(BaseModel):
     status: str = "active"
 
 
+class IsolationInfo(BaseModel):
+    """Tracks an isolation workspace (worktree or subdirectory)."""
+    role: str
+    instance: int
+    branch: str = ""
+    path: str
+    status: str = "active"
+    strategy: str = "git_worktree"  # "git_worktree" | "subdirectory"
+
+
 class WorkflowConfig(BaseModel):
-    total_sprints: int = 4
     auto_continue: bool = True
-    sprint_duration_hint: str = "1 week"
-    merge_strategy: str = "squash"
+    values: dict[str, Any] = {}
+    # Legacy fields — auto-populated during migration
+    total_sprints: int | None = None
+    sprint_duration_hint: str | None = None
+    merge_strategy: str | None = None
 
 
 class Workflow(BaseModel):
     id: str
     project_name: str
+    template_id: str = "software-engineering"
     team: list[TeamRole]
     config: WorkflowConfig = WorkflowConfig()
     status: WorkflowStatus = WorkflowStatus.DRAFT
     phases: list[WorkflowPhase] = []
     current_phase_index: int = 0
     worktrees: list[WorktreeInfo] = []
+    isolation: list[IsolationInfo] = []
     created_at: str | None = None
     started_at: str | None = None
     completed_at: str | None = None
 
 
 class CreateWorkflowRequest(BaseModel):
+    template_id: str = "software-engineering"
     team: list[TeamRole]
     config: WorkflowConfig = WorkflowConfig()
 

@@ -1,0 +1,70 @@
+{
+  "id": "data-processing",
+  "name": "Data Processing",
+  "description": "Data pipeline workflow with design, parallel processing passes, quality checks, and output generation.",
+  "category": "data",
+  "icon": "database",
+  "version": 1,
+
+  "role_presets": [
+    { "role": "processor", "label": "Data Processor", "is_worker": true },
+    { "role": "validator", "label": "Data Validator", "is_worker": true },
+    { "role": "architect", "label": "Pipeline Architect", "is_worker": false }
+  ],
+  "default_team": [
+    { "role": "processor", "count": 2, "instructions": "" },
+    { "role": "validator", "count": 1, "instructions": "" }
+  ],
+
+  "isolation_strategy": "subdirectory",
+
+  "config_schema": {
+    "total_iterations": { "type": "number", "label": "Processing Passes", "default": 3, "min": 1, "max": 8 },
+    "iteration_duration_hint": { "type": "string", "label": "Pass Duration", "default": "1 session" },
+    "output_format": { "type": "select", "label": "Output Format", "options": ["csv", "json", "parquet", "markdown-tables"], "default": "json" },
+    "auto_continue": { "type": "boolean", "label": "Auto-continue between phases", "default": true }
+  },
+
+  "phases": [
+    {
+      "id": "planning",
+      "label": "Pipeline Design",
+      "repeats": false,
+      "prompt": "## WORKFLOW PHASE: Pipeline Design\n\nYou are running an autonomous data processing workflow. Your team: {{team_summary}}.\nOutput format: {{config.output_format}}\n\n**Your task:**\n1. Read PROJECT.md to understand the data sources, transformations, and desired output.\n2. Design the processing pipeline: input → transform stages → validation → output.\n3. Plan {{config.total_iterations}} processing passes.\n4. Update TASKS.md with the pipeline plan organized by pass.\n   Use headings: `## Pass 1`, `## Pass 2`, etc.\n5. Pass 1: initial processing. Later passes: refinement, edge cases, optimization.\n\n**Output format:**\n## Pipeline Design Complete\n- Input sources: N\n- Transform stages: N\n- Processing passes: {{config.total_iterations}}\n- Pass 1 focus: (brief)\n\nDo NOT start processing. Design and planning only."
+    },
+    {
+      "id": "iteration_planning",
+      "label": "Pass {{iteration_number}} Planning",
+      "repeats": true,
+      "prompt": "## WORKFLOW PHASE: Pass {{iteration_number}} Planning\n\nYour team: {{team_summary}}.\n\n**Your task:**\n1. Read TASKS.md — find the Pass {{iteration_number}} section.\n2. Review any quality issues from previous passes.\n3. Assign processing tasks to team members.\n4. Update TASKS.md with assignments.\n\n**Output format:**\n## Pass {{iteration_number}} Plan\n- Processing tasks: N\n- Data segments to process: (list)\n\nDo NOT start processing. Planning only."
+    },
+    {
+      "id": "iteration_execution",
+      "label": "Pass {{iteration_number}} Processing",
+      "repeats": true,
+      "creates_isolation": true,
+      "prompt": "## WORKFLOW PHASE: Pass {{iteration_number}} Processing\n\nYour team: {{team_summary}}.\n{{role_instructions}}\n\n**Workspaces:**\nEach team member processes data in their isolated workspace:\n\n{{isolation_table}}\n\n{{isolation_instructions}}\n\n**Your task:**\n1. Read TASKS.md — find Pass {{iteration_number}} tasks.\n2. For each assigned processor, spawn a subagent with the Agent tool.\n3. Give each subagent: their processing tasks, their workspace path, input data locations, and transform specs.\n4. Processors should write output data to their workspace.\n5. Wait for all subagents to complete.\n6. Update TASKS.md checkboxes based on results.\n\nDelegate ALL work. You are the coordinator.{{subagent_report_instruction}}"
+    },
+    {
+      "id": "iteration_review",
+      "label": "Pass {{iteration_number}} Quality Check",
+      "repeats": true,
+      "cleanup_isolation": true,
+      "prompt": "## WORKFLOW PHASE: Pass {{iteration_number}} Quality Check\n\nProcessing pass is complete. Now validate the output.\n\n**Workspaces with processed data:**\n{{isolation_table}}\n\n**Your task:**\n1. For each workspace with processed data, spawn a validator subagent.\n2. Validators should check: completeness, accuracy, format compliance, edge cases, data integrity.\n3. Collect validation results from all subagents.\n4. Compile quality report into QUALITY.md (append a section for Pass {{iteration_number}}).\n5. Merge validated output into the main output directory.\n\n**Output format:**\n## Pass {{iteration_number}} Quality Check\n- Data segments validated: N\n- [x] Segments that passed validation\n- [ ] Segments with quality issues\n{{subagent_report_instruction}}"
+    },
+    {
+      "id": "iteration_retro",
+      "label": "Pass {{iteration_number}} Review",
+      "repeats": true,
+      "prompt": "## WORKFLOW PHASE: Pass {{iteration_number}} Review\n\nPass {{iteration_number}} is complete. Output has been consolidated.\n\n**Your task:**\n1. Read QUALITY.md for Pass {{iteration_number}}.\n2. Assess pipeline progress:\n   - Data segments processed / remaining\n   - Quality metrics\n   - Issues to address in next pass\n3. If there are remaining passes, prioritize what to fix or optimize.\n\n**Output format:**\n## Pass {{iteration_number}} Review\n**Progress**: N/M segments processed\n**Quality**: (pass rate / error rate)\n**Next pass focus**: ..."
+    },
+    {
+      "id": "complete",
+      "label": "Output Generation",
+      "repeats": false,
+      "prompt": "## WORKFLOW COMPLETE: Output Generation\n\nAll {{config.total_iterations}} processing passes are finished.\n\n**Your task:**\n1. Read all processed output and QUALITY.md.\n2. Assemble final output in {{config.output_format}} format.\n3. Generate a processing summary:\n   - Total records/segments processed\n   - Quality metrics\n   - Any known limitations\n4. Write final output to OUTPUT/ directory.\n5. Update TASKS.md with final status.\n\n**Output:**\n## Processing Complete\n**Passes**: {{config.total_iterations}}\n**Format**: {{config.output_format}}\n**Output**: OUTPUT/"
+    }
+  ],
+
+  "instructions_overlay": "## Workflow Mode\n\nWhen you receive a workflow phase injection (messages starting with `## WORKFLOW PHASE:`),\nyou are in autonomous data processing workflow mode. Follow the phase instructions precisely:\n\n- **Pipeline Design**: Design the processing pipeline, plan passes, update TASKS.md.\n- **Pass Planning**: Assign processing tasks to team members.\n- **Pass Processing**: Delegate data processing to subagents in isolated workspaces.\n- **Quality Check**: Validate processed data, compile quality reports.\n- **Pass Review**: Assess progress, identify issues for next pass.\n- **Output Generation**: Assemble final output in the specified format.\n\nAlways complete the full phase before going idle. The system auto-injects the next phase."
+}

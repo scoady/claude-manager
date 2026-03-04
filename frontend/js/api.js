@@ -262,6 +262,20 @@ export const api = {
     return res.json();
   },
 
+  // ─── Templates ─────────────────────────────────────────────────────────────
+
+  async getTemplates() {
+    const res = await fetch(`${BASE}/api/templates`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
+  async getTemplate(templateId) {
+    const res = await fetch(`${BASE}/api/templates/${encodeURIComponent(templateId)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
   // ─── Workflows ─────────────────────────────────────────────────────────────
 
   async getWorkflow(projectName) {
@@ -270,11 +284,11 @@ export const api = {
     return res.json();
   },
 
-  async createWorkflow(projectName, team, config) {
+  async createWorkflow(projectName, team, config, templateId = 'software-engineering') {
     const res = await fetch(`${BASE}/api/projects/${encodeURIComponent(projectName)}/workflow`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ team, config }),
+      body: JSON.stringify({ template_id: templateId, team, config }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));

@@ -1,0 +1,70 @@
+{
+  "id": "research-analysis",
+  "name": "Research & Analysis",
+  "description": "Multi-round research workflow with scoping, parallel research, synthesis, and final report generation.",
+  "category": "research",
+  "icon": "search",
+  "version": 1,
+
+  "role_presets": [
+    { "role": "researcher", "label": "Researcher", "is_worker": true },
+    { "role": "analyst", "label": "Analyst", "is_worker": true },
+    { "role": "reviewer", "label": "Reviewer", "is_worker": false }
+  ],
+  "default_team": [
+    { "role": "researcher", "count": 2, "instructions": "" },
+    { "role": "analyst", "count": 1, "instructions": "" }
+  ],
+
+  "isolation_strategy": "subdirectory",
+
+  "config_schema": {
+    "total_iterations": { "type": "number", "label": "Research Rounds", "default": 3, "min": 1, "max": 8 },
+    "iteration_duration_hint": { "type": "string", "label": "Round Duration", "default": "1 session" },
+    "output_format": { "type": "select", "label": "Output Format", "options": ["markdown", "structured-data", "presentation"], "default": "markdown" },
+    "auto_continue": { "type": "boolean", "label": "Auto-continue between phases", "default": true }
+  },
+
+  "phases": [
+    {
+      "id": "planning",
+      "label": "Research Scoping",
+      "repeats": false,
+      "prompt": "## WORKFLOW PHASE: Research Scoping\n\nYou are running an autonomous research workflow. Your team: {{team_summary}}.\n\n**Your task:**\n1. Read PROJECT.md thoroughly to understand the research objectives.\n2. Define research questions and hypotheses.\n3. Identify sources, methods, and data requirements.\n4. Create a research plan with {{config.total_iterations}} rounds.\n5. Update TASKS.md with the research plan organized by round.\n   Use headings: `## Round 1`, `## Round 2`, etc.\n6. Assign research areas to team roles.\n\n**Output format:**\n## Research Scope Complete\n- Research questions: N\n- Rounds planned: {{config.total_iterations}}\n- Round 1 focus: (brief)\n\nDo NOT start research. Scoping and planning only."
+    },
+    {
+      "id": "iteration_planning",
+      "label": "Round {{iteration_number}} Planning",
+      "repeats": true,
+      "prompt": "## WORKFLOW PHASE: Round {{iteration_number}} Planning\n\nYour team: {{team_summary}}.\n\n**Your task:**\n1. Read TASKS.md — find the Round {{iteration_number}} section.\n2. Refine research questions based on any prior round findings.\n3. Assign specific research tasks to team members.\n4. Update TASKS.md with assignments.\n\n**Output format:**\n## Round {{iteration_number}} Plan\n- Research tasks: N\n- Key questions to answer this round: (brief list)\n\nDo NOT start research. Planning only."
+    },
+    {
+      "id": "iteration_execution",
+      "label": "Round {{iteration_number}} Research",
+      "repeats": true,
+      "creates_isolation": true,
+      "prompt": "## WORKFLOW PHASE: Round {{iteration_number}} Research\n\nYour team: {{team_summary}}.\n{{role_instructions}}\n\n**Workspaces:**\nEach team member has an isolated workspace:\n\n{{isolation_table}}\n\n{{isolation_instructions}}\n\n**Your task:**\n1. Read TASKS.md — find Round {{iteration_number}} tasks.\n2. For each assigned role, spawn a subagent with the Agent tool.\n3. Give each subagent: their research tasks, their workspace path, and context from PROJECT.md.\n4. Each subagent should write findings to their workspace as markdown files.\n5. Wait for all subagents to complete.\n6. Update TASKS.md checkboxes based on results.\n\nDelegate ALL work. You are the coordinator.{{subagent_report_instruction}}"
+    },
+    {
+      "id": "iteration_review",
+      "label": "Round {{iteration_number}} Synthesis",
+      "repeats": true,
+      "cleanup_isolation": true,
+      "prompt": "## WORKFLOW PHASE: Round {{iteration_number}} Synthesis\n\nResearch round is complete. Now synthesize findings.\n\n**Workspaces with research output:**\n{{isolation_table}}\n\n**Your task:**\n1. For each workspace, spawn an analyst subagent to review and synthesize findings.\n2. Analysts should: verify sources, identify patterns, note contradictions, extract key insights.\n3. Collect synthesis from all subagents.\n4. Compile a round summary in FINDINGS.md (append a new section for Round {{iteration_number}}).\n\n**Output format:**\n## Round {{iteration_number}} Synthesis\n- Key findings: (bullet list)\n- Open questions: (what still needs research)\n- Confidence level: high / medium / low\n{{subagent_report_instruction}}"
+    },
+    {
+      "id": "iteration_retro",
+      "label": "Round {{iteration_number}} Review",
+      "repeats": true,
+      "prompt": "## WORKFLOW PHASE: Round {{iteration_number}} Review\n\nRound {{iteration_number}} is complete. Workspace findings have been consolidated.\n\n**Your task:**\n1. Read FINDINGS.md and TASKS.md for Round {{iteration_number}}.\n2. Assess research progress:\n   - Questions answered / remaining\n   - Quality of findings\n   - Gaps to address in next round\n3. If there are remaining rounds, prioritize what to investigate next.\n\n**Output format:**\n## Round {{iteration_number}} Review\n**Progress**: N/M questions addressed\n**Key insights**: ...\n**Gaps**: ...\n**Next round focus**: ..."
+    },
+    {
+      "id": "complete",
+      "label": "Final Report",
+      "repeats": false,
+      "prompt": "## WORKFLOW COMPLETE: Final Report\n\nAll {{config.total_iterations}} research rounds are finished.\n\n**Your task:**\n1. Read FINDINGS.md — compile all round findings into a final report.\n2. Structure the report:\n   - Executive summary\n   - Methodology\n   - Key findings (organized by research question)\n   - Analysis and implications\n   - Recommendations\n   - Appendix: sources and raw data references\n3. Write the final report to REPORT.md.\n4. Update TASKS.md with final status.\n\nOutput format: {{config.output_format}}\n\n**Output:**\n## Research Complete\n**Rounds**: {{config.total_iterations}}\n**Questions answered**: N\n**Report**: REPORT.md"
+    }
+  ],
+
+  "instructions_overlay": "## Workflow Mode\n\nWhen you receive a workflow phase injection (messages starting with `## WORKFLOW PHASE:`),\nyou are in autonomous research workflow mode. Follow the phase instructions precisely:\n\n- **Research Scoping**: Define questions, plan rounds, update TASKS.md.\n- **Round Planning**: Refine questions, assign research tasks.\n- **Round Research**: Delegate research to subagents in isolated workspaces.\n- **Round Synthesis**: Consolidate findings, update FINDINGS.md.\n- **Round Review**: Assess progress, identify gaps for next round.\n- **Final Report**: Compile all findings into REPORT.md.\n\nAlways complete the full phase before going idle. The system auto-injects the next phase."
+}

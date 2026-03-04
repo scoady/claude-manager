@@ -1,0 +1,71 @@
+{
+  "id": "software-engineering",
+  "name": "Software Engineering",
+  "description": "Sprint-based iterative development with planning, execution, code review, and retrospectives. Uses git worktrees for isolated parallel work.",
+  "category": "engineering",
+  "icon": "code",
+  "version": 1,
+
+  "role_presets": [
+    { "role": "engineer", "label": "Software Engineer", "is_worker": true },
+    { "role": "qa", "label": "QA Engineer", "is_worker": true },
+    { "role": "devops", "label": "DevOps", "is_worker": true },
+    { "role": "designer", "label": "Designer", "is_worker": true }
+  ],
+  "default_team": [
+    { "role": "engineer", "count": 2, "instructions": "" },
+    { "role": "qa", "count": 1, "instructions": "" }
+  ],
+
+  "isolation_strategy": "git_worktree",
+
+  "config_schema": {
+    "total_iterations": { "type": "number", "label": "Total Sprints", "default": 4, "min": 1, "max": 12 },
+    "iteration_duration_hint": { "type": "string", "label": "Sprint Duration", "default": "1 week" },
+    "merge_strategy": { "type": "select", "label": "Merge Strategy", "options": ["squash", "merge"], "default": "squash" },
+    "auto_continue": { "type": "boolean", "label": "Auto-continue between phases", "default": true }
+  },
+
+  "phases": [
+    {
+      "id": "planning",
+      "label": "Quarter Planning",
+      "repeats": false,
+      "prompt": "## WORKFLOW PHASE: Quarter Planning\n\nYou are running an autonomous team workflow. Your team: {{team_summary}}.\n\n**Your task:**\n1. Read PROJECT.md thoroughly to understand the project goals.\n2. Create a quarter roadmap with {{config.total_iterations}} sprints (each sprint ~{{config.iteration_duration_hint}}).\n3. Break the project down into epics, then user stories/tasks.\n4. Update TASKS.md with a complete backlog organized by sprint.\n   Use headings: `## Sprint 1`, `## Sprint 2`, etc.\n5. Prioritize: most critical/foundational work in Sprint 1.\n\n**Output format:**\nWhen done, write a brief summary:\n## Quarter Plan Complete\n- Total sprints: N\n- Total tasks: N\n- Sprint 1 focus: (brief)\n\nDo NOT ask questions. Do NOT start implementation. Plan only."
+    },
+    {
+      "id": "iteration_planning",
+      "label": "Sprint {{iteration_number}} Planning",
+      "repeats": true,
+      "prompt": "## WORKFLOW PHASE: Sprint {{iteration_number}} Planning\n\nYour team: {{team_summary}}.\n\n**Your task:**\n1. Read TASKS.md — find the Sprint {{iteration_number}} section.\n2. Review task dependencies and priorities.\n3. Assign tasks to team roles (add `@engineer-1`, `@qa-1` etc. after each task).\n4. Ensure each role has a balanced workload.\n5. Update TASKS.md with assignments.\n\n**Output format:**\n## Sprint {{iteration_number}} Plan\n- Tasks assigned: N\n- Engineer tasks: N | QA tasks: N | DevOps tasks: N\n- Key risks: (brief)\n\nDo NOT start implementation. Planning only."
+    },
+    {
+      "id": "iteration_execution",
+      "label": "Sprint {{iteration_number}} Execution",
+      "repeats": true,
+      "creates_isolation": true,
+      "prompt": "## WORKFLOW PHASE: Sprint {{iteration_number}} Execution\n\nYour team: {{team_summary}}.\n{{role_instructions}}\n\n**IMPORTANT: Git Worktrees**\nEach team member has an isolated working directory (git worktree) to avoid conflicts:\n\n{{isolation_table}}\n\n{{isolation_instructions}}\n\n**Your task:**\n1. Read TASKS.md — find Sprint {{iteration_number}} tasks.\n2. For each assigned role, spawn a subagent with the Agent tool.\n3. Give each subagent: their tasks, their worktree path, and context from PROJECT.md.\n4. Wait for all subagents to complete.\n5. Update TASKS.md checkboxes based on results.\n\nDelegate ALL work. You are the coordinator.{{subagent_report_instruction}}"
+    },
+    {
+      "id": "iteration_review",
+      "label": "Sprint {{iteration_number}} Review",
+      "repeats": true,
+      "cleanup_isolation": true,
+      "prompt": "## WORKFLOW PHASE: Sprint {{iteration_number}} Review\n\nSprint execution is complete. Now review the work.\n\n**Worktrees with completed work:**\n{{isolation_table}}\n\n**Your task:**\n1. For each worktree with engineer work, spawn a QA subagent to review.\n   Tell the subagent to `cd` into the worktree path and review all changes.\n2. QA should check: correctness, code quality, tests passing, edge cases.\n3. Collect review results from all subagents.\n4. Summarize: what passed review, what needs fixes.\n\n**Output format:**\n## Sprint {{iteration_number}} Review\n- [x] Items that passed review\n- [ ] Items that need fixes\n{{subagent_report_instruction}}"
+    },
+    {
+      "id": "iteration_retro",
+      "label": "Sprint {{iteration_number}} Retro",
+      "repeats": true,
+      "prompt": "## WORKFLOW PHASE: Sprint {{iteration_number}} Retrospective\n\nSprint {{iteration_number}} is complete. Worktree branches have been merged to main.\n\n**Your task:**\n1. Read TASKS.md — count completed vs remaining tasks for Sprint {{iteration_number}}.\n2. Generate a sprint report:\n   - Tasks completed / total\n   - Key accomplishments\n   - Issues encountered\n   - Velocity assessment\n3. If there are remaining sprints, note any tasks to carry over.\n\n**Output format:**\n## Sprint {{iteration_number}} Report\n**Completed**: N/M tasks\n**Highlights**: ...\n**Carry-over**: ...\n**Velocity**: on track / behind / ahead"
+    },
+    {
+      "id": "complete",
+      "label": "Complete",
+      "repeats": false,
+      "prompt": "## WORKFLOW COMPLETE\n\nAll {{config.total_iterations}} sprints are finished.\n\n**Your task:**\n1. Read TASKS.md — generate a final quarter report.\n2. Summarize: total tasks completed, overall progress, key deliverables.\n3. Note any remaining backlog items.\n\n**Output format:**\n## Quarter Report\n**Duration**: {{config.total_iterations}} sprints\n**Total tasks**: X completed / Y total\n**Key deliverables**: ...\n**Remaining backlog**: ..."
+    }
+  ],
+
+  "instructions_overlay": "## Workflow Mode\n\nWhen you receive a workflow phase injection (messages starting with `## WORKFLOW PHASE:`),\nyou are in autonomous team workflow mode. Follow the phase instructions precisely:\n\n- **Quarter Planning**: Create a full backlog in TASKS.md organized by sprint.\n- **Sprint Planning**: Assign tasks to team roles using @role-N tags.\n- **Sprint Execution**: Delegate ALL work to subagents via the Agent tool. CRITICAL: each\n  subagent must work in their assigned git worktree directory. Include the worktree path\n  in every subagent prompt and tell them to `cd` there first.\n- **Sprint Review**: Spawn QA subagents to review code in each worktree.\n- **Sprint Retro**: Generate a sprint report with metrics and carry-over items.\n\nAlways complete the full phase before going idle. The system auto-injects the next phase."
+}
