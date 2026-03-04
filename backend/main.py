@@ -36,6 +36,7 @@ from .rules import RulesEngine
 from .services.database import Database
 from .rules.builtin_rules import SessionHealthRule
 from .services import projects as projects_svc
+from .services.projects import SUBAGENT_REPORT_INSTRUCTION
 from .services import settings as settings_svc
 from .services import skills as skills_svc
 from .services import tasks as tasks_svc
@@ -196,6 +197,7 @@ async def create_project(body: BootstrapProjectRequest) -> ManagedProject:
         "IMPORTANT: You are a coordinator — you MUST NOT write code or implement anything yourself. "
         "When you receive a task, ALWAYS use the Agent tool (subagent_type='general-purpose') to delegate the work to a subagent. "
         "Your only job is to plan, delegate via Agent tool, review results, and update TASKS.md."
+        + SUBAGENT_REPORT_INSTRUCTION
     )
     asyncio.create_task(broker.create_session(
         project_name=project.name,
@@ -246,6 +248,7 @@ async def dispatch_task(name: str, body: DispatchRequest) -> dict[str, Any]:
             f'Do NOT implement anything yourself — you are the coordinator. '
             f'Give the subagent a clear, detailed prompt with all context it needs from PROJECT.md. '
             f'After the subagent finishes, update TASKS.md if applicable and report the result.'
+            + SUBAGENT_REPORT_INSTRUCTION
         )
         await broker.inject_message(controller.session_id, task_prompt)
         return {"status": "delegated", "session_ids": [controller.session_id]}
@@ -378,6 +381,7 @@ async def start_task(name: str, task_index: int, body: DispatchRequest | None = 
         f'Do NOT implement anything yourself — you are the coordinator. '
         f'Give the subagent a clear, detailed prompt including context from PROJECT.md and TASKS.md. '
         f'After the subagent finishes, update the checkbox in TASKS.md (change [~] to [x]) and report the result.'
+        + SUBAGENT_REPORT_INSTRUCTION
     )
 
     await ws_manager.broadcast(WSMessageType.TASKS_UPDATED, {

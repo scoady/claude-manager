@@ -7,6 +7,11 @@ import { renderMarkdown } from './MarkdownRenderer.js';
  * Parse a subagent result into a structured checklist + remaining detail text.
  * Handles: - [x] checkboxes, numbered lists (1. ...), plain bullets (- ...)
  * Strips metadata lines (agentId, total_tokens, duration_ms, tool_uses, <usage>).
+ *
+ * Strategy: if a "## Result" or "## Summary" heading exists, parse only the
+ * section below it for checklist items (the stuff above becomes detail/context).
+ * This makes parsing reliable even when the subagent writes prose before the
+ * checklist.
  */
 function parseSubagentResult(text) {
   if (!text) return { items: [], detail: text || '' };
@@ -15,25 +20,42 @@ function parseSubagentResult(text) {
   const metaRe = /^(agentId:|total_tokens:|tool_uses:|duration_ms:|<\/?usage>)/;
   const cleaned = text.split('\n').filter(l => !metaRe.test(l.trim())).join('\n');
 
-  const lines = cleaned.split('\n');
+  // Look for a ## Result / ## Summary section and split there
+  const sectionRe = /^##\s+(Result|Summary|Completed|Report)\s*$/im;
+  const sectionMatch = cleaned.match(sectionRe);
+
+  let checklistBlock, preamble;
+  if (sectionMatch) {
+    const idx = cleaned.indexOf(sectionMatch[0]);
+    preamble = cleaned.slice(0, idx).trim();
+    checklistBlock = cleaned.slice(idx + sectionMatch[0].length).trim();
+  } else {
+    preamble = '';
+    checklistBlock = cleaned;
+  }
+
+  const lines = checklistBlock.split('\n');
   const items = [];
-  const detailLines = [];
+  const tailLines = [];
 
   // Patterns: checkbox, numbered list, plain bullet
-  const checkRe   = /^\s*-\s*\[([ xX✓✗×])\]\s*(.+)$/;
+  const checkRe   = /^\s*-\s*\[([ xX✓✗×~])\]\s*(.+)$/;
   const numberedRe = /^\s*\d+[.)]\s+(.+)$/;
   const bulletRe   = /^\s*[-*]\s+(.+)$/;
 
   // Headings like "## Summary" are structural, skip them for items
   const headingRe = /^\s*#{1,4}\s/;
 
+  let foundAny = false;
   for (const line of lines) {
     // Checkbox format (highest priority)
     const cm = line.match(checkRe);
     if (cm) {
-      const done = cm[1] !== ' ';
-      const ok = cm[1] !== '✗' && cm[1] !== '×';
+      const mark = cm[1].trim().toLowerCase();
+      const done = mark !== '' && mark !== ' ';
+      const ok = mark !== '✗' && mark !== '×';
       items.push({ text: cm[2].trim(), done, ok });
+      foundAny = true;
       continue;
     }
 
@@ -41,20 +63,25 @@ function parseSubagentResult(text) {
     const nm = line.match(numberedRe);
     if (nm && !headingRe.test(line)) {
       items.push({ text: nm[1].trim(), done: true, ok: true });
+      foundAny = true;
       continue;
     }
 
-    // Plain bullet (treat as completed, but only if we haven't accumulated lots of detail)
+    // Plain bullet — only capture if we're in a checklist section (i.e. we had
+    // a ## heading OR we've already seen at least one item)
     const bm = line.match(bulletRe);
-    if (bm && !headingRe.test(line) && items.length < 20) {
+    if (bm && !headingRe.test(line) && (sectionMatch || foundAny) && items.length < 20) {
       items.push({ text: bm[1].trim(), done: true, ok: true });
+      foundAny = true;
       continue;
     }
 
-    detailLines.push(line);
+    tailLines.push(line);
   }
 
-  const detail = detailLines.join('\n').trim();
+  // Combine preamble + non-checklist tail as the "detail" collapsed area
+  const detailParts = [preamble, tailLines.join('\n').trim()].filter(Boolean);
+  const detail = detailParts.join('\n\n').trim();
   return { items, detail };
 }
 

@@ -87,20 +87,30 @@ When you receive a task injection:
 6. Report a brief summary and wait for the next injection
 
 **NEVER use Bash, Write, or Edit directly. ALWAYS delegate through Agent.**
+"""
 
-### Subagent prompt format
+# This block gets appended verbatim to every task injection so the controller
+# always includes it in the subagent prompt.  Kept separate from INSTRUCTIONS
+# so it can't be "forgotten" across long sessions.
+SUBAGENT_REPORT_INSTRUCTION = """
 
-When you delegate, ALWAYS end the subagent prompt with this instruction:
+IMPORTANT — Subagent output format:
+You MUST end your subagent prompt with the EXACT block below (copy-paste it verbatim):
 
-> When finished, respond with ONLY a structured summary in this exact format:
-> ## Summary
-> - [x] Completed action description
-> - [x] Another completed action
-> - [ ] Any action that failed or was skipped
->
-> Then add a blank line and a brief one-line result note.
+---BEGIN COPY-PASTE BLOCK---
+When you are completely finished, you MUST end your response with a structured report.
+Use EXACTLY this format — no prose, no explanation, just the checklist:
 
-This structured format is required — the dashboard parses it to show progress.
+## Result
+- [x] Short description of completed action
+- [x] Another completed action
+- [ ] Any action that was skipped or failed
+
+One-line summary sentence here.
+---END COPY-PASTE BLOCK---
+
+The dashboard parses this checklist to show progress indicators. If the subagent does not
+return this format, the UI will fall back to raw text which looks bad. Always include it.
 """
 
 _SETTINGS_TEMPLATE = {
