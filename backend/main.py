@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .models import (
+    AddTaskRequest,
     Agent,
     AgentStatus,
     BootstrapProjectRequest,
@@ -23,9 +24,11 @@ from .models import (
     GlobalStats,
     InjectRequest,
     ManagedProject,
+    PlanTaskRequest,
     ProjectConfig,
     SessionPhase,
     SkillInfo,
+    UpdateTaskRequest,
     WSMessageType,
 )
 from .broker import AgentBroker
@@ -35,6 +38,7 @@ from .rules.builtin_rules import SessionHealthRule
 from .services import projects as projects_svc
 from .services import settings as settings_svc
 from .services import skills as skills_svc
+from .services import tasks as tasks_svc
 from .ws_manager import WSManager
 
 # ─── Singletons ───────────────────────────────────────────────────────────────
@@ -238,6 +242,129 @@ async def dispatch_task(name: str, body: DispatchRequest) -> dict[str, Any]:
         session_ids.append(session.session_id)
 
     return {"status": "dispatched", "session_ids": session_ids}
+
+
+# ─── Tasks API ────────────────────────────────────────────────────────────────
+
+
+@app.get("/api/projects/{name}/tasks")
+async def get_tasks(name: str) -> list[dict[str, Any]]:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, tasks_svc.get_tasks, name)
+
+
+@app.post("/api/projects/{name}/tasks", status_code=201)
+async def add_task(name: str, body: AddTaskRequest) -> list[dict[str, Any]]:
+    loop = asyncio.get_event_loop()
+    tasks = await loop.run_in_executor(None, tasks_svc.add_task, name, body.text)
+    await ws_manager.broadcast(WSMessageType.TASKS_UPDATED, {
+        "project_name": name,
+        "tasks": tasks,
+    })
+    return tasks
+
+
+@app.put("/api/projects/{name}/tasks/{task_index}")
+async def update_task(name: str, task_index: int, body: UpdateTaskRequest) -> list[dict[str, Any]]:
+    try:
+        loop = asyncio.get_event_loop()
+        tasks = await loop.run_in_executor(
+            None, tasks_svc.update_task_status, name, task_index, body.status
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    await ws_manager.broadcast(WSMessageType.TASKS_UPDATED, {
+        "project_name": name,
+        "tasks": tasks,
+    })
+    return tasks
+
+
+@app.delete("/api/projects/{name}/tasks/{task_index}")
+async def delete_task(name: str, task_index: int) -> list[dict[str, Any]]:
+    try:
+        loop = asyncio.get_event_loop()
+        tasks = await loop.run_in_executor(None, tasks_svc.delete_task, name, task_index)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    await ws_manager.broadcast(WSMessageType.TASKS_UPDATED, {
+        "project_name": name,
+        "tasks": tasks,
+    })
+    return tasks
+
+
+@app.post("/api/projects/{name}/tasks/plan", status_code=202)
+async def plan_task(name: str, body: PlanTaskRequest) -> dict[str, Any]:
+    broker: AgentBroker = app.state.broker
+    loop = asyncio.get_event_loop()
+    project = await loop.run_in_executor(None, projects_svc.get_project, name, [])
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # First add the task to TASKS.md
+    await loop.run_in_executor(None, tasks_svc.add_task, name, body.text)
+
+    plan_prompt = (
+        f'Read PROJECT.md and TASKS.md in this project. '
+        f'A new task has been added: "{body.text}". '
+        f'Break this task into concrete, actionable sub-tasks and update TASKS.md. '
+        f'Add sub-tasks as indented checkboxes under the main task. '
+        f'Do NOT execute any tasks or write any code. Only plan and update TASKS.md. '
+        f'When done, write a brief summary of the plan.'
+    )
+
+    model = body.model or project.config.model
+    session = await broker.create_session(
+        project_name=name,
+        project_path=project.path,
+        initial_task=plan_prompt,
+        model=model,
+    )
+
+    return {"status": "planning", "session_id": session.session_id}
+
+
+@app.post("/api/projects/{name}/tasks/{task_index}/start", status_code=202)
+async def start_task(name: str, task_index: int, body: DispatchRequest | None = None) -> dict[str, Any]:
+    broker: AgentBroker = app.state.broker
+    loop = asyncio.get_event_loop()
+    project = await loop.run_in_executor(None, projects_svc.get_project, name, [])
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    tasks = tasks_svc.get_tasks(name)
+    if task_index >= len(tasks):
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    task = tasks[task_index]
+
+    # Mark task as in-progress
+    await loop.run_in_executor(
+        None, tasks_svc.update_task_status, name, task_index, "in_progress"
+    )
+
+    task_prompt = (
+        f'Work on this specific task from TASKS.md: "{task["text"]}"\n\n'
+        f'Read PROJECT.md for context. Check TASKS.md for the full task list. '
+        f'Focus on completing this specific task. '
+        f'Update the checkbox in TASKS.md when done (change [~] to [x]).'
+    )
+
+    model = (body.model if body else None) or project.config.model
+    session = await broker.create_session(
+        project_name=name,
+        project_path=project.path,
+        initial_task=task_prompt,
+        model=model,
+    )
+
+    await ws_manager.broadcast(WSMessageType.TASKS_UPDATED, {
+        "project_name": name,
+        "tasks": tasks_svc.get_tasks(name),
+    })
+
+    return {"status": "started", "session_id": session.session_id, "task": task["text"]}
 
 
 # ─── Agents API ────────────────────────────────────────────────────────────────

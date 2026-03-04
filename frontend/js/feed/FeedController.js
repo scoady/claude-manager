@@ -1,6 +1,7 @@
 /** FeedController — owns the #feed DOM element and manages the narrative feed. */
 import { escapeHtml } from '../utils.js';
 import { AgentSection } from './AgentSection.js';
+import { TasksPanel } from './TasksPanel.js';
 import { api } from '../api.js';
 import { toast } from '../utils.js';
 
@@ -26,6 +27,10 @@ export class FeedController {
     this._laneIndex = 0;
     this._headerEl  = null;
     this._focusedSessionId = null;
+    this._activeTab = 'feed';    // 'feed' | 'tasks'
+    this._agentContainer = null;
+    this._tasksContainer = null;
+    this._tasksPanel = null;
   }
 
   // ── Project ────────────────────────────────────────────────────────────────
@@ -35,9 +40,28 @@ export class FeedController {
     this._project = project;
     this._sections.clear();
     this._laneIndex = 0;
+    this._activeTab = 'feed';
     this._el.innerHTML = '';
+
     this._headerEl = this._buildHeader(project);
     this._el.appendChild(this._headerEl);
+
+    // Agent sections container (Feed tab content)
+    this._agentContainer = document.createElement('div');
+    this._agentContainer.className = 'feed-agent-container';
+    this._el.appendChild(this._agentContainer);
+
+    // Tasks container (Tasks tab content, hidden by default)
+    this._tasksContainer = document.createElement('div');
+    this._tasksContainer.className = 'feed-tasks-container hidden';
+    this._el.appendChild(this._tasksContainer);
+
+    // Create tasks panel
+    if (this._tasksPanel) this._tasksPanel.destroy();
+    this._tasksPanel = new TasksPanel(project.name);
+    this._tasksContainer.appendChild(this._tasksPanel.el);
+
+    this._bindTabEvents();
   }
 
   _buildHeader(project) {
@@ -52,6 +76,10 @@ export class FeedController {
           <span class="feed-meta-chip">×${project.config?.parallelism || 1} parallelism</span>
           ${project.config?.model ? `<span class="feed-meta-chip">${escapeHtml(project.config.model.split('-').slice(-2).join('-'))}</span>` : ''}
         </div>
+      </div>
+      <div class="feed-tab-bar">
+        <button class="feed-tab active" data-feed-tab="feed">Feed</button>
+        <button class="feed-tab" data-feed-tab="tasks">Tasks</button>
       </div>
       <div class="feed-dispatch-composer">
         <div class="feed-dispatch-row">
@@ -247,7 +275,7 @@ export class FeedController {
     // Animate in
     section.el.style.opacity = '0';
     section.el.style.transform = 'translateY(12px)';
-    this._el.appendChild(section.el);
+    (this._agentContainer || this._el).appendChild(section.el);
     requestAnimationFrame(() => {
       section.el.style.transition = 'opacity 280ms ease, transform 280ms ease';
       section.el.style.opacity = '1';
@@ -347,6 +375,44 @@ export class FeedController {
         // milestones are shown via tool blocks — no extra action needed
         break;
       }
+    }
+  }
+
+  // ── Tab switching ──────────────────────────────────────────────────────────
+
+  _bindTabEvents() {
+    const tabs = this._headerEl.querySelectorAll('.feed-tab');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const tabName = tab.dataset.feedTab;
+        if (tabName === this._activeTab) return;
+        this._activeTab = tabName;
+
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+
+        if (tabName === 'tasks') {
+          this._agentContainer?.classList.add('hidden');
+          this._tasksContainer?.classList.remove('hidden');
+          this._headerEl.querySelector('.feed-dispatch-composer')?.classList.add('hidden');
+          this._headerEl.querySelector('.skill-toggle-panel')?.classList.add('hidden');
+          this._tasksPanel?.load();
+          this._tasksPanel?.startAutoRefresh();
+        } else {
+          this._tasksContainer?.classList.add('hidden');
+          this._agentContainer?.classList.remove('hidden');
+          this._headerEl.querySelector('.feed-dispatch-composer')?.classList.remove('hidden');
+          this._headerEl.querySelector('.skill-toggle-panel')?.classList.remove('hidden');
+          this._tasksPanel?.stopAutoRefresh();
+        }
+      });
+    });
+  }
+
+  /** Handle tasks_updated WS event. */
+  handleTasksUpdated(projectName, tasks) {
+    if (this._project && this._project.name === projectName && this._tasksPanel) {
+      this._tasksPanel.updateTasks(tasks);
     }
   }
 

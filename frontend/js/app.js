@@ -203,6 +203,12 @@ function onWSMessage(msg) {
       if (idx >= 0) state.agents[idx] = { ...state.agents[idx], ...updated };
       break;
     }
+
+    case 'tasks_updated': {
+      const { project_name, tasks } = msg.data;
+      feed.handleTasksUpdated(project_name, tasks);
+      break;
+    }
   }
 }
 

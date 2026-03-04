@@ -145,6 +145,80 @@ export const api = {
     return res.json();
   },
 
+  // ─── Tasks ────────────────────────────────────────────────────────────────
+
+  async getTasks(projectName) {
+    const res = await fetch(`${BASE}/api/projects/${encodeURIComponent(projectName)}/tasks`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
+  async addTask(projectName, text) {
+    const res = await fetch(`${BASE}/api/projects/${encodeURIComponent(projectName)}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
+  async updateTask(projectName, taskIndex, status) {
+    const res = await fetch(`${BASE}/api/projects/${encodeURIComponent(projectName)}/tasks/${taskIndex}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
+  async deleteTask(projectName, taskIndex) {
+    const res = await fetch(`${BASE}/api/projects/${encodeURIComponent(projectName)}/tasks/${taskIndex}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
+  async planTask(projectName, text, model) {
+    const body = { text };
+    if (model) body.model = model;
+    const res = await fetch(`${BASE}/api/projects/${encodeURIComponent(projectName)}/tasks/plan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
+  async startTask(projectName, taskIndex, model) {
+    const body = model ? { model, task: '' } : { task: '' };
+    const res = await fetch(`${BASE}/api/projects/${encodeURIComponent(projectName)}/tasks/${taskIndex}/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
   // ─── Settings ──────────────────────────────────────────────────────────────
 
   async getStats() {

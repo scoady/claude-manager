@@ -106,6 +106,19 @@ class InjectRequest(BaseModel):
     message: str
 
 
+class AddTaskRequest(BaseModel):
+    text: str
+
+
+class UpdateTaskRequest(BaseModel):
+    status: str  # "pending" | "in_progress" | "done"
+
+
+class PlanTaskRequest(BaseModel):
+    text: str
+    model: str | None = None
+
+
 # ─── Agent (runtime) ──────────────────────────────────────────────────────────
 
 
@@ -169,6 +182,7 @@ class WSMessageType(str, Enum):
     INJECTION_ACK   = "injection_ack"
     RULE_FIRED      = "rule_fired"
     STATS_UPDATE    = "stats_update"
+    TASKS_UPDATED   = "tasks_updated"
     ERROR           = "error"
 
 
