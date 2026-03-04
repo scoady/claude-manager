@@ -25,6 +25,7 @@ export class FeedController {
     this._sections  = new Map(); // sessionId → AgentSection
     this._laneIndex = 0;
     this._headerEl  = null;
+    this._focusedSessionId = null;
   }
 
   // ── Project ────────────────────────────────────────────────────────────────
@@ -44,29 +45,26 @@ export class FeedController {
     el.className = 'feed-project-header';
     const agentCount = project.active_session_ids?.length || 0;
     el.innerHTML = `
-      <div class="feed-project-title">${escapeHtml(project.name)}</div>
-      ${project.description ? `<div class="feed-project-desc">${escapeHtml(project.description)}</div>` : ''}
-      <div class="feed-project-meta">
-        <span class="feed-meta-chip">${agentCount} agent${agentCount !== 1 ? 's' : ''}</span>
-        <span class="feed-meta-chip">×${project.config?.parallelism || 1} parallelism</span>
-        ${project.config?.model ? `<span class="feed-meta-chip">${escapeHtml(project.config.model.split('-').slice(-2).join('-'))}</span>` : ''}
+      <div class="feed-header-row">
+        <span class="feed-project-title">${escapeHtml(project.name)}</span>
+        <div class="feed-project-meta">
+          <span class="feed-meta-chip">${agentCount} agent${agentCount !== 1 ? 's' : ''}</span>
+          <span class="feed-meta-chip">×${project.config?.parallelism || 1} parallelism</span>
+          ${project.config?.model ? `<span class="feed-meta-chip">${escapeHtml(project.config.model.split('-').slice(-2).join('-'))}</span>` : ''}
+        </div>
       </div>
       <div class="feed-dispatch-composer">
-        <div class="feed-dispatch-context">
-          <span class="feed-dispatch-label">Dispatch to <strong>${escapeHtml(project.name)}</strong></span>
-          <span class="feed-dispatch-hint">Enter to dispatch · Shift+Enter for newline</span>
-        </div>
         <div class="feed-dispatch-row">
+          <textarea class="feed-task-input" rows="1" placeholder="Dispatch a task…"></textarea>
           <select class="feed-parallelism-select" title="Parallelism">
             ${[1,2,3,4].map(n => `<option value="${n}" ${n === (project.config?.parallelism || 1) ? 'selected' : ''}>×${n}</option>`).join('')}
           </select>
           <select class="feed-model-select" title="Model override">
-            <option value="">project default</option>
-            <option value="claude-opus-4-6" ${project.config?.model === 'claude-opus-4-6' ? 'selected' : ''}>opus-4-6</option>
-            <option value="claude-sonnet-4-6" ${project.config?.model === 'claude-sonnet-4-6' ? 'selected' : ''}>sonnet-4-6</option>
-            <option value="claude-haiku-4-5-20251001" ${project.config?.model === 'claude-haiku-4-5-20251001' ? 'selected' : ''}>haiku-4-5</option>
+            <option value="">default</option>
+            <option value="claude-opus-4-6" ${project.config?.model === 'claude-opus-4-6' ? 'selected' : ''}>opus</option>
+            <option value="claude-sonnet-4-6" ${project.config?.model === 'claude-sonnet-4-6' ? 'selected' : ''}>sonnet</option>
+            <option value="claude-haiku-4-5-20251001" ${project.config?.model === 'claude-haiku-4-5-20251001' ? 'selected' : ''}>haiku</option>
           </select>
-          <textarea class="feed-task-input" rows="1" placeholder="Give this project a task…"></textarea>
           <button class="feed-dispatch-btn" disabled>
             <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
               <path d="M2 7.5h11M9 3l5 4.5L9 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -241,6 +239,7 @@ export class FeedController {
       onInject: (sid, msg) => this._inject(sid, msg),
       onKill:   (sid) => this._kill(sid),
       onStatus: (sid) => this._askStatus(sid),
+      onFocus:  (sid) => this._setFocused(sid),
     });
 
     this._sections.set(sessionId, section);
@@ -254,6 +253,11 @@ export class FeedController {
       section.el.style.opacity = '1';
       section.el.style.transform = 'translateY(0)';
     });
+
+    // Adaptive layout: when 3+ agents, focus the newest one
+    if (this._sections.size >= 3) {
+      this._setFocused(sessionId);
+    }
 
     return section;
   }
@@ -335,6 +339,19 @@ export class FeedController {
       case 'agent_milestone': {
         // milestones are shown via tool blocks — no extra action needed
         break;
+      }
+    }
+  }
+
+  // ── Adaptive layout ────────────────────────────────────────────────────────
+
+  _setFocused(sessionId) {
+    this._focusedSessionId = sessionId;
+    for (const [sid, section] of this._sections) {
+      if (sid === sessionId) {
+        section.setExpanded(true);
+      } else if (!section._done) {
+        section.setExpanded(false);
       }
     }
   }

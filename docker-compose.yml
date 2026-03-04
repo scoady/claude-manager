@@ -20,6 +20,8 @@ services:
       # SSH keys + git config for git push/pull inside agents
       - "${HOME}/.ssh:/root/.ssh:ro"
       - "${HOME}/.gitconfig:/root/.gitconfig:ro"
+      # OAuth token file — refreshed on host by launchd, read per-spawn by backend
+      - "./.claude-snapshot/oauth-token:/run/claude-oauth-token:ro"
     environment:
       CLAUDE_DATA_DIR: /root/.claude
       MANAGED_PROJECTS_DIR: "${MANAGED_PROJECTS_DIR:-${HOME}/git/claude-managed-projects}"

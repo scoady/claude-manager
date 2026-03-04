@@ -27,6 +27,18 @@ const PHASE_CLASSES = {
   error:      'phase-error',
 };
 
+const PHASE_COLORS = {
+  starting:   '#00f0ff',
+  thinking:   '#ffcc00',
+  generating: '#ffcc00',
+  tool_input: '#e040fb',
+  tool_exec:  '#e040fb',
+  idle:       '#39ff14',
+  injecting:  '#ffcc00',
+  cancelled:  '#ff1744',
+  error:      '#ff1744',
+};
+
 export class AgentSection {
   /**
    * @param {object} opts
@@ -38,27 +50,34 @@ export class AgentSection {
    * @param {Function} opts.onInject — (sessionId, message) => void
    * @param {Function} opts.onKill   — (sessionId) => void
    * @param {Function} opts.onStatus — (sessionId) => void
+   * @param {Function} [opts.onFocus] — (sessionId) => void — called when user expands this section
    */
-  constructor({ sessionId, task, laneColor, initialPhase, initialTurnCount, onInject, onKill, onStatus }) {
+  constructor({ sessionId, task, laneColor, initialPhase, initialTurnCount, onInject, onKill, onStatus, onFocus }) {
     this.sessionId  = sessionId;
     this.task       = task;
     this.laneColor  = laneColor;
     this._onInject  = onInject;
     this._onKill    = onKill;
     this._onStatus  = onStatus;
+    this._onFocus   = onFocus;
 
     this._phase     = initialPhase || 'starting';
     this._turnCount = initialTurnCount || 0;
     this._expanded  = false;
     this._streamText = '';
-    this._lastCardIndex = 0; // offset into _streamText for last card update
+    this._lastCardIndex = 0;
     this._detailsOpen = false;
-    this._toolBlocks = new Map(); // toolId → ToolBlock
+    this._toolBlocks = new Map();
+
+    this._done = false;
+    this._startTime = Date.now();
+    this._currentPre = null;
+    this._autoFollow = true;
+    this._phaseHistory = [{ phase: this._phase, startTime: Date.now() }];
 
     this.el = this._build();
     this._bindEvents();
 
-    // Apply initial phase styling (lane pulsing, inject composer visibility)
     if (initialPhase) {
       this.setPhase(initialPhase);
     }
@@ -79,6 +98,7 @@ export class AgentSection {
         <div class="agent-section-lane"></div>
         <div class="agent-section-title">${escapeHtml(this._taskLabel())}</div>
         <div class="agent-section-badges">
+          <div class="agent-phase-timeline"></div>
           <span class="agent-phase-badge ${PHASE_CLASSES[this._phase] || ''}">${PHASE_LABELS[this._phase] || this._phase}</span>
           <span class="agent-turn-count" title="Turns">${this._turnCount}t</span>
         </div>
@@ -97,13 +117,21 @@ export class AgentSection {
         </div>
       </div>
       <div class="agent-section-body">
-        <div class="agent-status-card">
-          <div class="status-card-placeholder">Agent is starting...</div>
+        <div class="agent-live-content">
+          <div class="agent-stream-area">
+            <div class="skeleton-loader">
+              <div class="skeleton-line" style="width:85%"></div>
+              <div class="skeleton-line" style="width:60%"></div>
+              <div class="skeleton-line" style="width:40%"></div>
+            </div>
+            <span class="stream-cursor"></span>
+            <button class="agent-follow-btn hidden">↓</button>
+          </div>
+          <div class="agent-status-card hidden"></div>
         </div>
-        <button class="agent-detail-toggle">Show details</button>
-        <div class="agent-detail-section hidden">
-          <div class="agent-stream-area"></div>
-          <div class="agent-tools-area"></div>
+        <button class="agent-detail-toggle hidden">Show raw log</button>
+        <div class="agent-raw-log hidden">
+          <pre class="agent-raw-pre"></pre>
         </div>
         <div class="agent-inject-composer hidden">
           <div class="inject-hint-row">
@@ -148,16 +176,35 @@ export class AgentSection {
       this._onStatus?.(this.sessionId);
     });
 
-    // Detail toggle
+    // Detail toggle — show/hide raw log
     this.el.querySelector('.agent-detail-toggle').addEventListener('click', e => {
       e.stopPropagation();
       this._detailsOpen = !this._detailsOpen;
-      const section = this.el.querySelector('.agent-detail-section');
+      const rawLog = this.el.querySelector('.agent-raw-log');
       const btn = this.el.querySelector('.agent-detail-toggle');
-      section?.classList.toggle('hidden', !this._detailsOpen);
-      btn.textContent = this._detailsOpen ? 'Hide details' : 'Show details';
+      rawLog?.classList.toggle('hidden', !this._detailsOpen);
+      btn.textContent = this._detailsOpen ? 'Hide raw log' : 'Show raw log';
     });
 
+    // Auto-scroll detection on stream area
+    const streamArea = this.el.querySelector('.agent-stream-area');
+    streamArea?.addEventListener('scroll', () => {
+      const atBottom = (streamArea.scrollHeight - streamArea.scrollTop - streamArea.clientHeight) < 30;
+      this._autoFollow = atBottom;
+      const followBtn = streamArea.querySelector('.agent-follow-btn');
+      if (followBtn) followBtn.classList.toggle('hidden', atBottom);
+    });
+
+    // Follow button
+    this.el.querySelector('.agent-follow-btn')?.addEventListener('click', e => {
+      e.stopPropagation();
+      this._autoFollow = true;
+      const area = this.el.querySelector('.agent-stream-area');
+      if (area) area.scrollTop = area.scrollHeight;
+      e.currentTarget.classList.add('hidden');
+    });
+
+    // Inject composer
     const textarea = this.el.querySelector('.agent-inject-input');
     const sendBtn  = this.el.querySelector('.inject-send-btn');
 
@@ -189,27 +236,39 @@ export class AgentSection {
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
-  /** Append a streaming text chunk — goes to detail section raw stream only. */
+  /** Append a streaming text chunk — visible in live stream area. */
   appendChunk(text) {
     this._streamText += text;
-    const area = this.el.querySelector('.agent-stream-area');
-    if (!area) return;
 
-    // Update the raw stream <pre> in the detail section
-    let pre = area.querySelector('.agent-stream-pre');
-    if (!pre) {
-      pre = document.createElement('pre');
-      pre.className = 'agent-stream-pre';
-      area.appendChild(pre);
-      const cursor = document.createElement('span');
-      cursor.className = 'stream-cursor';
-      area.appendChild(cursor);
+    // Update raw log
+    const rawPre = this.el.querySelector('.agent-raw-pre');
+    if (rawPre) rawPre.textContent = this._streamText;
+
+    // Remove skeleton if present
+    const skeleton = this.el.querySelector('.skeleton-loader');
+    if (skeleton) skeleton.remove();
+
+    const streamArea = this.el.querySelector('.agent-stream-area');
+    if (!streamArea) return;
+    streamArea.classList.remove('hidden');
+
+    // Ensure we have a current pre element (new one after each tool block)
+    const cursor = streamArea.querySelector('.stream-cursor');
+    if (!this._currentPre) {
+      this._currentPre = document.createElement('pre');
+      this._currentPre.className = 'agent-stream-pre';
+      if (cursor) {
+        streamArea.insertBefore(this._currentPre, cursor);
+      } else {
+        streamArea.appendChild(this._currentPre);
+      }
     }
-    pre.textContent = this._streamText;
 
-    // Auto-scroll detail section if open
-    if (this._detailsOpen) {
-      area.scrollTop = area.scrollHeight;
+    this._currentPre.textContent += text;
+
+    // Auto-scroll if following
+    if (this._autoFollow) {
+      streamArea.scrollTop = streamArea.scrollHeight;
     }
   }
 
@@ -218,27 +277,49 @@ export class AgentSection {
     const card = this.el.querySelector('.agent-status-card');
     if (!card) return;
 
-    // Extract text since last card update
     const newText = this._streamText.slice(this._lastCardIndex).trim();
     this._lastCardIndex = this._streamText.length;
 
     if (!newText) return;
 
-    // Render markdown and replace card content
     const html = renderMarkdown(newText);
     card.innerHTML = html;
+    card.classList.remove('hidden');
     card.classList.add('card-fade-in');
-
-    // Remove animation class after it completes so it can re-trigger
     setTimeout(() => card.classList.remove('card-fade-in'), 250);
+
+    // Switch to status card view — hide stream, show raw log toggle
+    const streamArea = this.el.querySelector('.agent-stream-area');
+    if (streamArea) streamArea.classList.add('hidden');
+    const toggle = this.el.querySelector('.agent-detail-toggle');
+    if (toggle) toggle.classList.remove('hidden');
   }
 
-  /** Add a new ToolBlock for a tool_start event. */
+  /** Add a new ToolBlock inline in the stream area. */
   addToolBlock({ toolId, toolName, toolInput }) {
     const block = new ToolBlock({ toolId, toolName, toolInput });
     this._toolBlocks.set(toolId, block);
-    const toolsArea = this.el.querySelector('.agent-tools-area');
-    toolsArea?.appendChild(block.el);
+
+    const streamArea = this.el.querySelector('.agent-stream-area');
+    if (!streamArea) return;
+
+    // Remove skeleton if present
+    const skeleton = streamArea.querySelector('.skeleton-loader');
+    if (skeleton) skeleton.remove();
+
+    const cursor = streamArea.querySelector('.stream-cursor');
+    if (cursor) {
+      streamArea.insertBefore(block.el, cursor);
+    } else {
+      streamArea.appendChild(block.el);
+    }
+
+    // Break current pre so next text chunk creates a new pre after tool block
+    this._currentPre = null;
+
+    if (this._autoFollow) {
+      streamArea.scrollTop = streamArea.scrollHeight;
+    }
   }
 
   /** Update an existing ToolBlock with its output. */
@@ -247,9 +328,11 @@ export class AgentSection {
     if (block) block.setOutput(output);
   }
 
-  /** Update the phase badge. */
+  /** Update the phase badge and manage view transitions. */
   setPhase(phase) {
+    const prevPhase = this._phase;
     this._phase = phase;
+
     const badge = this.el.querySelector('.agent-phase-badge');
     if (badge) {
       badge.textContent = PHASE_LABELS[phase] || phase;
@@ -262,11 +345,34 @@ export class AgentSection {
       composer.classList.toggle('hidden', phase !== 'idle');
     }
 
-    // Pulse on header lane bar when working
+    // Pulse lane bar when working
     const lane = this.el.querySelector('.agent-section-lane');
     if (lane) {
-      const isWorking = phase !== 'idle' && phase !== 'cancelled' && phase !== 'error';
+      const isWorking = !['idle', 'cancelled', 'error'].includes(phase);
       lane.classList.toggle('pulsing', isWorking);
+    }
+
+    // When resuming work from idle, switch back to live stream view
+    if (prevPhase === 'idle' && !['idle', 'cancelled', 'error'].includes(phase)) {
+      const streamArea = this.el.querySelector('.agent-stream-area');
+      const card = this.el.querySelector('.agent-status-card');
+      const toggle = this.el.querySelector('.agent-detail-toggle');
+      const rawLog = this.el.querySelector('.agent-raw-log');
+      streamArea?.classList.remove('hidden');
+      card?.classList.add('hidden');
+      toggle?.classList.add('hidden');
+      rawLog?.classList.add('hidden');
+      this._detailsOpen = false;
+
+      // Clear stream area content for new turn
+      this._clearStreamArea();
+      this._currentPre = null;
+    }
+
+    // Update phase timeline
+    if (phase !== prevPhase) {
+      this._phaseHistory.push({ phase, startTime: Date.now() });
+      this._renderTimeline();
     }
   }
 
@@ -277,31 +383,92 @@ export class AgentSection {
     if (el) el.textContent = `${count}t`;
   }
 
-  /** Mark session as done (no more streaming). */
+  /** Mark session as done — collapse and add duration badge. */
   markDone(reason) {
+    this._done = true;
     const phase = reason === 'cancelled' ? 'cancelled' : (reason === 'error' ? 'error' : 'idle');
     this.setPhase(phase);
-    const area = this.el.querySelector('.agent-stream-area');
-    // Remove blinking cursor if present
-    area?.querySelector('.stream-cursor')?.remove();
+
+    // Remove blinking cursor
+    this.el.querySelector('.stream-cursor')?.remove();
+
+    // Add completed class
+    this.el.classList.add('completed');
+
+    // Add duration badge
+    const duration = this._formatDuration(Date.now() - this._startTime);
+    const badges = this.el.querySelector('.agent-section-badges');
+    if (badges) {
+      const durBadge = document.createElement('span');
+      durBadge.className = 'agent-duration';
+      durBadge.textContent = duration;
+      badges.appendChild(durBadge);
+    }
+
+    // Auto-collapse after delay
+    setTimeout(() => {
+      if (this._done) this.setExpanded(false);
+    }, 600);
   }
 
   /** Expand or collapse the body. */
   setExpanded(expanded) {
     this._expanded = expanded;
     this.el.classList.toggle('expanded', expanded);
-    const chevron = this.el.querySelector('.toggle-chevron path');
-    if (chevron) {
-      chevron.setAttribute('d', expanded
-        ? 'M3 7l3-3 3 3'
-        : 'M3 5l3 3 3-3'
-      );
-    }
+    // Notify parent for adaptive focus
+    if (expanded) this._onFocus?.(this.sessionId);
   }
 
-  /** Update the session ID (pending-PID -> real UUID). */
+  /** Update the session ID (pending-PID → real UUID). */
   updateSessionId(newId) {
     this.sessionId = newId;
     this.el.dataset.session = newId;
+  }
+
+  // ── Private helpers ─────────────────────────────────────────────────────────
+
+  _clearStreamArea() {
+    const area = this.el.querySelector('.agent-stream-area');
+    if (!area) return;
+    const cursor = area.querySelector('.stream-cursor');
+    const followBtn = area.querySelector('.agent-follow-btn');
+    Array.from(area.children).forEach(child => {
+      if (child !== cursor && child !== followBtn) child.remove();
+    });
+  }
+
+  _formatDuration(ms) {
+    const secs = Math.floor(ms / 1000);
+    if (secs < 60) return `${secs}s`;
+    const mins = Math.floor(secs / 60);
+    const remSecs = secs % 60;
+    if (mins < 60) return `${mins}m ${remSecs}s`;
+    const hrs = Math.floor(mins / 60);
+    const remMins = mins % 60;
+    return `${hrs}h ${remMins}m`;
+  }
+
+  _renderTimeline() {
+    const container = this.el.querySelector('.agent-phase-timeline');
+    if (!container || this._phaseHistory.length < 2) return;
+
+    const now = Date.now();
+    const totalMs = now - this._phaseHistory[0].startTime;
+    if (totalMs < 1000) return;
+
+    let html = '';
+    for (let i = 0; i < this._phaseHistory.length; i++) {
+      const entry = this._phaseHistory[i];
+      const endTime = (i + 1 < this._phaseHistory.length)
+        ? this._phaseHistory[i + 1].startTime
+        : now;
+      const durationMs = endTime - entry.startTime;
+      const pct = Math.max(2, (durationMs / totalMs) * 100);
+      const color = PHASE_COLORS[entry.phase] || '#484f58';
+      const isLast = (i === this._phaseHistory.length - 1);
+      html += `<div class="phase-seg${isLast ? ' phase-seg-active' : ''}" style="width:${pct}%;background:${color}" title="${entry.phase}"></div>`;
+    }
+
+    container.innerHTML = html;
   }
 }

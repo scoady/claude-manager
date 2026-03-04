@@ -21,6 +21,19 @@ from typing import Any, Callable
 from ..models import SessionPhase
 
 CLAUDE_BIN = os.environ.get("CLAUDE_BIN", "claude")
+OAUTH_TOKEN_FILE = "/run/claude-oauth-token"
+
+
+def _get_spawn_env() -> dict[str, str]:
+    """Build env for subprocess, reading a fresh OAuth token from file if available."""
+    env = {**os.environ}
+    try:
+        token = Path(OAUTH_TOKEN_FILE).read_text().strip()
+        if token:
+            env["CLAUDE_CODE_OAUTH_TOKEN"] = token
+    except FileNotFoundError:
+        pass
+    return env
 
 
 def _format_milestone(tool_name: str, tool_input: dict[str, Any]) -> str:
@@ -167,7 +180,7 @@ class AgentSession:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=cwd,
-                env={**os.environ},
+                env=_get_spawn_env(),
             )
         except Exception as exc:
             print(f"[session:{self.session_id[:8]}] spawn error: {exc}")
