@@ -486,6 +486,21 @@ export class FeedController {
         const { session_id, reason } = msg.data;
         const section = this._sections.get(session_id);
         section?.markDone(reason);
+
+        // Hide completed non-controller agents from the orchestrator container
+        if (section && !section._isController) {
+          const orchAgents = this._orchestratorBanner?.agentsContainer;
+          if (orchAgents?.contains(section.el)) {
+            setTimeout(() => {
+              section.el.style.transition = 'opacity 0.4s ease, max-height 0.4s ease, margin 0.4s ease, padding 0.4s ease';
+              section.el.style.opacity = '0';
+              section.el.style.maxHeight = '0';
+              section.el.style.marginBottom = '0';
+              section.el.style.overflow = 'hidden';
+              setTimeout(() => section.el.remove(), 500);
+            }, 2000);
+          }
+        }
         break;
       }
       case 'agent_id_assigned': {
