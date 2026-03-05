@@ -7,6 +7,7 @@ import { MilestonesPanel } from './MilestonesPanel.js';
 import { WorkflowPanel } from './WorkflowPanel.js';
 import { ArtifactsPanel } from './ArtifactsPanel.js';
 import { renderMarkdown } from './MarkdownRenderer.js';
+import { CanvasEngine } from '../canvas/CanvasEngine.js';
 import { api } from '../api.js';
 import { toast } from '../utils.js';
 
@@ -46,6 +47,8 @@ export class FeedController {
     this._subagentMap = new Map(); // tool_use_id → subagent section id
     this._taskAgentMap = new Map(); // taskIndex → sessionId
     this._onDeleteProject = onDeleteProject || null;
+    this._dashboardCanvas = new CanvasEngine();
+    this._dashboardWidgetGrid = null;
   }
 
   // ── Project ────────────────────────────────────────────────────────────────
@@ -71,6 +74,13 @@ export class FeedController {
     this._orchestratorBanner = new OrchestratorBanner();
     this._orchestratorBanner._taskAgentMap = this._taskAgentMap;
     this._treeContainer.appendChild(this._orchestratorBanner.el);
+
+    // 2a-ii. Dashboard widget grid (agent-authored content)
+    this._dashboardWidgetGrid = document.createElement('div');
+    this._dashboardWidgetGrid.className = 'dashboard-widget-grid';
+    this._dashboardWidgetGrid.innerHTML = '<div class="dashboard-empty-state">Agent dashboard widgets will appear here</div>';
+    this._treeContainer.appendChild(this._dashboardWidgetGrid);
+    this._dashboardCanvas.mount(this._dashboardWidgetGrid);
 
     // 2b. Vertical connector from orchestrator to children
     this._treeConnector = document.createElement('div');
@@ -139,12 +149,50 @@ export class FeedController {
       this._tasksPanel?.updateTasks(tasks);
     } catch (_) {}
 
+    // Load existing dashboard widgets for this project
+    this._loadDashboardWidgets(project.name);
+
     // If a controller session already exists in our state, wire it up
     // (no auto-spawning — orchestrator is only created via explicit dispatch)
     for (const [sid, section] of this._sections) {
       if (section._isController && section.sessionId) {
         this._orchestratorBanner?.setControllerSession(sid);
         break;
+      }
+    }
+  }
+
+  async _loadDashboardWidgets(projectName) {
+    try {
+      const resp = await fetch(`/api/canvas/${encodeURIComponent(projectName)}`);
+      const widgets = await resp.json();
+      this._dashboardCanvas.clear();
+      for (const w of widgets) {
+        if (!w.widget_id) w.widget_id = w.id;
+        this._dashboardCanvas.create(w);
+      }
+    } catch (_) {}
+  }
+
+  /** Route a canvas widget event to the dashboard if it belongs to the current project. */
+  handleCanvasEvent(type, data) {
+    if (!this._project) return;
+
+    if (type === 'canvas_widget_created') {
+      const w = data.widget ?? data;
+      if (w.project && w.project !== this._project.name) return;
+      if (w && !w.widget_id && w.id) w.widget_id = w.id;
+      this._dashboardCanvas.create(w);
+    } else if (type === 'canvas_widget_updated') {
+      const widgetId = data.widget_id;
+      const patch = data.patch ?? data;
+      if (widgetId) this._dashboardCanvas.update(widgetId, patch);
+    } else if (type === 'canvas_widget_removed') {
+      const widgetId = data.widget_id ?? data;
+      if (widgetId) this._dashboardCanvas.remove(widgetId);
+    } else if (type === 'canvas_cleared') {
+      if (data.project === this._project.name) {
+        this._dashboardCanvas.clear();
       }
     }
   }

@@ -266,12 +266,12 @@ function onWSMessage(msg) {
       break;
     }
 
-    // ── Canvas widget events ────────────────────────────────────────────────
+    // ── Canvas widget events — route to both Canvas page and dashboard ────
     case 'canvas_widget_created': {
       const w = msg.widget ?? msg.data?.widget ?? msg.data;
-      // Normalize: API uses "id" but CanvasEngine expects "widget_id"
       if (w && !w.widget_id && w.id) w.widget_id = w.id;
       canvasEngine.create(w);
+      feed.handleCanvasEvent('canvas_widget_created', msg.data ?? msg);
       break;
     }
 
@@ -279,12 +279,19 @@ function onWSMessage(msg) {
       const widgetId = msg.widget_id ?? msg.data?.widget_id;
       const patch    = msg.patch    ?? msg.data?.patch ?? msg.data;
       if (widgetId) canvasEngine.update(widgetId, patch);
+      feed.handleCanvasEvent('canvas_widget_updated', msg.data ?? msg);
       break;
     }
 
     case 'canvas_widget_removed': {
       const widgetId = msg.widget_id ?? msg.data?.widget_id ?? msg.data;
       if (widgetId) canvasEngine.remove(widgetId);
+      feed.handleCanvasEvent('canvas_widget_removed', msg.data ?? msg);
+      break;
+    }
+
+    case 'canvas_cleared': {
+      feed.handleCanvasEvent('canvas_cleared', msg.data ?? msg);
       break;
     }
   }

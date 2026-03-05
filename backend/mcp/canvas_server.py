@@ -26,14 +26,28 @@ def canvas_put(
     row_span: int = 1,
 ) -> dict:
     """
-    Create or update a widget on the agent canvas for a project.
+    Create or update a dashboard widget for a project.
 
-    The widget renders as an isolated HTML/CSS/JS block in the dashboard.
-    Use this to display status, charts, logs, or any custom visualization.
+    Widgets appear directly on the project's Overview dashboard. Use this to
+    publish task status, progress summaries, architecture diagrams, code
+    highlights, or any structured project information.
 
-    widget_id: stable ID for this widget — use the same ID on repeated calls to
-               update the widget in-place rather than creating a duplicate.
-    grid_col/grid_row: 1-indexed position in the canvas grid.
+    REQUIRED CONTENT: Every widget MUST include:
+    - A clear TASK or TOPIC name in the title
+    - A STATUS indicator (e.g. in-progress, done, blocked, planned)
+    - A concise summary visible at a glance
+    - A <details> element containing the FULL TEXT (detailed explanation,
+      code snippets, logs, etc.) that users can expand on click
+
+    STYLING GUIDELINES:
+    - Use self-contained inline HTML + CSS (no external dependencies)
+    - Colors: cyan (#67e8f9), green (#4ade80), amber (#fbbf24), purple (#a78bfa)
+    - Fonts: 'IBM Plex Mono' for data, system-ui for body text
+    - Transparent backgrounds (the widget frame provides the card bg)
+    - Status badges: green=done, amber=in-progress, cyan=planned, red=blocked
+
+    widget_id: stable ID — use the same ID on repeated calls to update in-place.
+    grid_col/grid_row: 1-indexed position in the dashboard grid.
     col_span/row_span: how many grid cells the widget occupies (default 1).
     """
     payload = {

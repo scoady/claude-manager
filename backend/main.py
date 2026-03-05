@@ -231,24 +231,27 @@ async def create_project(body: BootstrapProjectRequest) -> ManagedProject:
     project_name = project.name
     controller_task = (
         "You are the CONTROLLER agent for this project.\n\n"
-        "You have MCP tools for managing agents:\n"
+        "You have MCP tools for managing agents and the dashboard:\n"
         f"- list_tasks(project=\"{project_name}\") — get all tasks from TASKS.md\n"
         f"- dispatch_agent(project=\"{project_name}\", task_index=N) — spawn a worker agent\n"
         f"- get_agents(project=\"{project_name}\") — check status of all agents\n"
         f"- report_complete(project=\"{project_name}\", task_index=N, summary=\"...\") — mark task done\n"
-        f"- dispatch_custom(project=\"{project_name}\", task=\"...\") — spawn ad-hoc agent\n\n"
+        f"- dispatch_custom(project=\"{project_name}\", task=\"...\") — spawn ad-hoc agent\n"
+        f"- canvas_put(project=\"{project_name}\", ...) — publish a dashboard widget\n\n"
         "Your workflow:\n"
         "1. Read PROJECT.md to understand the project goal\n"
         "2. Open TASKS.md and replace the placeholder with a concrete checklist of tasks\n"
-        "3. Report a brief PROJECT STATUS and stop:\n"
-        "   ## Project Status\n"
-        "   **Goal**: (one-line summary)\n"
-        "   **Plan**: (numbered list of planned tasks)\n"
-        "   **Status**: Ready for instructions.\n\n"
+        "3. Publish a dashboard widget summarizing project status using canvas_put:\n"
+        f'   canvas_put(project="{project_name}", widget_id="project-status",\n'
+        '     title="Project Status", html="<html with task list, status badges, details>")\n'
+        "   The widget MUST include: task names, status badges (done/active/planned),\n"
+        "   and a <details> section with the full plan text.\n"
+        "4. Stop and wait for instructions.\n\n"
         "IMPORTANT: You are a coordinator — NEVER write code or implement anything yourself.\n"
         "When told to start work, use dispatch_agent() to assign tasks to workers.\n"
         "Monitor with get_agents(). Use report_complete() when tasks finish.\n"
-        "Do NOT ask questions or offer to proceed. Just report status and stop."
+        "After each status change, UPDATE your dashboard widget with canvas_put().\n"
+        "Do NOT ask questions or offer to proceed. Publish status to dashboard and stop."
     )
     asyncio.create_task(broker.create_session(
         project_name=project.name,
@@ -313,7 +316,9 @@ async def dispatch_task(name: str, body: DispatchRequest) -> dict[str, Any]:
             f'Use dispatch_custom(project="{name}", task="...") to spawn a worker agent for this. '
             f'Give the worker a clear, detailed prompt with all context it needs. '
             f'Do NOT implement anything yourself — you are the coordinator. '
-            f'Monitor with get_agents() and report results when done.'
+            f'Monitor with get_agents() and report results when done.\n\n'
+            f'After dispatching, UPDATE the dashboard using canvas_put(project="{name}", '
+            f'widget_id="project-status", ...) to reflect the new task and its status.'
         )
         await broker.inject_message(controller.session_id, task_prompt)
         return {"status": "delegated", "session_ids": [controller.session_id]}
@@ -324,12 +329,22 @@ async def dispatch_task(name: str, body: DispatchRequest) -> dict[str, Any]:
     )
     model = body.model or project.config.model
     mcp_config = project.config.mcp_config or _CANVAS_MCP_CONFIG
+
+    # Wrap the task with dashboard publishing instructions
+    dashboard_task = (
+        f'{body.task}\n\n'
+        f'When you have results, publish a dashboard widget using canvas_put('
+        f'project="{name}", widget_id="<descriptive-id>", title="<task title>", '
+        f'html="<your content>"). The widget MUST include: a status badge, '
+        f'a concise summary, and a <details> element with the full output/details.'
+    )
+
     session_ids = []
     for _ in range(project.config.parallelism):
         session = await broker.create_session(
             project_name=name,
             project_path=project.path,
-            initial_task=body.task,
+            initial_task=dashboard_task,
             model=model,
             mcp_config_path=mcp_config,
         )
@@ -553,17 +568,22 @@ async def ensure_orchestrator(name: str):
             project_path=project.path,
             initial_task=(
                 "You are the project orchestrator for this project.\n\n"
-                "You have MCP tools for managing agents:\n"
+                "You have MCP tools for managing agents and the dashboard:\n"
                 f"- list_tasks(project=\"{name}\") — get all tasks from TASKS.md\n"
                 f"- dispatch_agent(project=\"{name}\", task_index=N) — spawn a worker agent for a task\n"
                 f"- get_agents(project=\"{name}\") — check status of all agents\n"
                 f"- report_complete(project=\"{name}\", task_index=N, summary=\"...\") — mark a task done\n"
-                f"- dispatch_custom(project=\"{name}\", task=\"...\") — spawn an ad-hoc agent\n\n"
+                f"- dispatch_custom(project=\"{name}\", task=\"...\") — spawn an ad-hoc agent\n"
+                f"- canvas_put(project=\"{name}\", ...) — publish/update a dashboard widget\n\n"
                 "Your workflow:\n"
                 "1. Read PROJECT.md for context, then use list_tasks() to see current state\n"
-                "2. Give a brief status summary\n"
+                "2. Publish a project status widget to the dashboard using canvas_put\n"
                 "3. Wait for instructions — when told to work, use dispatch_agent() to assign tasks to workers\n"
-                "4. Monitor with get_agents(), then report_complete() when tasks finish\n\n"
+                "4. Monitor with get_agents(), then report_complete() when tasks finish\n"
+                "5. After each status change, UPDATE the dashboard widget with canvas_put()\n\n"
+                "Dashboard widgets MUST include: task name, status badge, summary,\n"
+                "and a <details> element with full text. Use widget_id='project-status'\n"
+                "for the main status widget so it updates in-place.\n\n"
                 "Do NOT implement anything yourself. You coordinate by dispatching agents via MCP tools."
             ),
             model=project.config.model if project.config else None,
