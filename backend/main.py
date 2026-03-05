@@ -127,19 +127,17 @@ def _dashboard_instructions(project_name: str, widget_id: str) -> str:
     """Return prompt text telling an agent about its dashboard widget."""
     return (
         f"\n\nDASHBOARD: You have a live widget on the project dashboard (widget_id=\"{widget_id}\"). "
-        f"Update it with your progress using canvas_put(project=\"{project_name}\", "
-        f"widget_id=\"{widget_id}\", title=\"<your status>\", html=\"<your content>\"). "
-        f"Update it when you: start working, make significant progress, encounter errors, "
-        f"or finish. Include a status badge, summary, and <details> with full output. "
-        f"You may also create ADDITIONAL widgets for charts, diagrams, or detailed views — "
-        f"use a unique widget_id for each.\n\n"
-        f"DESIGN: Use the design tokens from canvas_put's docstring. Key rules:\n"
-        f"- Titles: font-family:'Plus Jakarta Sans',system-ui; font-weight:600; color:#e2e8f0\n"
-        f"- Body: font-family:'DM Sans',system-ui; color:#94a3b8\n"
-        f"- Data/stats: font-family:'IBM Plex Mono',monospace; color:#67e8f9\n"
-        f"- Status badges: small pill with border-radius:10px, colored bg at 15% opacity\n"
-        f"- Inner panels: background:linear-gradient(135deg,#141d30,#0e1525); border:1px solid #243352; border-radius:10px\n"
-        f"- Add subtle glow (box-shadow) on accent elements. Aim for polished, modern, premium."
+        f"Update it using canvas_put with a TEMPLATE — never write raw HTML.\n\n"
+        f"Example — update your status:\n"
+        f'  canvas_put(project="{project_name}", widget_id="{widget_id}", title="My Status",\n'
+        f'    template="status-card",\n'
+        f'    data=\'{{"status":"in_progress","heading":"Working on X",\n'
+        f'            "description":"Currently doing Y...",\n'
+        f'            "items":[{{"label":"Step 1","status":"done"}},{{"label":"Step 2","status":"active"}}],\n'
+        f'            "details":"Full log output here..."}}\' )\n\n'
+        f"Templates: status-card, progress, key-value, log (see canvas_put docs for data keys).\n"
+        f"Update your widget when you: start, make progress, hit errors, or finish.\n"
+        f"You may create ADDITIONAL widgets with unique widget_ids for extra views."
     )
 
 
