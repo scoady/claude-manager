@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Color Theme: Phantom — All 3 Layouts</title>
+<style>
+  /* ─── PHANTOM THEME ─── Ghostly gray, subtle soft pink highlights, muted & spectral */
+  :root {
+    --bg-base: #111113; --bg-surface: #1a1a1d; --bg-elevated: #222226;
+    --bg-hover: #2b2b30; --bg-border: #3a3a40; --bg-border-dim: #2b2b30;
+    --accent-green: #b8c8bc; --accent-amber: #e0b0b8; --accent-cyan: #c0c0d0;
+    --accent-red: #d89090; --accent-purple: #cbb4c4; --accent-magenta: #d8a0ae;
+    --accent-controller: #e0b0b8; --accent-subagent: #c4bcd4;
+    --text-primary: #ededf0; --text-secondary: #a0a0a8; --text-muted: #606068;
+    --font-mono: 'IBM Plex Mono', 'Fira Code', monospace;
+    --font-ui: 'DM Sans', system-ui, sans-serif;
+    --radius-sm: 6px; --radius-md: 10px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg-base); color: var(--text-primary); font-family: var(--font-ui); padding: 24px; max-width: 840px; margin: 0 auto; }
+
+  .theme-label { text-align: center; font-size: 22px; font-weight: 300; color: var(--accent-controller); font-family: var(--font-ui); margin-bottom: 6px; letter-spacing: -.02em; }
+  .theme-desc { text-align: center; font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); margin-bottom: 32px; }
+  .layout-title { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; font-family: var(--font-mono); margin: 32px 0 14px; padding-top: 24px; border-top: 1px solid var(--bg-border-dim); }
+  .layout-title:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+
+  @keyframes breathe { 0%,100%{opacity:.7;transform:scale(1)} 50%{opacity:.3;transform:scale(1.2)} }
+
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-controller); animation: breathe 3s ease-in-out infinite; flex-shrink: 0; }
+  .badge { font-size: 9px; font-family: var(--font-mono); padding: 2px 8px; border-radius: 12px; white-space: nowrap; }
+  .badge-sub { color: var(--accent-subagent); background: rgba(196,188,212,0.1); border: 1px solid rgba(196,188,212,0.15); }
+  .badge-ctrl { color: var(--accent-controller); background: rgba(224,176,184,0.1); border: 1px solid rgba(224,176,184,0.15); }
+  .badge-phase { color: var(--text-secondary); background: var(--bg-hover); }
+  .badge-phase.gen { color: var(--accent-cyan); }
+  .badge-phase.think { color: var(--accent-amber); }
+  .badge-phase.exec { color: var(--accent-green); }
+  .turns { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
+
+  /* ═══ V1 ═══ */
+  .v1-orch { border: 1px solid var(--bg-border); border-left: 3px solid var(--accent-controller); border-radius: var(--radius-md); background: var(--bg-surface); overflow: hidden; }
+  .v1-orch-header { display: flex; align-items: center; gap: 10px; padding: 14px 18px; background: linear-gradient(135deg, var(--bg-elevated), var(--bg-surface)); border-bottom: 1px solid var(--bg-border-dim); }
+  .v1-orch-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--accent-controller); font-family: var(--font-mono); }
+  .v1-orch-summary { font-size: 12px; color: var(--text-secondary); margin-left: auto; font-family: var(--font-mono); }
+  .v1-progress { display: flex; align-items: center; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--bg-border-dim); }
+  .v1-pbar { flex: 1; height: 3px; background: var(--bg-hover); border-radius: 2px; overflow: hidden; }
+  .v1-pfill { height: 100%; background: linear-gradient(90deg, var(--accent-green), var(--accent-controller)); border-radius: 2px; }
+  .v1-ptxt { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
+  .v1-agent { margin: 10px 12px; border: 1px solid var(--bg-border-dim); border-radius: var(--radius-sm); background: var(--bg-elevated); overflow: hidden; }
+  .v1-agent-header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; cursor: pointer; }
+  .v1-agent-header:hover { background: var(--bg-hover); }
+  .v1-lane { width: 3px; height: 18px; border-radius: 2px; flex-shrink: 0; }
+  .v1-agent-label { font-size: 12px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .v1-tasks { border-top: 1px solid var(--bg-border-dim); }
+  .v1-task { display: flex; align-items: center; gap: 10px; padding: 9px 14px 9px 28px; border-bottom: 1px solid var(--bg-border-dim); font-size: 13px; }
+  .v1-task:last-child { border-bottom: none; }
+  .v1-task-text { flex: 1; }
+  .v1-task.pending .v1-task-text { color: var(--text-secondary); }
+  .v1-task-status { font-size: 10px; font-family: var(--font-mono); color: var(--text-muted); }
+  .v1-task-status.live { color: var(--accent-green); }
+
+  /* ═══ V2 ═══ */
+  .v2-banner { display: flex; align-items: center; gap: 12px; padding: 12px 18px; background: linear-gradient(135deg, var(--bg-elevated), var(--bg-surface)); border: 1px solid var(--bg-border); border-left: 3px solid var(--accent-controller); border-radius: var(--radius-md); margin-bottom: 4px; }
+  .v2-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--accent-controller); font-family: var(--font-mono); }
+  .v2-text { font-size: 12px; color: var(--text-secondary); flex: 1; }
+  .v2-stat { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
+  .v2-tree { padding-left: 0; }
+  .v2-node { position: relative; }
+  .v2-node::before { content: ''; position: absolute; left: 14px; top: 0; bottom: 0; width: 2px; background: var(--bg-border-dim); }
+  .v2-node:last-child::before { bottom: 50%; }
+  .v2-row { position: relative; display: flex; align-items: center; gap: 8px; padding: 8px 0 8px 36px; }
+  .v2-row::before { content: ''; position: absolute; left: 14px; top: 50%; width: 14px; height: 2px; background: var(--bg-border-dim); }
+  .v2-icon { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; z-index: 1; background: var(--bg-base); border: 2px solid var(--accent-subagent); }
+  .v2-content { flex: 1; display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--bg-surface); border: 1px solid var(--bg-border-dim); border-radius: var(--radius-sm); cursor: pointer; }
+  .v2-content:hover { background: var(--bg-hover); border-color: var(--bg-border); }
+  .v2-name { font-size: 13px; font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ═══ V3 ═══ */
+  .v3-strip { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--bg-surface); border: 1px solid var(--bg-border); border-radius: var(--radius-md); margin-bottom: 12px; }
+  .v3-strip-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--accent-controller); font-family: var(--font-mono); }
+  .v3-strip-text { font-size: 12px; color: var(--text-secondary); flex: 1; }
+  .v3-strip-bar { width: 80px; height: 3px; background: var(--bg-hover); border-radius: 2px; overflow: hidden; }
+  .v3-strip-fill { height: 100%; background: linear-gradient(90deg, var(--accent-green), var(--accent-controller)); width: 57%; }
+  .v3-lane { position: relative; margin-bottom: 10px; border-radius: var(--radius-md); overflow: hidden; background: var(--bg-surface); border: 1px solid var(--bg-border-dim); }
+  .v3-lane::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
+  .v3-lane.lc::before { background: var(--accent-cyan); }
+  .v3-lane.lm::before { background: var(--accent-magenta); }
+  .v3-lane.lg::before { background: var(--accent-green); }
+  .v3-lh { display: flex; align-items: center; gap: 8px; padding: 10px 16px 10px 14px; background: var(--bg-elevated); border-bottom: 1px solid var(--bg-border-dim); cursor: pointer; }
+  .v3-lh:hover { background: var(--bg-hover); }
+  .v3-ldot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .v3-ltitle { font-size: 13px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .v3-task { display: flex; align-items: center; gap: 10px; padding: 9px 16px 9px 24px; border-bottom: 1px solid var(--bg-border-dim); font-size: 13px; }
+  .v3-task:last-child { border-bottom: none; }
+  .v3-task-text { flex: 1; }
+  .v3-task.pending .v3-task-text { color: var(--text-secondary); }
+  .v3-task-st { font-size: 10px; font-family: var(--font-mono); color: var(--text-muted); }
+  .v3-task-st.live { color: var(--accent-green); }
+</style>
+</head>
+<body>
+
+<div class="theme-label">Phantom</div>
+<div class="theme-desc">Ghostly gray &middot; subtle soft pink highlights &middot; muted &amp; spectral</div>
+
+<!-- ═══ V1 ═══ -->
+<div class="layout-title">v1 &mdash; Nested Cards</div>
+<div class="v1-orch">
+  <div class="v1-orch-header"><span class="dot"></span><span class="v1-orch-label">Orchestrator</span><span class="v1-orch-summary">3 active &middot; 4/7</span></div>
+  <div class="v1-progress"><div class="v1-pbar"><div class="v1-pfill" style="width:57%"></div></div><span class="v1-ptxt">57%</span></div>
+  <div class="v1-agent">
+    <div class="v1-agent-header"><div class="v1-lane" style="background:var(--accent-cyan)"></div><span class="v1-agent-label">Generate themes and push them up</span><span class="badge badge-sub">subagent</span><span class="badge badge-phase gen">generating</span><span class="turns">5t</span></div>
+    <div class="v1-tasks">
+      <div class="v1-task"><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" stroke="#e0b0b8" stroke-width="1.2" stroke-dasharray="3 2.5" fill="none"/></svg><span class="v1-task-text">Create gruvbox-extra theme</span><span class="v1-task-status live">writing</span></div>
+      <div class="v1-task pending"><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" stroke="#606068" stroke-width="1.2" fill="none"/></svg><span class="v1-task-text">Create cyberpunk-extra theme</span><span class="v1-task-status">pending</span></div>
+    </div>
+  </div>
+  <div class="v1-agent"><div class="v1-agent-header"><div class="v1-lane" style="background:var(--accent-magenta)"></div><span class="v1-agent-label">Set up database schema</span><span class="badge badge-sub">subagent</span><span class="badge badge-phase exec">tool_exec</span><span class="turns">8t</span></div></div>
+</div>
+
+<!-- ═══ V2 ═══ -->
+<div class="layout-title">v2 &mdash; Rail Tree</div>
+<div class="v2-banner"><span class="dot"></span><span class="v2-title">Orchestrator</span><span class="v2-text">Auth complete. Working on themes &amp; DB schema.</span><span class="v2-stat">4/7 &middot; 57%</span></div>
+<div class="v2-tree">
+  <div class="v2-node"><div class="v2-row"><div class="v2-icon"><svg width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3" fill="var(--accent-subagent)"/></svg></div><div class="v2-content"><span class="v2-name">Generate themes and push them up</span><span class="badge badge-sub">subagent</span><span class="badge badge-phase gen">generating</span><span class="turns">5t</span></div></div></div>
+  <div class="v2-node"><div class="v2-row"><div class="v2-icon"><svg width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3" fill="var(--accent-subagent)"/></svg></div><div class="v2-content"><span class="v2-name">Set up database schema</span><span class="badge badge-sub">subagent</span><span class="badge badge-phase exec">tool_exec</span><span class="turns">8t</span></div></div></div>
+  <div class="v2-node"><div class="v2-row"><div class="v2-icon"><svg width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3" fill="var(--accent-subagent)"/></svg></div><div class="v2-content"><span class="v2-name">Implement auth system</span><span class="badge badge-sub">subagent</span><span class="badge badge-phase think">thinking</span><span class="turns">3t</span></div></div></div>
+</div>
+
+<!-- ═══ V3 ═══ -->
+<div class="layout-title">v3 &mdash; Swim Lanes</div>
+<div class="v3-strip"><span class="dot"></span><span class="v3-strip-label">Orchestrator</span><span class="v3-strip-text">Auth complete. Working on themes &amp; DB schema.</span><div class="v3-strip-bar"><div class="v3-strip-fill"></div></div><span class="turns">4/7</span></div>
+<div class="v3-lane lc">
+  <div class="v3-lh"><div class="v3-ldot" style="background:var(--accent-cyan)"></div><span class="v3-ltitle">Generate themes and push them up</span><span class="badge badge-sub">subagent</span><span class="badge badge-phase gen">generating</span><span class="turns">5t</span></div>
+  <div class="v3-task"><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" stroke="#e0b0b8" stroke-width="1.2" stroke-dasharray="3 2.5" fill="none"/></svg><span class="v3-task-text">Create gruvbox-extra theme</span><span class="v3-task-st live">writing</span></div>
+  <div class="v3-task pending"><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" stroke="#606068" stroke-width="1.2" fill="none"/></svg><span class="v3-task-text">Create cyberpunk-extra theme</span><span class="v3-task-st">pending</span></div>
+</div>
+<div class="v3-lane lm"><div class="v3-lh"><div class="v3-ldot" style="background:var(--accent-magenta)"></div><span class="v3-ltitle">Set up database schema</span><span class="badge badge-sub">subagent</span><span class="badge badge-phase exec">tool_exec</span><span class="turns">8t</span></div></div>
+<div class="v3-lane lg"><div class="v3-lh"><div class="v3-ldot" style="background:var(--accent-green)"></div><span class="v3-ltitle">Implement auth system</span><span class="badge badge-sub">subagent</span><span class="badge badge-phase think">thinking</span><span class="turns">3t</span></div></div>
+
+</body>
+</html>

@@ -112,16 +112,16 @@ const PHASE_CLASSES = {
 };
 
 const PHASE_COLORS = {
-  starting:    '#00f0ff',
-  thinking:    '#ffcc00',
-  generating:  '#ffcc00',
-  tool_input:  '#e040fb',
-  tool_exec:   '#e040fb',
-  idle:        '#39ff14',
-  injecting:   '#ffcc00',
-  delegating:  '#b388ff',
-  cancelled:   '#ff1744',
-  error:       '#ff1744',
+  starting:    '#67e8f9',
+  thinking:    '#fbbf24',
+  generating:  '#fbbf24',
+  tool_input:  '#c084fc',
+  tool_exec:   '#c084fc',
+  idle:        '#4ade80',
+  injecting:   '#fbbf24',
+  delegating:  '#a78bfa',
+  cancelled:   '#f87171',
+  error:       '#f87171',
 };
 
 export class AgentSection {
@@ -184,7 +184,7 @@ export class AgentSection {
     if (this._isSubagent) classes.push('subagent');
     el.className = classes.join(' ');
     el.dataset.session = this.sessionId;
-    el.style.setProperty('--lane-color', this._isController ? '#ffcc00' : this.laneColor);
+    el.style.setProperty('--lane-color', this._isController ? '#fbbf24' : this.laneColor);
     el.innerHTML = `
       <div class="agent-section-header">
         <div class="agent-section-lane"></div>

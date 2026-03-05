@@ -2,7 +2,6 @@
 import { escapeHtml } from '../utils.js';
 import { AgentSection } from './AgentSection.js';
 import { OrchestratorBanner } from './OrchestratorBanner.js';
-import { TaskFeed } from './TaskFeed.js';
 import { MilestonesPanel } from './MilestonesPanel.js';
 import { WorkflowPanel } from './WorkflowPanel.js';
 import { renderMarkdown } from './MarkdownRenderer.js';
@@ -10,14 +9,14 @@ import { api } from '../api.js';
 import { toast } from '../utils.js';
 
 const LANE_COLORS = [
-  '#00f0ff', // cyan
-  '#e040fb', // magenta
-  '#39ff14', // neon green
-  '#ff6ec7', // hot pink
-  '#ffcc00', // golden
-  '#ff1744', // hot red
-  '#00ffc8', // seafoam
-  '#b388ff', // lavender
+  '#67e8f9', // cyan
+  '#c084fc', // purple
+  '#4ade80', // green
+  '#f9a8d4', // pink
+  '#fbbf24', // amber
+  '#f87171', // red
+  '#5eead4', // teal
+  '#a78bfa', // lavender
 ];
 
 export class FeedController {
@@ -34,7 +33,6 @@ export class FeedController {
     this._activeTab = 'overview';
     this._agentContainer = null;
     this._orchestratorBanner = null;
-    this._taskFeed = null;
     this._milestonesContainer = null;
     this._milestonesPanel = null;
     this._workflowContainer = null;
@@ -59,19 +57,13 @@ export class FeedController {
     this._headerEl = this._buildHeader(project);
     this._el.appendChild(this._headerEl);
 
-    // 2. Orchestrator banner (replaces old status card)
+    // 2. Orchestrator container (nested cards layout — agents mount inside)
     this._orchestratorBanner = new OrchestratorBanner();
     this._el.appendChild(this._orchestratorBanner.el);
 
-    // 3. Agent container with TaskFeed (Overview tab content)
+    // 3. Agent container for overflow (standalone agents without orchestrator)
     this._agentContainer = document.createElement('div');
     this._agentContainer.className = 'feed-agent-container';
-
-    this._taskFeed = new TaskFeed(project.name, {
-      onStartTask: (idx) => this._startTask(idx),
-      onAddTask: (text) => {},
-    });
-    this._agentContainer.appendChild(this._taskFeed.el);
     this._el.appendChild(this._agentContainer);
 
     // 4. Milestones container (hidden by default)
@@ -102,7 +94,6 @@ export class FeedController {
     // Fetch tasks
     try {
       const tasks = await api.getTasks(project.name);
-      this._taskFeed?.setTasks(tasks);
       this._orchestratorBanner?.setProject(project, tasks);
     } catch (_) {}
 
@@ -334,7 +325,7 @@ export class FeedController {
     if (this._sections.has(sessionId)) return this._sections.get(sessionId);
 
     // Controllers always get gold; others rotate through lane colors
-    const color = isController ? '#ffcc00' : LANE_COLORS[this._laneIndex % LANE_COLORS.length];
+    const color = isController ? '#fbbf24' : LANE_COLORS[this._laneIndex % LANE_COLORS.length];
     if (!isController) this._laneIndex++;
 
     const section = new AgentSection({
@@ -354,14 +345,17 @@ export class FeedController {
 
     // Determine where to mount this section
     if (isController) {
-      // Controller → link to orchestrator banner (don't show in feed)
+      // Controller → link to orchestrator banner + nest inside as first card
       this._orchestratorBanner?.setControllerSession(sessionId);
-    } else if (taskIndex != null) {
-      // Worker with task_index → embed in task row
-      this._taskFeed?.attachAgent(taskIndex, section);
-      this._taskAgentMap.set(taskIndex, sessionId);
+      this._orchestratorBanner?.appendAgent(section);
+    } else if (this._orchestratorBanner) {
+      // All agents nest inside orchestrator container as cards
+      this._orchestratorBanner.appendAgent(section);
+      if (taskIndex != null) {
+        this._taskAgentMap.set(taskIndex, sessionId);
+      }
     } else {
-      // Standalone agent with no task_index → append to agent container
+      // Fallback: standalone agent container
       section.el.style.opacity = '0';
       section.el.style.transform = 'translateY(12px)';
       (this._agentContainer || this._el).appendChild(section.el);
@@ -446,13 +440,7 @@ export class FeedController {
           this._orchestratorBanner.setPhase(phase);
         }
 
-        // Update task feed phase badge
-        for (const [idx, sid] of this._taskAgentMap) {
-          if (sid === session_id) {
-            this._taskFeed?.setAgentPhase(idx, phase);
-            break;
-          }
-        }
+        // (task agent map maintained for future use)
         break;
       }
       case 'tool_start': {
@@ -491,13 +479,7 @@ export class FeedController {
         section?.setTurnCount(turn_count);
         section?.updateStatusCard();
 
-        // Update task feed turn count
-        for (const [idx, sid] of this._taskAgentMap) {
-          if (sid === session_id) {
-            this._taskFeed?.setAgentTurns(idx, turn_count);
-            break;
-          }
-        }
+        // (task agent map maintained for future use)
         break;
       }
       case 'agent_done': {
@@ -626,7 +608,6 @@ export class FeedController {
   /** Handle tasks_updated WS event. */
   handleTasksUpdated(projectName, tasks) {
     if (this._project && this._project.name === projectName) {
-      this._taskFeed?.setTasks(tasks);
       this._orchestratorBanner?.updateProgress(tasks);
     }
   }

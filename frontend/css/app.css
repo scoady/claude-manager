@@ -1,28 +1,28 @@
 /* ─── Design Tokens ─────────────────────────────────────────────────────────── */
 :root {
-  --bg-base:       #0d1117;
-  --bg-surface:    #161b22;
-  --bg-elevated:   #1c2128;
-  --bg-hover:      #21262d;
-  --bg-border:     #30363d;
-  --bg-border-dim: #21262d;
+  --bg-base:       #080c14;
+  --bg-surface:    #0e1525;
+  --bg-elevated:   #141d30;
+  --bg-hover:      #1a2640;
+  --bg-border:     #243352;
+  --bg-border-dim: #1a2640;
 
-  --accent-blue:    #5b9cff;
-  --accent-blue-2:  #3d7de8;
-  --accent-green:   #39ff14;
-  --accent-amber:   #ffcc00;
-  --accent-red:     #ff1744;
-  --accent-purple:  #b388ff;
-  --accent-cyan:    #00f0ff;
-  --accent-magenta: #e040fb;
-  --accent-teal:    #00ffc8;
-  --accent-pink:    #ff6ec7;
+  --accent-blue:    #60a5fa;
+  --accent-blue-2:  #3b82f6;
+  --accent-green:   #4ade80;
+  --accent-amber:   #fbbf24;
+  --accent-red:     #f87171;
+  --accent-purple:  #a78bfa;
+  --accent-cyan:    #67e8f9;
+  --accent-magenta: #c084fc;
+  --accent-teal:    #5eead4;
+  --accent-pink:    #f9a8d4;
 
-  --text-primary:   #e6edf3;
-  --text-secondary: #8b949e;
-  --text-muted:     #484f58;
-  --text-code:      #00f0ff;
-  --text-user:      #c9d1d9;
+  --text-primary:   #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted:     #475569;
+  --text-code:      #67e8f9;
+  --text-user:      #cbd5e1;
 
   --font-mono:  'IBM Plex Mono', 'Fira Code', monospace;
   --font-ui:    'DM Sans', system-ui, sans-serif;
@@ -33,18 +33,18 @@
   --radius-lg: 16px;
   --radius-xl: 20px;
 
-  --shadow-glow-blue:    0 0 16px rgba(91, 156, 255, 0.2);
-  --shadow-glow-green:   0 0 14px rgba(57, 255, 20, 0.25);
-  --shadow-glow-amber:   0 0 14px rgba(255, 204, 0, 0.25);
-  --shadow-glow-purple:  0 0 16px rgba(179, 136, 255, 0.25);
-  --shadow-glow-cyan:    0 0 16px rgba(0, 240, 255, 0.25);
-  --shadow-glow-magenta: 0 0 16px rgba(0, 240, 255, 0.15);
-  --shadow-glow-pink:    0 0 14px rgba(255, 110, 199, 0.2);
+  --shadow-glow-blue:    0 0 16px rgba(96, 165, 250, 0.2);
+  --shadow-glow-green:   0 0 14px rgba(74, 222, 128, 0.25);
+  --shadow-glow-amber:   0 0 14px rgba(251, 191, 36, 0.25);
+  --shadow-glow-purple:  0 0 16px rgba(167, 139, 250, 0.25);
+  --shadow-glow-cyan:    0 0 16px rgba(103, 232, 249, 0.25);
+  --shadow-glow-magenta: 0 0 16px rgba(192, 132, 252, 0.15);
+  --shadow-glow-pink:    0 0 14px rgba(249, 168, 212, 0.2);
 
-  --tint-working:  rgba(255, 204, 0, 0.06);
-  --tint-active:   rgba(57, 255, 20, 0.04);
-  --shadow-tile-working: 0 0 20px rgba(255, 204, 0, 0.1);
-  --shadow-tile-active:  0 0 16px rgba(57, 255, 20, 0.08);
+  --tint-working:  rgba(251, 191, 36, 0.06);
+  --tint-active:   rgba(74, 222, 128, 0.04);
+  --shadow-tile-working: 0 0 20px rgba(251, 191, 36, 0.1);
+  --shadow-tile-active:  0 0 16px rgba(74, 222, 128, 0.08);
 
   --sidebar-width: 272px;
   --activity-width: 252px;

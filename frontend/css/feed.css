@@ -140,7 +140,7 @@
   align-items: center;
   justify-content: center;
   transition: all var(--transition);
-  box-shadow: 0 2px 10px rgba(0, 240, 255, 0.15);
+  box-shadow: 0 2px 10px rgba(103, 232, 249, 0.15);
 }
 
 .feed-dispatch-btn:disabled {
@@ -149,7 +149,7 @@
 }
 .feed-dispatch-btn:not(:disabled):hover {
   filter: brightness(1.15);
-  box-shadow: 0 4px 16px rgba(0, 240, 255, 0.2), 0 0 20px rgba(224, 64, 251, 0.12);
+  box-shadow: 0 4px 16px rgba(103, 232, 249, 0.2), 0 0 20px rgba(192, 132, 252, 0.12);
 }
 .feed-dispatch-btn.sending {
   opacity: 0.5;
@@ -231,25 +231,25 @@
 
 .agent-phase-badge.phase-working {
   color: var(--accent-amber);
-  background: rgba(255, 204, 0, 0.1);
-  border-color: rgba(255, 204, 0, 0.25);
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.25);
   animation: badge-pulse 1.8s ease-in-out infinite;
-  box-shadow: 0 0 8px rgba(255, 204, 0, 0.1);
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.1);
 }
 
 .agent-phase-badge.phase-idle {
   color: var(--accent-green);
-  background: rgba(57, 255, 20, 0.08);
-  border-color: rgba(57, 255, 20, 0.2);
-  box-shadow: 0 0 8px rgba(57, 255, 20, 0.08);
+  background: rgba(74, 222, 128, 0.08);
+  border-color: rgba(74, 222, 128, 0.2);
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.08);
 }
 
 .agent-phase-badge.phase-starting {
   color: var(--accent-cyan);
-  background: rgba(0, 240, 255, 0.08);
-  border-color: rgba(0, 240, 255, 0.2);
+  background: rgba(103, 232, 249, 0.08);
+  border-color: rgba(103, 232, 249, 0.2);
   animation: badge-pulse 2s ease-in-out infinite;
-  box-shadow: 0 0 8px rgba(0, 240, 255, 0.08);
+  box-shadow: 0 0 8px rgba(103, 232, 249, 0.08);
 }
 
 .agent-phase-badge.phase-done {
@@ -341,7 +341,7 @@
   animation: blink 1s step-end infinite;
   opacity: 0.9;
   margin-left: 1px;
-  box-shadow: 0 0 8px rgba(224, 64, 251, 0.35);
+  box-shadow: 0 0 8px rgba(192, 132, 252, 0.35);
 }
 
 @keyframes blink {
@@ -528,7 +528,7 @@
   align-items: center;
   justify-content: center;
   transition: all var(--transition);
-  box-shadow: 0 2px 10px rgba(255, 204, 0, 0.25);
+  box-shadow: 0 2px 10px rgba(251, 191, 36, 0.25);
 }
 
 .inject-send-btn:disabled {
@@ -538,7 +538,7 @@
 
 .inject-send-btn:not(:disabled):hover {
   filter: brightness(1.15);
-  box-shadow: 0 4px 16px rgba(255, 204, 0, 0.4), 0 0 20px rgba(255, 110, 199, 0.12);
+  box-shadow: 0 4px 16px rgba(251, 191, 36, 0.4), 0 0 20px rgba(249, 168, 212, 0.12);
 }
 
 /* ─── Feed empty state ───────────────────────────────────────────────────────── */
@@ -608,7 +608,7 @@
   font-size: 16px;
   font-weight: 700;
   color: var(--accent-purple);
-  text-shadow: 0 0 12px rgba(179, 136, 255, 0.3);
+  text-shadow: 0 0 12px rgba(167, 139, 250, 0.3);
   margin: 16px 0 8px;
   line-height: 1.3;
 }
@@ -661,7 +661,7 @@
 .agent-status-card code {
   font-family: var(--font-mono);
   font-size: 11px;
-  background: rgba(0, 240, 255, 0.08);
+  background: rgba(103, 232, 249, 0.08);
   color: var(--accent-cyan);
   border-radius: 4px;
   padding: 1px 5px;
@@ -800,12 +800,12 @@
 /* ─── Controller Agent ────────────────────────────────────────────────────── */
 
 .agent-section.controller .agent-section-header {
-  background: linear-gradient(135deg, rgba(255, 204, 0, 0.06), rgba(224, 64, 251, 0.04));
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.06), rgba(192, 132, 252, 0.04));
 }
 
 .agent-section.controller .agent-section-lane {
-  background: linear-gradient(180deg, #ffcc00, #e040fb);
-  box-shadow: 0 0 12px rgba(255, 204, 0, 0.3);
+  background: linear-gradient(180deg, var(--accent-amber), var(--accent-magenta));
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.3);
 }
 
 .agent-controller-badge {
@@ -815,10 +815,10 @@
   font-family: var(--font-mono);
   font-weight: 600;
   letter-spacing: 0.5px;
-  color: #ffcc00;
-  background: rgba(255, 204, 0, 0.1);
-  border: 1px solid rgba(255, 204, 0, 0.25);
-  box-shadow: 0 0 8px rgba(255, 204, 0, 0.15);
+  color: var(--accent-amber);
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.15);
   text-transform: uppercase;
 }
 
@@ -827,8 +827,8 @@
 }
 
 @keyframes controller-glow {
-  0%, 100% { box-shadow: 0 0 8px rgba(255, 204, 0, 0.15); }
-  50%      { box-shadow: 0 0 16px rgba(255, 204, 0, 0.35), 0 0 4px rgba(224, 64, 251, 0.15); }
+  0%, 100% { box-shadow: 0 0 8px rgba(251, 191, 36, 0.15); }
+  50%      { box-shadow: 0 0 16px rgba(251, 191, 36, 0.35), 0 0 4px rgba(192, 132, 252, 0.15); }
 }
 
 /* ─── Subagent Section (nested under controller) ─────────────────────────── */
@@ -836,13 +836,13 @@
 .agent-children {
   margin-left: 16px;
   padding-left: 12px;
-  border-left: 2px solid rgba(179, 136, 255, 0.15);
+  border-left: 2px solid rgba(167, 139, 250, 0.15);
   margin-bottom: 4px;
 }
 
 .agent-section.subagent {
   border-bottom: none;
-  background: rgba(179, 136, 255, 0.03);
+  background: rgba(167, 139, 250, 0.03);
   border-radius: var(--radius-sm);
   margin: 4px 0;
 }
@@ -864,8 +864,8 @@
   font-weight: 600;
   letter-spacing: 0.5px;
   color: var(--accent-purple);
-  background: rgba(179, 136, 255, 0.1);
-  border: 1px solid rgba(179, 136, 255, 0.25);
+  background: rgba(167, 139, 250, 0.1);
+  border: 1px solid rgba(167, 139, 250, 0.25);
   text-transform: uppercase;
 }
 
@@ -905,8 +905,8 @@
 
 .sa-check.ok {
   color: var(--accent-green);
-  background: rgba(57, 255, 20, 0.1);
-  box-shadow: 0 0 6px rgba(57, 255, 20, 0.15);
+  background: rgba(74, 222, 128, 0.1);
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.15);
 }
 
 .sa-check.fail {
@@ -996,7 +996,7 @@
 }
 
 .sat-in_progress {
-  background: rgba(255, 204, 0, 0.06);
+  background: rgba(251, 191, 36, 0.06);
 }
 
 .sat-in_progress .sat-label {
@@ -1040,10 +1040,10 @@
 
 .agent-phase-badge.phase-delegating {
   color: var(--accent-purple);
-  background: rgba(179, 136, 255, 0.1);
-  border-color: rgba(179, 136, 255, 0.25);
+  background: rgba(167, 139, 250, 0.1);
+  border-color: rgba(167, 139, 250, 0.25);
   animation: badge-pulse 1.8s ease-in-out infinite;
-  box-shadow: 0 0 8px rgba(179, 136, 255, 0.1);
+  box-shadow: 0 0 8px rgba(167, 139, 250, 0.1);
 }
 
 /* ─── Completed Agent Collapse ────────────────────────────────────────────── */
@@ -1088,14 +1088,14 @@
   color: var(--accent-cyan);
   font-size: 14px;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 240, 255, 0.15);
+  box-shadow: 0 2px 8px rgba(103, 232, 249, 0.15);
   transition: all var(--transition);
   z-index: 2;
 }
 
 .agent-follow-btn:hover {
-  background: rgba(0, 240, 255, 0.1);
-  box-shadow: 0 2px 12px rgba(0, 240, 255, 0.25);
+  background: rgba(103, 232, 249, 0.1);
+  box-shadow: 0 2px 12px rgba(103, 232, 249, 0.25);
 }
 
 /* ─── Phase Timeline ──────────────────────────────────────────────────────── */
@@ -1194,7 +1194,7 @@
   background: linear-gradient(90deg, var(--accent-green), var(--accent-cyan));
   border-radius: 2px;
   transition: width 300ms ease;
-  box-shadow: 0 0 6px rgba(57, 255, 20, 0.25);
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.25);
 }
 
 .psc-progress-label {
@@ -1279,7 +1279,7 @@
 
 .tasks-add-input:focus {
   border-color: var(--accent-cyan);
-  box-shadow: 0 0 0 2px rgba(0, 240, 255, 0.08);
+  box-shadow: 0 0 0 2px rgba(103, 232, 249, 0.08);
 }
 
 .tasks-add-input::placeholder {
@@ -1310,14 +1310,14 @@
 }
 
 .tasks-plan-btn {
-  background: linear-gradient(135deg, rgba(179, 136, 255, 0.15), rgba(0, 240, 255, 0.10));
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.15), rgba(103, 232, 249, 0.10));
   color: var(--accent-purple);
-  border-color: rgba(179, 136, 255, 0.25);
+  border-color: rgba(167, 139, 250, 0.25);
 }
 
 .tasks-plan-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, rgba(179, 136, 255, 0.25), rgba(0, 240, 255, 0.15));
-  border-color: rgba(179, 136, 255, 0.4);
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.25), rgba(103, 232, 249, 0.15));
+  border-color: rgba(167, 139, 250, 0.4);
 }
 
 .tasks-add-btn:disabled,
@@ -1345,7 +1345,7 @@
   background: linear-gradient(90deg, var(--accent-green), var(--accent-cyan));
   border-radius: 2px;
   transition: width 300ms ease;
-  box-shadow: 0 0 8px rgba(57, 255, 20, 0.3);
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.3);
 }
 
 .tasks-progress-label {
@@ -1462,8 +1462,8 @@
 
 .task-start-btn {
   padding: 3px 10px;
-  background: linear-gradient(135deg, rgba(57, 255, 20, 0.1), rgba(0, 240, 255, 0.08));
-  border: 1px solid rgba(57, 255, 20, 0.25);
+  background: linear-gradient(135deg, rgba(74, 222, 128, 0.1), rgba(103, 232, 249, 0.08));
+  border: 1px solid rgba(74, 222, 128, 0.25);
   border-radius: var(--radius-sm);
   color: var(--accent-green);
   font-family: var(--font-mono);
@@ -1474,9 +1474,9 @@
 }
 
 .task-start-btn:hover {
-  background: linear-gradient(135deg, rgba(57, 255, 20, 0.2), rgba(0, 240, 255, 0.15));
-  border-color: rgba(57, 255, 20, 0.4);
-  box-shadow: 0 0 8px rgba(57, 255, 20, 0.15);
+  background: linear-gradient(135deg, rgba(74, 222, 128, 0.2), rgba(103, 232, 249, 0.15));
+  border-color: rgba(74, 222, 128, 0.4);
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.15);
 }
 
 .task-delete-btn {
@@ -1591,21 +1591,21 @@
 }
 
 .milestone-type-controller {
-  color: #ffcc00;
-  background: rgba(255, 204, 0, 0.1);
-  border: 1px solid rgba(255, 204, 0, 0.25);
+  color: var(--accent-amber);
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.25);
 }
 
 .milestone-type-subagent {
   color: var(--accent-purple);
-  background: rgba(179, 136, 255, 0.1);
-  border: 1px solid rgba(179, 136, 255, 0.25);
+  background: rgba(167, 139, 250, 0.1);
+  border: 1px solid rgba(167, 139, 250, 0.25);
 }
 
 .milestone-type-standalone {
   color: var(--accent-cyan);
-  background: rgba(0, 240, 255, 0.08);
-  border: 1px solid rgba(0, 240, 255, 0.2);
+  background: rgba(103, 232, 249, 0.08);
+  border: 1px solid rgba(103, 232, 249, 0.2);
 }
 
 .milestone-task {
@@ -1810,7 +1810,7 @@
 .wf-add-role-btn:hover {
   color: var(--accent-cyan);
   border-color: var(--accent-cyan);
-  background: rgba(0, 240, 255, 0.04);
+  background: rgba(103, 232, 249, 0.04);
 }
 
 /* Config grid */
@@ -1874,12 +1874,12 @@
   font-weight: 600;
   cursor: pointer;
   transition: all var(--transition);
-  box-shadow: 0 2px 12px rgba(179, 136, 255, 0.25);
+  box-shadow: 0 2px 12px rgba(167, 139, 250, 0.25);
 }
 
 .wf-start-btn:hover:not(:disabled) {
   filter: brightness(1.15);
-  box-shadow: 0 4px 20px rgba(179, 136, 255, 0.4), 0 0 20px rgba(224, 64, 251, 0.15);
+  box-shadow: 0 4px 20px rgba(167, 139, 250, 0.4), 0 0 20px rgba(192, 132, 252, 0.15);
 }
 
 .wf-start-btn:disabled {
@@ -1920,21 +1920,21 @@
 
 .wf-status-running {
   color: var(--accent-amber);
-  background: rgba(255, 204, 0, 0.1);
-  border: 1px solid rgba(255, 204, 0, 0.25);
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.25);
   animation: badge-pulse 1.8s ease-in-out infinite;
 }
 
 .wf-status-paused {
   color: var(--accent-pink);
-  background: rgba(255, 110, 199, 0.1);
-  border: 1px solid rgba(255, 110, 199, 0.25);
+  background: rgba(249, 168, 212, 0.1);
+  border: 1px solid rgba(249, 168, 212, 0.25);
 }
 
 .wf-status-complete {
   color: var(--accent-green);
-  background: rgba(57, 255, 20, 0.08);
-  border: 1px solid rgba(57, 255, 20, 0.2);
+  background: rgba(74, 222, 128, 0.08);
+  border: 1px solid rgba(74, 222, 128, 0.2);
 }
 
 .wf-status-draft {
@@ -1955,8 +1955,8 @@
   font-size: 11px;
   font-family: var(--font-mono);
   padding: 3px 10px;
-  background: rgba(179, 136, 255, 0.08);
-  border: 1px solid rgba(179, 136, 255, 0.2);
+  background: rgba(167, 139, 250, 0.08);
+  border: 1px solid rgba(167, 139, 250, 0.2);
   border-radius: 20px;
   color: var(--accent-purple);
 }
@@ -1979,7 +1979,7 @@
   background: linear-gradient(90deg, var(--accent-purple), var(--accent-magenta));
   border-radius: 3px;
   transition: width 400ms ease;
-  box-shadow: 0 0 10px rgba(179, 136, 255, 0.35);
+  box-shadow: 0 0 10px rgba(167, 139, 250, 0.35);
 }
 
 .wf-progress-label {
@@ -2033,19 +2033,19 @@
 .wf-phase-complete .wf-phase-dot {
   background: var(--accent-green);
   border-color: var(--accent-green);
-  box-shadow: 0 0 8px rgba(57, 255, 20, 0.3);
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.3);
 }
 
 .wf-phase-active .wf-phase-dot {
   background: var(--accent-amber);
   border-color: var(--accent-amber);
-  box-shadow: 0 0 10px rgba(255, 204, 0, 0.4);
+  box-shadow: 0 0 10px rgba(251, 191, 36, 0.4);
   animation: phase-dot-pulse 2s ease-in-out infinite;
 }
 
 @keyframes phase-dot-pulse {
-  0%, 100% { box-shadow: 0 0 8px rgba(255, 204, 0, 0.3); }
-  50%      { box-shadow: 0 0 16px rgba(255, 204, 0, 0.6), 0 0 4px rgba(255, 204, 0, 0.8); }
+  0%, 100% { box-shadow: 0 0 8px rgba(251, 191, 36, 0.3); }
+  50%      { box-shadow: 0 0 16px rgba(251, 191, 36, 0.6), 0 0 4px rgba(251, 191, 36, 0.8); }
 }
 
 .wf-phase-pending .wf-phase-dot {
@@ -2125,14 +2125,14 @@
 
 .wf-wt-active .wf-wt-status {
   color: var(--accent-amber);
-  background: rgba(255, 204, 0, 0.1);
-  border: 1px solid rgba(255, 204, 0, 0.2);
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.2);
 }
 
 .wf-wt-merged .wf-wt-status {
   color: var(--accent-green);
-  background: rgba(57, 255, 20, 0.08);
-  border: 1px solid rgba(57, 255, 20, 0.15);
+  background: rgba(74, 222, 128, 0.08);
+  border: 1px solid rgba(74, 222, 128, 0.15);
 }
 
 .wf-wt-conflict .wf-wt-status {
@@ -2167,22 +2167,22 @@
 }
 
 .wf-pause-btn:hover {
-  border-color: rgba(255, 110, 199, 0.4) !important;
+  border-color: rgba(249, 168, 212, 0.4) !important;
   color: var(--accent-pink) !important;
 }
 
 .wf-resume-btn:hover {
-  border-color: rgba(57, 255, 20, 0.4) !important;
+  border-color: rgba(74, 222, 128, 0.4) !important;
   color: var(--accent-green) !important;
 }
 
 .wf-skip-btn:hover {
-  border-color: rgba(255, 204, 0, 0.4) !important;
+  border-color: rgba(251, 191, 36, 0.4) !important;
   color: var(--accent-amber) !important;
 }
 
 .wf-new-btn:hover {
-  border-color: rgba(179, 136, 255, 0.4) !important;
+  border-color: rgba(167, 139, 250, 0.4) !important;
   color: var(--accent-purple) !important;
 }
 
@@ -2225,9 +2225,9 @@
 }
 
 .wf-template-card:hover {
-  border-color: rgba(179, 136, 255, 0.4);
-  background: rgba(179, 136, 255, 0.04);
-  box-shadow: 0 2px 12px rgba(179, 136, 255, 0.1);
+  border-color: rgba(167, 139, 250, 0.4);
+  background: rgba(167, 139, 250, 0.04);
+  box-shadow: 0 2px 12px rgba(167, 139, 250, 0.1);
 }
 
 .wf-template-icon {
@@ -2237,8 +2237,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(179, 136, 255, 0.08);
-  border: 1px solid rgba(179, 136, 255, 0.15);
+  background: rgba(167, 139, 250, 0.08);
+  border: 1px solid rgba(167, 139, 250, 0.15);
   border-radius: var(--radius-sm);
   color: var(--accent-purple);
 }
@@ -2312,8 +2312,8 @@
 
 .wf-back-btn:hover {
   color: var(--accent-purple);
-  border-color: rgba(179, 136, 255, 0.4);
-  background: rgba(179, 136, 255, 0.06);
+  border-color: rgba(167, 139, 250, 0.4);
+  background: rgba(167, 139, 250, 0.06);
 }
 
 .wf-setup-header .wf-setup-title {
@@ -2338,320 +2338,163 @@
 
 /* ─── Orchestrator Banner ───────────────────────────────────────────────────── */
 
-.orchestrator-banner {
+/* ─── Orchestrator Container (Nested Cards) ──────────────────────────────────── */
+
+.orch-container {
   margin: 12px 20px 0;
-  padding: 16px 20px;
-  background: linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-surface) 100%);
   border: 1px solid var(--bg-border);
-  border-left: 4px solid #ffcc00;
+  border-left: 3px solid var(--accent-amber);
   border-radius: var(--radius-md);
-  position: relative;
+  background: var(--bg-surface);
+  overflow: hidden;
 }
 
-.ob-header {
+.orch-header {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 10px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-surface) 100%);
+  border-bottom: 1px solid var(--bg-border-dim);
 }
 
-.ob-alive-dot {
-  width: 6px;
-  height: 6px;
+.orch-alive-dot {
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--accent-green);
   flex-shrink: 0;
 }
 
-.ob-alive-dot.ob-alive {
-  animation: ob-breathe 2s ease-in-out infinite;
+.orch-alive-dot.orch-alive {
+  animation: orch-breathe 2s ease-in-out infinite;
 }
 
-.ob-alive-dot.ob-dead {
+.orch-alive-dot.orch-dead {
   background: var(--text-muted);
   animation: none;
 }
 
-@keyframes ob-breathe {
+@keyframes orch-breathe {
   0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 4px var(--accent-green); }
   50% { opacity: 0.6; transform: scale(1.3); box-shadow: 0 0 10px var(--accent-green); }
 }
 
-.ob-label {
+.orch-label {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #ffcc00;
+  color: var(--accent-amber);
   font-family: var(--font-mono);
 }
 
-.ob-phase {
-  font-size: 10px;
-  color: var(--text-muted);
+.orch-summary-stat {
+  font-size: 12px;
+  color: var(--text-secondary);
   margin-left: auto;
   font-family: var(--font-mono);
 }
 
-.ob-summary {
+.orch-phase {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.orch-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--bg-border-dim);
+}
+
+.orch-progress-bar {
+  flex: 1;
+  height: 3px;
+  background: var(--bg-hover);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.orch-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent-green), var(--accent-cyan));
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.25);
+  transition: width 0.5s ease;
+}
+
+.orch-progress-label {
+  display: flex;
+  gap: 12px;
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.orch-summary {
+  padding: 10px 18px;
   font-size: 13px;
   color: var(--text-secondary);
   line-height: 1.5;
   max-height: 60px;
   overflow: hidden;
+  border-bottom: 1px solid var(--bg-border-dim);
   mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
   -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
 }
 
-.ob-summary .ob-placeholder {
+.orch-summary:empty,
+.orch-summary:has(.orch-placeholder) {
+  padding: 8px 18px;
+  max-height: none;
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
+.orch-placeholder {
   color: var(--text-muted);
   font-style: italic;
+  font-size: 12px;
 }
 
-.ob-progress {
-  margin-top: 12px;
+/* ─── Agent cards nested inside orchestrator ──────────────────────────────── */
+
+.orch-agents {
+  padding: 6px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.ob-progress-bar {
-  height: 4px;
-  background: var(--bg-hover);
-  border-radius: 2px;
+.orch-agents:empty {
+  padding: 0;
+}
+
+/* Agent section as a nested card */
+.orch-agents .agent-section {
+  margin: 0;
+  border: 1px solid var(--bg-border-dim);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
   overflow: hidden;
 }
 
-.ob-progress-fill {
-  height: 100%;
-  border-radius: 2px;
-  background: linear-gradient(90deg, var(--accent-green), var(--accent-cyan));
-  box-shadow: 0 0 6px rgba(57, 255, 20, 0.25);
-  transition: width 0.5s ease;
-}
-
-.ob-progress-label {
-  display: flex;
-  gap: 12px;
-  margin-top: 6px;
-  font-size: 11px;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-}
-
-
-/* ─── Task Feed ─────────────────────────────────────────────────────────────── */
-
-.task-feed {
-  padding: 8px 20px 80px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.tf-add-form {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-  padding: 4px 0;
-}
-
-.tf-add-input {
-  flex: 1;
-  background: var(--bg-elevated);
-  border: 1px solid var(--bg-border);
-  border-radius: var(--radius-sm);
-  padding: 8px 12px;
-  font-size: 13px;
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-  outline: none;
-  transition: border-color var(--transition);
-}
-
-.tf-add-input:focus {
-  border-color: var(--accent-green);
-}
-
-.tf-add-input::placeholder {
-  color: var(--text-muted);
-}
-
-.tf-add-btn {
-  background: transparent;
-  border: 1px solid var(--accent-green);
-  color: var(--accent-green);
-  border-radius: var(--radius-sm);
-  padding: 6px 14px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--transition);
-}
-
-.tf-add-btn:hover:not(:disabled) {
-  background: rgba(57, 255, 20, 0.1);
-}
-
-.tf-add-btn:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
-
-.tf-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.tf-empty {
-  padding: 40px 20px;
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 13px;
-  font-family: var(--font-ui);
-}
-
-.tf-row {
-  border-radius: var(--radius-sm);
-  border: 1px solid transparent;
-  transition: all var(--transition);
-}
-
-.tf-row:hover {
-  background: var(--bg-hover);
-}
-
-.tf-row.expanded {
+.orch-agents .agent-section:hover {
   background: var(--bg-elevated);
   border-color: var(--bg-border);
-  border-radius: var(--radius-md);
 }
 
-.tf-row-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  cursor: pointer;
-  user-select: none;
-  min-height: 42px;
+.orch-agents .agent-section-header {
+  padding: 10px 14px 10px 0;
 }
 
-.tf-icon {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-}
-
-.tf-text {
-  flex: 1;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.tf-done .tf-text {
-  color: var(--text-muted);
-  text-decoration: line-through;
-}
-
-.tf-in_progress .tf-text {
-  color: var(--text-primary);
-}
-
-.tf-pending .tf-text {
-  color: var(--text-secondary);
-}
-
-.tf-agent-badge {
-  font-size: 10px;
-  font-family: var(--font-mono);
-  color: var(--accent-amber);
-  background: rgba(255, 204, 0, 0.08);
-  padding: 2px 8px;
-  border-radius: 20px;
-  white-space: nowrap;
-}
-
-.tf-phase-badge {
-  font-size: 10px;
-  font-family: var(--font-mono);
-  padding: 2px 8px;
-  border-radius: 20px;
-  color: var(--text-muted);
-  background: var(--bg-hover);
-}
-
-.tf-phase-badge.phase-thinking { color: var(--accent-amber); }
-.tf-phase-badge.phase-generating { color: var(--accent-cyan); }
-.tf-phase-badge.phase-tool_exec { color: var(--accent-green); }
-.tf-phase-badge.phase-delegating { color: #ffcc00; }
-
-.tf-start-btn {
-  font-size: 11px;
-  font-family: var(--font-mono);
-  padding: 3px 10px;
-  border-radius: 20px;
-  background: transparent;
-  border: 1px solid var(--accent-green);
-  color: var(--accent-green);
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity var(--transition);
-}
-
-.tf-row:hover .tf-start-btn {
-  opacity: 1;
-}
-
-.tf-start-btn:hover {
-  background: rgba(57, 255, 20, 0.1);
-}
-
-.tf-chevron {
-  flex-shrink: 0;
-  transition: transform var(--transition);
-  color: var(--text-muted);
-}
-
-.tf-row.expanded .tf-chevron {
-  transform: rotate(180deg);
-}
-
-.tf-row-body {
-  overflow: hidden;
-  max-height: 0;
-  transition: max-height 0.3s ease;
-}
-
-.tf-row.expanded .tf-row-body {
-  max-height: 600px;
-  overflow-y: auto;
-}
-
-/* Agent section embedded in task row — remove outer margin/border */
-.tf-row-body .agent-section {
-  margin: 0;
-  border: none;
-  border-top: 1px solid var(--bg-border-dim);
-}
-
-.tf-row-body .agent-section-header {
-  display: none;
-}
-
-.tf-row-body .agent-section-body {
-  max-height: none;
-}
-
-/* Spinner animation for in-progress task icon */
-.tf-spinner {
-  animation: tf-spin 2s linear infinite;
-}
-
-@keyframes tf-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+.orch-agents .agent-section-lane {
+  height: auto;
+  align-self: stretch;
+  border-radius: 0;
+  margin-right: 4px;
 }
