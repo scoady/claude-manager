@@ -289,7 +289,7 @@ class AgentBroker:
         # ── Task queue auto-dispatch ──────────────────────────────────────
         if session and session.is_controller and reason == "idle" and not workflow_injected:
             try:
-                await self._check_task_queue(session)
+                await self.check_task_queue(session.project_name)
             except Exception as exc:
                 print(f"[task-queue] auto-dispatch error: {exc}")
 
@@ -318,12 +318,10 @@ class AgentBroker:
                     print(f"[task-queue] auto-complete error: {exc}")
 
             # Slot opened — dispatch next pending task
-            controller = self.get_controller_for_project(session.project_name)
-            if controller:
-                try:
-                    await self._check_task_queue(controller)
-                except Exception as exc:
-                    print(f"[task-queue] worker-done dispatch error: {exc}")
+            try:
+                await self.check_task_queue(session.project_name)
+            except Exception as exc:
+                print(f"[task-queue] worker-done dispatch error: {exc}")
 
         if self._db:
             import asyncio
@@ -403,7 +401,7 @@ class AgentBroker:
 
     # ── Task queue auto-dispatch ──────────────────────────────────────────────
 
-    async def _check_task_queue(self, controller: AgentSession) -> None:
+    async def check_task_queue(self, project_name: str) -> None:
         """Directly dispatch workers for pending tasks when capacity exists.
 
         Bypasses the controller's Claude API to avoid latency — the broker
@@ -414,7 +412,6 @@ class AgentBroker:
         from ..services import tasks as tasks_svc
         from ..services import projects as projects_svc
 
-        project_name = controller.project_name
         loop = asyncio.get_event_loop()
 
         tasks = await loop.run_in_executor(None, tasks_svc.get_tasks, project_name)

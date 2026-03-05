@@ -105,11 +105,8 @@ _task_cache: dict[str, list[dict]] = {}
 async def _notify_controller_queue(project_name: str, context: str) -> None:
     """Trigger direct task dispatch when tasks are added or completed."""
     broker: AgentBroker = app.state.broker
-    controller = broker.get_controller_for_project(project_name)
-    if not controller:
-        return
     try:
-        await broker._check_task_queue(controller)
+        await broker.check_task_queue(project_name)
     except Exception as exc:
         print(f"[task-queue] notify error: {exc}")
 
@@ -142,12 +139,10 @@ async def _task_poll_task(broker: AgentBroker) -> None:
 
                     # Auto-dispatch if new pending tasks detected
                     if has_new_tasks:
-                        controller = broker.get_controller_for_project(name)
-                        if controller:
-                            try:
-                                await broker._check_task_queue(controller)
-                            except Exception as exc:
-                                print(f"[task-poll] auto-dispatch error: {exc}")
+                        try:
+                            await broker.check_task_queue(name)
+                        except Exception as exc:
+                            print(f"[task-poll] auto-dispatch error: {exc}")
         except Exception as exc:
             print(f"[task-poll] error: {exc}")
 
