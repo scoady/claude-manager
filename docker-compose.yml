@@ -15,6 +15,11 @@ services:
       # Managed projects — same absolute path inside and outside container
       # so path strings in the UI match what's on disk
       - "${MANAGED_PROJECTS_DIR:-${HOME}/git/claude-managed-projects}:${MANAGED_PROJECTS_DIR:-${HOME}/git/claude-managed-projects}"
+      # claude-manager source — so the symlink in managed-projects resolves
+      - "${HOME}/git/claude-manager:${HOME}/git/claude-manager"
+      # Infrastructure repos — so symlinks in managed-projects resolve
+      - "${HOME}/git/kind-infra:${HOME}/git/kind-infra"
+      - "${HOME}/git/helm-platform:${HOME}/git/helm-platform"
       # Frontend dev mount — live reload without rebuilding image
       - "./frontend:/app/frontend:ro"
       # SSH keys + git config for git push/pull inside agents
@@ -31,4 +36,17 @@ services:
       # GitHub PAT for gh CLI and git HTTPS operations inside agents
       GH_TOKEN: "${GH_TOKEN:-}"
       GITHUB_TOKEN: "${GH_TOKEN:-}"
+    restart: unless-stopped
+
+  mcp-canvas:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: python3 -m backend.mcp.canvas_server
+    ports:
+      - "4041:4041"
+    environment:
+      CANVAS_API_URL: "http://backend:4040"
+    depends_on:
+      - backend
     restart: unless-stopped

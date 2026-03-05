@@ -1,10 +1,11 @@
 """Pydantic models for Claude Agent Manager."""
 from __future__ import annotations
 
+from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class AgentStatus(str, Enum):
@@ -64,6 +65,7 @@ class AgentMessage(BaseModel):
 class ProjectConfig(BaseModel):
     parallelism: int = 1
     model: str | None = None
+    mcp_config: str | None = None  # Path to MCP config JSON file
 
 
 class ManagedProject(BaseModel):
@@ -304,6 +306,47 @@ class GlobalStats(BaseModel):
 # ─── WebSocket ────────────────────────────────────────────────────────────────
 
 
+# ─── Canvas models ────────────────────────────────────────────────────────────
+
+
+class WidgetState(BaseModel):
+    id: str
+    project: str
+    title: str = ""
+    html: str = ""
+    css: str = ""
+    js: str = ""
+    grid_col: int = 1
+    grid_row: int = 1
+    col_span: int = 1
+    row_span: int = 1
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class WidgetCreate(BaseModel):
+    id: str | None = None  # optional caller-supplied ID (used by MCP canvas_put)
+    title: str = ""
+    html: str = ""
+    css: str = ""
+    js: str = ""
+    grid_col: int = 1
+    grid_row: int = 1
+    col_span: int = 1
+    row_span: int = 1
+
+
+class WidgetUpdate(BaseModel):
+    title: str | None = None
+    html: str | None = None
+    css: str | None = None
+    js: str | None = None
+    grid_col: int | None = None
+    grid_row: int | None = None
+    col_span: int | None = None
+    row_span: int | None = None
+
+
 class WSMessageType(str, Enum):
     PROJECT_LIST    = "project_list"
     PROJECT_UPDATE  = "project_update"
@@ -323,6 +366,12 @@ class WSMessageType(str, Enum):
     MILESTONES_UPDATED  = "milestones_updated"
     WORKFLOW_UPDATED    = "workflow_updated"
     ERROR               = "error"
+    # Canvas events
+    CANVAS_WIDGET_CREATED = "canvas_widget_created"
+    CANVAS_WIDGET_UPDATED = "canvas_widget_updated"
+    CANVAS_WIDGET_REMOVED = "canvas_widget_removed"
+    CANVAS_SCENE_REPLACED = "canvas_scene_replaced"
+    CANVAS_CLEARED        = "canvas_cleared"
 
 
 class WSMessage(BaseModel):

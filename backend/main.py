@@ -31,6 +31,9 @@ from .models import (
     SessionPhase,
     SkillInfo,
     UpdateTaskRequest,
+    WidgetCreate,
+    WidgetState,
+    WidgetUpdate,
     WorkflowActionRequest,
     WSMessageType,
 )
@@ -48,6 +51,7 @@ from .services import tasks as tasks_svc
 from .services import roles as roles_svc
 from .services import artifacts as artifacts_svc
 from .services import templates as templates_svc
+from .services.canvas import canvas_service
 from .ws_manager import WSManager
 
 # ─── Singletons ───────────────────────────────────────────────────────────────
@@ -246,6 +250,7 @@ async def create_project(body: BootstrapProjectRequest) -> ManagedProject:
         initial_task=controller_task,
         model=project.config.model,
         is_controller=True,
+        mcp_config_path=project.config.mcp_config,
     ))
 
     return project
@@ -502,6 +507,7 @@ async def ensure_orchestrator(name: str):
             ),
             model=project.config.model if project.config else None,
             is_controller=True,
+            mcp_config_path=project.config.mcp_config if project.config else None,
         )
         return {"status": "spawned", "session_id": session.session_id}
 
@@ -630,6 +636,7 @@ async def start_workflow(name: str) -> dict[str, Any]:
                 initial_task=prompt,
                 model=project.config.model,
                 is_controller=True,
+                mcp_config_path=project.config.mcp_config,
             ))
 
     await ws_manager.broadcast(WSMessageType.WORKFLOW_UPDATED, {
@@ -899,6 +906,90 @@ async def get_project_git_status(name: str) -> dict[str, str]:
         return await loop.run_in_executor(None, artifacts_svc.get_git_status, name)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+# ─── Canvas API ──────────────────────────────────────────────────────────────
+
+
+@app.get("/api/canvas/{project}", response_model=list[WidgetState])
+async def list_canvas_widgets(project: str) -> list[WidgetState]:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, canvas_service.get_widgets, project)
+
+
+@app.post("/api/canvas/{project}/widgets", response_model=WidgetState, status_code=201)
+async def create_canvas_widget(project: str, body: WidgetCreate) -> WidgetState:
+    import uuid as _uuid
+    # Use the caller-supplied ID if provided (e.g. from MCP canvas_put), otherwise
+    # generate a fresh UUID.  This lets the MCP tool issue stable IDs so that
+    # repeated canvas_put calls with the same widget_id update rather than duplicate.
+    widget_id = body.id or str(_uuid.uuid4())
+    loop = asyncio.get_event_loop()
+    widget = await loop.run_in_executor(
+        None, canvas_service.upsert_widget, project, widget_id, body
+    )
+    await ws_manager.broadcast(
+        WSMessageType.CANVAS_WIDGET_CREATED,
+        {"widget": widget.model_dump(mode="json")},
+    )
+    return widget
+
+
+@app.put("/api/canvas/{project}/widgets/{widget_id}", response_model=WidgetState)
+async def update_canvas_widget(
+    project: str, widget_id: str, body: WidgetUpdate
+) -> WidgetState:
+    loop = asyncio.get_event_loop()
+    # Check existence
+    widgets = await loop.run_in_executor(None, canvas_service.get_widgets, project)
+    if not any(w.id == widget_id for w in widgets):
+        raise HTTPException(status_code=404, detail="Widget not found")
+    updated = await loop.run_in_executor(
+        None, canvas_service.upsert_widget, project, widget_id, body
+    )
+    await ws_manager.broadcast(
+        WSMessageType.CANVAS_WIDGET_UPDATED,
+        {"widget_id": widget_id, "patch": updated.model_dump(mode="json")},
+    )
+    return updated
+
+
+@app.delete("/api/canvas/{project}/widgets/{widget_id}")
+async def delete_canvas_widget(project: str, widget_id: str) -> dict[str, bool]:
+    loop = asyncio.get_event_loop()
+    ok = await loop.run_in_executor(
+        None, canvas_service.delete_widget, project, widget_id
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="Widget not found")
+    await ws_manager.broadcast(
+        WSMessageType.CANVAS_WIDGET_REMOVED,
+        {"widget_id": widget_id},
+    )
+    return {"ok": True}
+
+
+@app.post("/api/canvas/{project}/scene", response_model=list[WidgetState])
+async def replace_canvas_scene(
+    project: str, body: list[WidgetCreate]
+) -> list[WidgetState]:
+    loop = asyncio.get_event_loop()
+    widgets = await loop.run_in_executor(
+        None, canvas_service.replace_scene, project, body
+    )
+    await ws_manager.broadcast(
+        WSMessageType.CANVAS_SCENE_REPLACED,
+        {"widgets": [w.model_dump(mode="json") for w in widgets]},
+    )
+    return widgets
+
+
+@app.delete("/api/canvas/{project}")
+async def clear_canvas(project: str) -> dict[str, bool]:
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, canvas_service.clear, project)
+    await ws_manager.broadcast(WSMessageType.CANVAS_CLEARED, {"project": project})
+    return {"ok": True}
 
 
 @app.get("/api/stats", response_model=GlobalStats)

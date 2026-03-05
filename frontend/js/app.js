@@ -17,6 +17,7 @@ import {
   toast,
 } from './utils.js';
 import { FeedController } from './feed/FeedController.js';
+import { CanvasEngine } from './canvas/CanvasEngine.js';
 
 // ─── State ─────────────────────────────────────────────────────────────────────
 const state = {
@@ -37,7 +38,12 @@ const dom = {
   statUptime:         $('stat-uptime'),
   workbenchEmpty:     $('workbench-empty'),
   feedEl:             $('feed'),
+  canvasView:         $('canvas-view'),
+  canvasRoot:         $('canvas-root'),
 };
+
+// ─── Canvas Engine ─────────────────────────────────────────────────────────────
+const canvasEngine = new CanvasEngine();
 
 // ─── Feed controller ───────────────────────────────────────────────────────────
 const feed = new FeedController(dom.feedEl, {
@@ -234,6 +240,25 @@ function onWSMessage(msg) {
       feed.handleWorkflowUpdated(project_name, workflow);
       break;
     }
+
+    // ── Canvas widget events ────────────────────────────────────────────────
+    case 'canvas_widget_created': {
+      canvasEngine.create(msg.widget ?? msg.data?.widget ?? msg.data);
+      break;
+    }
+
+    case 'canvas_widget_updated': {
+      const widgetId = msg.widget_id ?? msg.data?.widget_id;
+      const patch    = msg.patch    ?? msg.data?.patch ?? msg.data;
+      if (widgetId) canvasEngine.update(widgetId, patch);
+      break;
+    }
+
+    case 'canvas_widget_removed': {
+      const widgetId = msg.widget_id ?? msg.data?.widget_id ?? msg.data;
+      if (widgetId) canvasEngine.remove(widgetId);
+      break;
+    }
   }
 }
 
@@ -319,6 +344,11 @@ async function init() {
   // Render tile grid after agents are loaded
   renderProjectTileGrid(state.projects, state.agents, selectProject);
 
+  // Mount canvas engine to its host element
+  if (dom.canvasRoot) {
+    canvasEngine.mount(dom.canvasRoot);
+  }
+
   // WebSocket
   new WSClient({
     onOpen() {
@@ -342,18 +372,26 @@ async function init() {
   // ── Nav tabs ─────────────────────────────────────────────────────────────
   const mainLayout   = $('main-layout');
   const settingsView = $('settings-view');
+  const canvasView   = $('canvas-view');
 
   document.querySelectorAll('.nav-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       const view = tab.dataset.view;
       document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
+
+      // Hide all top-level views first.
+      mainLayout?.classList.add('hidden');
+      settingsView?.classList.add('hidden');
+      canvasView?.classList.add('hidden');
+
       if (view === 'settings') {
-        mainLayout?.classList.add('hidden');
         settingsView?.classList.remove('hidden');
         loadGlobalSettings();
+      } else if (view === 'canvas') {
+        canvasView?.classList.remove('hidden');
       } else {
-        settingsView?.classList.add('hidden');
+        // 'projects' (default)
         mainLayout?.classList.remove('hidden');
       }
     });
@@ -373,8 +411,28 @@ async function init() {
   });
 
   // ── Logo / title click: go back to tile grid ──────────────────────────────
-  document.querySelector('.app-title')?.addEventListener('click', showTileGrid);
-  document.querySelector('.app-logo')?.addEventListener('click', showTileGrid);
+  document.querySelector('.app-title')?.addEventListener('click', () => {
+    const projectsTab = $('tab-projects');
+    if (projectsTab) {
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+      projectsTab.classList.add('active');
+      settingsView?.classList.add('hidden');
+      canvasView?.classList.add('hidden');
+      mainLayout?.classList.remove('hidden');
+    }
+    showTileGrid();
+  });
+  document.querySelector('.app-logo')?.addEventListener('click', () => {
+    const projectsTab = $('tab-projects');
+    if (projectsTab) {
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+      projectsTab.classList.add('active');
+      settingsView?.classList.add('hidden');
+      canvasView?.classList.add('hidden');
+      mainLayout?.classList.remove('hidden');
+    }
+    showTileGrid();
+  });
 
   // ── Settings init ─────────────────────────────────────────────────────────
   initSettingsTabs();
