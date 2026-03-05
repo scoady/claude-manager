@@ -60,9 +60,25 @@ export class FeedController {
     this._headerEl = this._buildHeader(project);
     this._el.appendChild(this._headerEl);
 
-    // 2. Orchestrator container (nested cards layout — agents mount inside)
+    // 2. Tree container (org chart layout)
+    this._treeContainer = document.createElement('div');
+    this._treeContainer.className = 'tree-container';
+
+    // 2a. Orchestrator root node
     this._orchestratorBanner = new OrchestratorBanner();
-    this._el.appendChild(this._orchestratorBanner.el);
+    this._treeContainer.appendChild(this._orchestratorBanner.el);
+
+    // 2b. Vertical connector from orchestrator to children
+    this._treeConnector = document.createElement('div');
+    this._treeConnector.className = 'tree-connector-v hidden';
+    this._treeContainer.appendChild(this._treeConnector);
+
+    // 2c. Children row (agents fan out horizontally)
+    this._treeChildren = document.createElement('div');
+    this._treeChildren.className = 'tree-children';
+    this._treeContainer.appendChild(this._treeChildren);
+
+    this._el.appendChild(this._treeContainer);
 
     // 3. Agent container for overflow (standalone agents without orchestrator)
     this._agentContainer = document.createElement('div');
@@ -365,15 +381,37 @@ export class FeedController {
 
     // Determine where to mount this section
     if (isController) {
-      // Controller → link to orchestrator banner + nest inside as first card
       this._orchestratorBanner?.setControllerSession(sessionId);
-      this._orchestratorBanner?.appendAgent(section);
-    } else if (this._orchestratorBanner) {
-      // All agents nest inside orchestrator container as cards
-      this._orchestratorBanner.appendAgent(section);
-      if (taskIndex != null) {
-        this._taskAgentMap.set(taskIndex, sessionId);
-      }
+    }
+
+    // Enable compact mode for non-controller agents in the tree
+    if (!isController) {
+      section.setCompactMode(true);
+    }
+
+    if (taskIndex != null) {
+      this._taskAgentMap.set(taskIndex, sessionId);
+    }
+
+    // Mount in tree children row as a column
+    if (this._treeChildren) {
+      const col = document.createElement('div');
+      col.className = 'tree-agent-col';
+      col.dataset.session = sessionId;
+      col.appendChild(section.el);
+      col.style.opacity = '0';
+      col.style.transform = 'translateY(8px)';
+      this._treeChildren.appendChild(col);
+
+      // Show connector when we have children
+      this._treeConnector?.classList.remove('hidden');
+      this._updateTreeChildCount();
+
+      requestAnimationFrame(() => {
+        col.style.transition = 'opacity 280ms ease, transform 280ms ease';
+        col.style.opacity = '1';
+        col.style.transform = 'translateY(0)';
+      });
     } else {
       // Fallback: standalone agent container
       section.el.style.opacity = '0';
@@ -529,7 +567,7 @@ export class FeedController {
         // Show controller as delegating
         controllerSection.setPhase('delegating');
 
-        // Create a child section nested under the controller
+        // Create a child section as a tree sibling (not nested inside controller)
         const subId = `subagent-${tool_use_id}`;
         const color = LANE_COLORS[this._laneIndex % LANE_COLORS.length];
         this._laneIndex++;
@@ -546,14 +584,32 @@ export class FeedController {
           onStatus: () => {},
         });
 
+        childSection.setCompactMode(true);
         this._sections.set(subId, childSection);
         this._subagentMap.set(tool_use_id, subId);
 
-        // Nest inside the controller section's child container
-        controllerSection.appendChildSection(childSection);
+        // Mount as a tree column sibling to the controller
+        if (this._treeChildren) {
+          const col = document.createElement('div');
+          col.className = 'tree-agent-col';
+          col.dataset.session = subId;
+          col.appendChild(childSection.el);
+          col.style.opacity = '0';
+          col.style.transform = 'translateY(8px)';
+          this._treeChildren.appendChild(col);
+          this._treeConnector?.classList.remove('hidden');
+          this._updateTreeChildCount();
+          requestAnimationFrame(() => {
+            col.style.transition = 'opacity 280ms ease, transform 280ms ease';
+            col.style.opacity = '1';
+            col.style.transform = 'translateY(0)';
+          });
+        } else {
+          controllerSection.appendChildSection(childSection);
+        }
 
-        // Auto-expand controller to show the subagent
-        controllerSection.setExpanded(true);
+        // Update controller's monitoring indicator
+        this._updateControllerMonitoring();
         break;
       }
 
@@ -571,6 +627,7 @@ export class FeedController {
         }
 
         this._subagentMap.delete(tool_use_id);
+        this._updateControllerMonitoring();
         break;
       }
 
@@ -599,8 +656,8 @@ export class FeedController {
         tab.classList.add('active');
 
         // Hide all containers
+        this._treeContainer?.classList.add('hidden');
         this._agentContainer?.classList.add('hidden');
-        this._orchestratorBanner?.el?.classList.add('hidden');
         this._tasksContainer?.classList.add('hidden');
         this._milestonesContainer?.classList.add('hidden');
         this._workflowContainer?.classList.add('hidden');
@@ -615,7 +672,7 @@ export class FeedController {
         this._workflowPanel?.stopAutoRefresh();
 
         if (tabName === 'overview') {
-          this._orchestratorBanner?.el?.classList.remove('hidden');
+          this._treeContainer?.classList.remove('hidden');
           this._agentContainer?.classList.remove('hidden');
         } else if (tabName === 'tasks') {
           this._tasksContainer?.classList.remove('hidden');
@@ -670,22 +727,24 @@ export class FeedController {
 
   // ── Done agent cleanup ───────────────────────────────────────────────────
 
-  /** Fade out and remove a completed non-controller agent from the orchestrator. */
+  /** Fade out and remove a completed non-controller agent from the tree. */
   _fadeOutDoneSection(section, delay = 2000) {
     if (!section?.el?.isConnected) return;
-    // Only fade out if it's inside the orchestrator container
-    const orchContainer = this._orchestratorBanner?.el;
-    if (!orchContainer?.contains(section.el)) return;
 
     setTimeout(() => {
       if (!section.el.isConnected) return;
-      section.el.style.transition = 'opacity 0.4s ease, max-height 0.4s ease, margin 0.4s ease';
-      section.el.style.opacity = '0';
-      section.el.style.maxHeight = '0';
-      section.el.style.marginBottom = '0';
-      section.el.style.overflow = 'hidden';
+      // Find the tree-agent-col wrapper
+      const col = section.el.closest('.tree-agent-col');
+      const target = col || section.el;
+      target.style.transition = 'opacity 0.4s ease, max-width 0.4s ease, padding 0.4s ease, flex 0.4s ease';
+      target.style.opacity = '0';
+      target.style.maxWidth = '0';
+      target.style.padding = '0';
+      target.style.flex = '0';
+      target.style.overflow = 'hidden';
       setTimeout(() => {
-        if (section.el.isConnected) section.el.remove();
+        if (target.isConnected) target.remove();
+        this._updateTreeChildCount();
       }, 500);
     }, delay);
   }
@@ -720,5 +779,34 @@ export class FeedController {
     } catch (e) {
       toast(`Failed: ${e.message}`, 'error');
     }
+  }
+
+  /** Update CSS variable for horizontal connector line span. */
+  _updateTreeChildCount() {
+    if (this._treeChildren) {
+      const count = this._treeChildren.children.length;
+      this._treeChildren.style.setProperty('--child-count', count);
+    }
+  }
+
+  /** Update controller's monitoring indicator with active subagent count and colors. */
+  _updateControllerMonitoring() {
+    // Find the controller section
+    let controllerSection = null;
+    for (const [, section] of this._sections) {
+      if (section._isController) { controllerSection = section; break; }
+    }
+    if (!controllerSection) return;
+
+    // Collect active subagent colors
+    const colors = [];
+    for (const [, subId] of this._subagentMap) {
+      const sub = this._sections.get(subId);
+      if (sub && !sub._done) {
+        colors.push(sub.laneColor);
+      }
+    }
+
+    controllerSection.setMonitoring(colors.length, colors);
   }
 }

@@ -1,10 +1,10 @@
-/** OrchestratorBanner — orchestrator container card that wraps nested agent cards. */
+/** OrchestratorBanner — standalone orchestrator root node card (org chart tree root). */
 import { renderMarkdown } from './MarkdownRenderer.js';
 
 export class OrchestratorBanner {
   constructor() {
     this._el = document.createElement('div');
-    this._el.className = 'orch-container';
+    this._el.className = 'orch-node';
     this._controllerSessionId = null;
     this._phase = null;
     this._summaryText = '';
@@ -46,7 +46,7 @@ export class OrchestratorBanner {
   /** Update the alive indicator phase. */
   setPhase(phase) {
     this._phase = phase;
-    const dot = this._el.querySelector('.orch-alive-dot');
+    const dot = this._el.querySelector('.orch-dot');
     const phaseEl = this._el.querySelector('.orch-phase');
     if (!dot || !phaseEl) return;
 
@@ -56,48 +56,20 @@ export class OrchestratorBanner {
     phaseEl.textContent = phase === 'idle' ? 'idle' : isWorking ? 'working' : phase;
   }
 
-  /** Mount an agent section inside the orchestrator container. */
-  appendAgent(agentSection) {
-    const container = this._el.querySelector('.orch-agents');
-    if (container) {
-      // Enable compact card rendering for non-controller agents
-      if (!agentSection._isController) {
-        agentSection.setCompactMode(true);
-      }
-      agentSection.el.style.opacity = '0';
-      agentSection.el.style.transform = 'translateY(8px)';
-      container.appendChild(agentSection.el);
-      requestAnimationFrame(() => {
-        agentSection.el.style.transition = 'opacity 280ms ease, transform 280ms ease';
-        agentSection.el.style.opacity = '1';
-        agentSection.el.style.transform = 'translateY(0)';
-      });
-    }
-  }
-
-  /** Get the agents container element. */
-  get agentsContainer() {
-    return this._el.querySelector('.orch-agents');
-  }
-
   // ── Internal ──────────────────────────────────────────────────────────────
 
   _render() {
     this._el.innerHTML = `
       <div class="orch-header">
-        <span class="orch-alive-dot orch-alive"></span>
+        <span class="orch-dot orch-alive"></span>
         <span class="orch-label">Orchestrator</span>
         <span class="orch-summary-stat"></span>
         <span class="orch-phase">connecting</span>
       </div>
       <div class="orch-progress">
-        <div class="orch-progress-bar"><div class="orch-progress-fill" style="width: 0%"></div></div>
-        <div class="orch-progress-label"></div>
+        <div class="orch-bar"><div class="orch-fill" style="width: 0%"></div></div>
+        <span class="orch-pct"></span>
       </div>
-      <div class="orch-summary">
-        <span class="orch-placeholder">Waiting for orchestrator...</span>
-      </div>
-      <div class="orch-agents"></div>
     `;
   }
 
@@ -105,7 +77,7 @@ export class OrchestratorBanner {
     const phaseEl = this._el.querySelector('.orch-phase');
     if (phaseEl) phaseEl.textContent = phase;
 
-    const dot = this._el.querySelector('.orch-alive-dot');
+    const dot = this._el.querySelector('.orch-dot');
     if (dot) {
       dot.classList.add('orch-alive');
       dot.classList.remove('orch-dead');
@@ -119,7 +91,7 @@ export class OrchestratorBanner {
     const wip = tasks.filter(t => t.status === 'in_progress').length;
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
-    const fillEl = this._el.querySelector('.orch-progress-fill');
+    const fillEl = this._el.querySelector('.orch-fill');
     if (fillEl) fillEl.style.width = `${pct}%`;
 
     const statEl = this._el.querySelector('.orch-summary-stat');
@@ -129,11 +101,9 @@ export class OrchestratorBanner {
         : '';
     }
 
-    const labelEl = this._el.querySelector('.orch-progress-label');
-    if (labelEl) {
-      labelEl.innerHTML = total > 0
-        ? `<span>${done}/${total} tasks</span><span>${pct}%</span>`
-        : '<span>No tasks yet</span>';
+    const pctEl = this._el.querySelector('.orch-pct');
+    if (pctEl) {
+      pctEl.textContent = total > 0 ? `${pct}%` : '';
     }
   }
 }

@@ -2338,15 +2338,29 @@
 
 /* ─── Orchestrator Banner ───────────────────────────────────────────────────── */
 
-/* ─── Orchestrator Container (Nested Cards) ──────────────────────────────────── */
+/* ─── Org Chart Tree Layout ──────────────────────────────────────────────────── */
 
-.orch-container {
-  margin: 12px 20px 0;
+.tree-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 20px 0;
+}
+
+.tree-container.hidden {
+  display: none;
+}
+
+/* ─── Orchestrator Root Node ─── */
+
+.orch-node {
+  width: 100%;
+  max-width: 700px;
   border: 1px solid var(--bg-border);
-  border-left: 3px solid var(--accent-amber);
   border-radius: var(--radius-md);
-  background: var(--bg-surface);
+  background: linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-surface) 100%);
   overflow: hidden;
+  position: relative;
 }
 
 .orch-header {
@@ -2354,23 +2368,22 @@
   align-items: center;
   gap: 10px;
   padding: 14px 18px;
-  background: linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-surface) 100%);
   border-bottom: 1px solid var(--bg-border-dim);
 }
 
-.orch-alive-dot {
-  width: 7px;
-  height: 7px;
+.orch-dot {
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--accent-green);
   flex-shrink: 0;
 }
 
-.orch-alive-dot.orch-alive {
+.orch-dot.orch-alive {
   animation: orch-breathe 2s ease-in-out infinite;
 }
 
-.orch-alive-dot.orch-dead {
+.orch-dot.orch-dead {
   background: var(--text-muted);
   animation: none;
 }
@@ -2403,19 +2416,21 @@
 }
 
 .orch-progress {
-  padding: 8px 18px 10px;
-  border-bottom: 1px solid var(--bg-border-dim);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
 }
 
-.orch-progress-bar {
-  width: 100%;
+.orch-bar {
+  flex: 1;
   height: 3px;
   background: var(--bg-hover);
   border-radius: 2px;
   overflow: hidden;
 }
 
-.orch-progress-fill {
+.orch-fill {
   height: 100%;
   border-radius: 2px;
   background: linear-gradient(90deg, var(--accent-green), var(--accent-cyan));
@@ -2423,37 +2438,81 @@
   transition: width 0.5s ease;
 }
 
-.orch-progress-label {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 4px;
+.orch-pct {
   font-size: 10px;
   color: var(--text-muted);
   font-family: var(--font-mono);
-  white-space: nowrap;
 }
 
-/* Hide orchestrator summary — controller agent already shows its own output */
-.orch-summary {
+/* ─── Tree Connector Lines ─── */
+
+.tree-connector-v {
+  width: 2px;
+  height: 24px;
+  background: var(--bg-border);
+  margin: 0 auto;
+  flex-shrink: 0;
+}
+
+.tree-connector-v.hidden {
   display: none;
 }
 
-/* ─── Agent cards nested inside orchestrator ──────────────────────────────── */
+/* ─── Children Row (horizontal fan-out) ─── */
 
-.orch-agents {
-  padding: 8px 12px 12px;
+.tree-children {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  position: relative;
+  width: 100%;
+  max-width: 900px;
+  gap: 0;
+}
+
+/* Horizontal connector line spanning from first to last child center */
+.tree-children::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  height: 2px;
+  background: var(--bg-border);
+  /* Dynamic: spans between first and last child centers */
+  left: calc(100% / var(--child-count, 1) / 2);
+  right: calc(100% / var(--child-count, 1) / 2);
+  pointer-events: none;
+}
+
+/* Hide horizontal line when 0 or 1 children */
+.tree-children:empty::before,
+.tree-children:has(> :only-child)::before {
+  display: none;
+}
+
+/* ─── Agent Column (child of tree) ─── */
+
+.tree-agent-col {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  position: relative;
 }
 
-.orch-agents:empty {
-  padding: 0;
+/* Vertical branch from horizontal connector to card */
+.tree-agent-col::before {
+  content: '';
+  width: 2px;
+  height: 20px;
+  background: var(--bg-border);
+  flex-shrink: 0;
 }
 
-/* Agent section as a nested card */
-.orch-agents .agent-section {
+/* Style agent sections inside tree columns as cards */
+.tree-agent-col .agent-section {
+  width: 92%;
+  max-width: 280px;
   margin: 0 !important;
   border: 1px solid var(--bg-border-dim) !important;
   border-radius: var(--radius-sm) !important;
@@ -2461,63 +2520,135 @@
   overflow: hidden;
 }
 
-.orch-agents .agent-section:hover {
+.tree-agent-col .agent-section:hover {
   border-color: var(--bg-border) !important;
 }
 
-/* Completed agents fade out */
-.orch-agents .agent-section.completed {
+.tree-agent-col .agent-section.completed {
   opacity: 0.4;
 }
 
-/* Compact header in nested cards */
-.orch-agents .agent-section-header {
-  padding: 10px 14px 10px 0 !important;
+.tree-agent-col .agent-section-header {
+  padding: 10px 12px 10px 0 !important;
   min-height: 40px !important;
 }
 
-/* Lane color strip — full height, no rounding */
-.orch-agents .agent-section-lane {
+.tree-agent-col .agent-section-lane {
   height: auto !important;
   align-self: stretch !important;
   border-radius: 0 !important;
   margin-right: 6px !important;
 }
 
+.tree-agent-col .agent-section-title {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Hide action buttons by default — show on hover */
-.orch-agents .agent-section-actions .agent-status-btn,
-.orch-agents .agent-section-actions .agent-kill-btn {
+.tree-agent-col .agent-section-actions .agent-status-btn,
+.tree-agent-col .agent-section-actions .agent-kill-btn {
   opacity: 0 !important;
   transition: opacity 0.15s;
 }
-.orch-agents .agent-section:hover .agent-section-actions .agent-status-btn,
-.orch-agents .agent-section:hover .agent-section-actions .agent-kill-btn {
+.tree-agent-col .agent-section:hover .agent-section-actions .agent-status-btn,
+.tree-agent-col .agent-section:hover .agent-section-actions .agent-kill-btn {
   opacity: 1 !important;
 }
 
-/* Hide inject composer and raw log toggle in nested cards */
-.orch-agents .agent-inject-composer,
-.orch-agents .agent-detail-toggle,
-.orch-agents .agent-raw-log {
+/* Hide inject composer and raw log in tree cards */
+.tree-agent-col .agent-inject-composer,
+.tree-agent-col .agent-detail-toggle,
+.tree-agent-col .agent-raw-log {
   display: none !important;
 }
 
-/* Constrain body height for nested cards */
-.orch-agents .agent-section-body {
+/* Constrain body height for tree cards */
+.tree-agent-col .agent-section-body {
   max-height: 400px;
   overflow-y: auto;
 }
 
-/* Tighter stream area in nested cards */
-.orch-agents .agent-stream-area {
+/* Tighter stream area in tree cards */
+.tree-agent-col .agent-stream-area {
   max-height: 200px;
   overflow-y: auto;
-  padding: 10px 14px !important;
+  padding: 10px 12px !important;
 }
 
-/* Skeleton loader — smaller in nested context */
-.orch-agents .skeleton-loader {
-  padding: 8px 14px !important;
+.tree-agent-col .skeleton-loader {
+  padding: 8px 12px !important;
+}
+
+/* ─── Controller Monitoring Bar ─── */
+
+.agent-monitor-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--bg-border-dim);
+  background: linear-gradient(90deg, rgba(251, 191, 36, 0.04) 0%, transparent 100%);
+  font-family: var(--font-mono);
+}
+
+.agent-monitor-bar.hidden {
+  display: none;
+}
+
+.monitor-radar {
+  width: 18px;
+  height: 18px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.monitor-ring {
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid var(--accent-amber);
+  border-radius: 50%;
+  opacity: 0.3;
+}
+
+.monitor-sweep {
+  position: absolute;
+  inset: 2px;
+  border: 1.5px solid transparent;
+  border-top-color: var(--accent-amber);
+  border-radius: 50%;
+  animation: monitor-sweep-spin 2s linear infinite;
+}
+
+@keyframes monitor-sweep-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.monitor-text {
+  font-size: 10px;
+  color: var(--accent-amber);
+  opacity: 0.8;
+}
+
+.monitor-pips {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.monitor-pip {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  animation: monitor-pip-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes monitor-pip-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 4px currentColor; }
+  50% { opacity: 0.4; box-shadow: none; }
 }
 
 /* ─── Compact Card Mode (agents inside orchestrator) ────────────────────── */

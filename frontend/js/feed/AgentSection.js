@@ -244,6 +244,12 @@ export class AgentSection {
           </div>
         </div>
       </div>
+      ${this._isController ? `
+      <div class="agent-monitor-bar hidden">
+        <div class="monitor-radar"><div class="monitor-ring"></div><div class="monitor-sweep"></div></div>
+        <span class="monitor-text">monitoring</span>
+        <div class="monitor-pips"></div>
+      </div>` : ''}
       <div class="agent-children"></div>`;
     return el;
   }
@@ -786,6 +792,20 @@ export class AgentSection {
   updateSessionId(newId) {
     this.sessionId = newId;
     this.el.dataset.session = newId;
+  }
+
+  /** Update the monitoring indicator (controller only). */
+  setMonitoring(agentCount, colors = []) {
+    const bar = this.el.querySelector('.agent-monitor-bar');
+    if (!bar) return;
+    if (agentCount > 0) {
+      bar.classList.remove('hidden');
+      bar.querySelector('.monitor-text').textContent = `monitoring ${agentCount} agent${agentCount !== 1 ? 's' : ''}`;
+      const pips = bar.querySelector('.monitor-pips');
+      pips.innerHTML = colors.map(c => `<span class="monitor-pip" style="color:${c};background:${c}"></span>`).join('');
+    } else {
+      bar.classList.add('hidden');
+    }
   }
 
   // ── Compact mode ──────────────────────────────────────────────────────────
