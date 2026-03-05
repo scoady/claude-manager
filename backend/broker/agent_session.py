@@ -231,7 +231,8 @@ class AgentSession:
         self._cycle_start_time = datetime.now(timezone.utc).isoformat()
         self._subagent_captured_this_cycle = False
 
-        cmd = [CLAUDE_BIN, "--print", "--output-format", "stream-json", "--verbose"]
+        cmd = [CLAUDE_BIN, "--print", "--output-format", "stream-json", "--verbose",
+               "--permission-mode", "acceptEdits"]
 
         if resume and self._cli_session_id:
             cmd += ["--resume", self._cli_session_id]

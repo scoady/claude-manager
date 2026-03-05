@@ -28,3 +28,4 @@ frontend/dist/
 !.claude/skills/
 !.claude/INSTRUCTIONS.md
 .claude-snapshot/
+.worktrees/

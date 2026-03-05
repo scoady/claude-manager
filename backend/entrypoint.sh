@@ -6,4 +6,29 @@ if [ -f /tmp/claude-config.json ]; then
   echo "[entrypoint] Copied claude config to /root/.claude.json"
 fi
 
+# Ensure MCP tools are pre-approved in global settings so agents don't get
+# permission denials. Also disable fast mode (not available in npm CLI).
+SETTINGS_FILE="/root/.claude/settings.json"
+if [ -f "$SETTINGS_FILE" ]; then
+  python3 -c "
+import json, sys
+with open('$SETTINGS_FILE') as f:
+    s = json.load(f)
+# Pre-approve MCP tool patterns
+allows = s.setdefault('permissions', {}).setdefault('allow', [])
+mcp_patterns = [
+    'mcp__canvas__*',
+    'mcp__orchestrator__*',
+]
+for p in mcp_patterns:
+    if p not in allows:
+        allows.append(p)
+# Disable fast mode (npm CLI doesn't support it)
+s['fastMode'] = False
+with open('$SETTINGS_FILE', 'w') as f:
+    json.dump(s, f, indent=2)
+print('[entrypoint] Updated settings: MCP permissions + fastMode=false')
+"
+fi
+
 exec "$@"
