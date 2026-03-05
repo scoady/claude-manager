@@ -294,18 +294,13 @@ export class WidgetFrame {
   // ── Grid placement ───────────────────────────────────────────────────────────
 
   _applyGridPlacement(def) {
-    const col     = def.grid_col  ?? 'auto';
-    const row     = def.grid_row  ?? 'auto';
     const colSpan = def.col_span  ?? 1;
     const rowSpan = def.row_span  ?? 1;
 
-    this._hostEl.style.gridColumn = col !== 'auto'
-      ? `${col} / span ${colSpan}`
-      : `auto / span ${colSpan}`;
-
-    this._hostEl.style.gridRow = row !== 'auto'
-      ? `${row} / span ${rowSpan}`
-      : `auto / span ${rowSpan}`;
+    // Always use auto-placement — never set explicit grid_col/grid_row
+    // to prevent overlap. The grid engine with dense packing handles layout.
+    this._hostEl.style.gridColumn = `auto / span ${colSpan}`;
+    this._hostEl.style.gridRow = `auto / span ${rowSpan}`;
   }
 
   // ── Public API ───────────────────────────────────────────────────────────────

@@ -4,8 +4,7 @@
   flex: 1;
   min-width: 0;
   min-height: 0;
-  overflow-y: auto;
-  padding: 0 0 80px 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -16,6 +15,7 @@
 .feed-project-header {
   padding: 12px 20px;
   border-bottom: 1px solid var(--bg-border);
+  flex-shrink: 0;
   background: linear-gradient(180deg, var(--bg-elevated), var(--bg-surface));
   position: sticky;
   top: 0;
@@ -2593,7 +2593,10 @@
 .overview-container {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* ─── Dashboard Widget Grid ─── */
@@ -2601,8 +2604,12 @@
 .dashboard-widget-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  grid-auto-flow: dense;
+  grid-auto-rows: 1fr;
   gap: 12px;
-  min-height: 120px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .dashboard-widget-grid:empty::after {
@@ -2618,7 +2625,9 @@
 }
 
 .dashboard-widget-grid .widget-frame {
-  min-height: 80px;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 /* ─── Agent Strip ─── */
