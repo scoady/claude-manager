@@ -17,7 +17,6 @@ import {
   toast,
 } from './utils.js';
 import { FeedController } from './feed/FeedController.js';
-import { CanvasEngine } from './canvas/CanvasEngine.js';
 
 // ─── State ─────────────────────────────────────────────────────────────────────
 const state = {
@@ -39,11 +38,7 @@ const dom = {
   workbenchEmpty:     $('workbench-empty'),
   feedEl:             $('feed'),
   canvasView:         $('canvas-view'),
-  canvasRoot:         $('canvas-root'),
 };
-
-// ─── Canvas Engine ─────────────────────────────────────────────────────────────
-const canvasEngine = new CanvasEngine();
 
 // ─── Feed controller ───────────────────────────────────────────────────────────
 const feed = new FeedController(dom.feedEl, {
@@ -266,32 +261,12 @@ function onWSMessage(msg) {
       break;
     }
 
-    // ── Canvas widget events — route to both Canvas page and dashboard ────
-    case 'canvas_widget_created': {
-      const w = msg.widget ?? msg.data?.widget ?? msg.data;
-      if (w && !w.widget_id && w.id) w.widget_id = w.id;
-      canvasEngine.create(w);
-      feed.handleCanvasEvent('canvas_widget_created', msg.data ?? msg);
-      break;
-    }
-
-    case 'canvas_widget_updated': {
-      const widgetId = msg.widget_id ?? msg.data?.widget_id;
-      const patch    = msg.patch    ?? msg.data?.patch ?? msg.data;
-      if (widgetId) canvasEngine.update(widgetId, patch);
-      feed.handleCanvasEvent('canvas_widget_updated', msg.data ?? msg);
-      break;
-    }
-
-    case 'canvas_widget_removed': {
-      const widgetId = msg.widget_id ?? msg.data?.widget_id ?? msg.data;
-      if (widgetId) canvasEngine.remove(widgetId);
-      feed.handleCanvasEvent('canvas_widget_removed', msg.data ?? msg);
-      break;
-    }
-
+    // ── Canvas widget events — route to feed for dashboard display ────
+    case 'canvas_widget_created':
+    case 'canvas_widget_updated':
+    case 'canvas_widget_removed':
     case 'canvas_cleared': {
-      feed.handleCanvasEvent('canvas_cleared', msg.data ?? msg);
+      feed.handleCanvasEvent(msg.type, msg.data ?? msg);
       break;
     }
   }
@@ -349,127 +324,62 @@ async function createProject() {
   }
 }
 
-// ─── Canvas ────────────────────────────────────────────────────────────────────
-
-async function loadCanvasWidgets() {
-  // Populate project selector
-  const select = document.getElementById('canvas-project-select');
-  if (select && select.options.length <= 1) {
-    for (const p of state.projects) {
-      const opt = document.createElement('option');
-      opt.value = p.name;
-      opt.textContent = p.name;
-      select.appendChild(opt);
-    }
-  }
-
-  // Load widgets for the selected project (or first project)
-  const project = select?.value || state.projects[0]?.name;
-  if (!project) return;
-
-  try {
-    const resp = await fetch(`/api/canvas/${encodeURIComponent(project)}`);
-    const widgets = await resp.json();
-    // Clear existing and load fresh
-    canvasEngine.clear();
-    for (const w of widgets) {
-      if (!w.widget_id) w.widget_id = w.id;
-      canvasEngine.create(w);
-    }
-  } catch (e) {
-    console.warn('[canvas] Failed to load widgets:', e);
-  }
-}
-
-function initCanvasPrompt() {
-  const input = document.getElementById('canvas-prompt-input');
-  const btn = document.getElementById('canvas-prompt-btn');
-  const clearBtn = document.getElementById('canvas-clear-btn');
-  const select = document.getElementById('canvas-project-select');
-  const status = document.getElementById('canvas-prompt-status');
-  if (!input || !btn) return;
-
-  input.addEventListener('input', () => {
-    btn.disabled = !input.value.trim() || !select?.value;
-  });
-
-  select?.addEventListener('change', () => {
-    btn.disabled = !input.value.trim() || !select.value;
-    // Reload widgets for selected project
-    if (select.value) loadCanvasWidgets();
-  });
-
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      dispatchCanvasPrompt();
-    }
-  });
-
-  btn.addEventListener('click', () => dispatchCanvasPrompt());
-
-  clearBtn?.addEventListener('click', async () => {
-    const project = select?.value;
-    if (!project) return;
-    try {
-      await fetch(`/api/canvas/${encodeURIComponent(project)}`, { method: 'DELETE' });
-      canvasEngine.clear();
-      toast('Canvas cleared', 'success', 2000);
-    } catch (e) {
-      toast(`Clear failed: ${e.message}`, 'error');
-    }
-  });
-
-  async function dispatchCanvasPrompt() {
-    const prompt = input.value.trim();
-    const project = select?.value;
-    if (!prompt || !project) return;
-
-    btn.disabled = true;
-    if (status) {
-      status.textContent = 'Generating widgets...';
-      status.className = 'canvas-prompt-status generating';
-    }
-
-    const canvasPrompt =
-      `You have canvas MCP tools. Use canvas_put() to create widgets on the "${project}" canvas.\n\n` +
-      `User request: "${prompt}"\n\n` +
-      `Create visually rich HTML/CSS widgets using canvas_put(). Each widget should:\n` +
-      `- Use self-contained inline HTML + CSS (no external deps)\n` +
-      `- Use colors: cyan (#67e8f9), green (#4ade80), amber (#fbbf24), purple (#a78bfa)\n` +
-      `- Use fonts: 'IBM Plex Mono' for data, 'Instrument Serif' for headings\n` +
-      `- Use transparent backgrounds (the widget frame provides the card bg)\n` +
-      `- Include subtle animations (glow, pulse, transitions)\n` +
-      `Place widgets in a grid layout using grid_col/grid_row (1-indexed).`;
-
-    try {
-      const resp = await fetch(`/api/projects/${encodeURIComponent(project)}/dispatch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task: canvasPrompt }),
-      });
-      if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
-      input.value = '';
-      if (status) status.textContent = 'Agent dispatched — widgets will appear as they are created';
-    } catch (e) {
-      toast(`Failed: ${e.message}`, 'error');
-      if (status) {
-        status.textContent = `Error: ${e.message}`;
-        status.className = 'canvas-prompt-status';
-      }
-    } finally {
-      btn.disabled = !input.value.trim();
-    }
-  }
-}
 
 // ─── Template Catalog ───────────────────────────────────────────────────────────
 
 let _pendingTemplate = null; // holds generated template before save
 
+function _renderTemplatePreview(template, container) {
+  // Render template HTML with preview_data substituted
+  let html = template.html || '';
+  let css = template.css || '';
+  const data = template.preview_data || {};
+
+  // {{#each key}}...{{/each}} expansion
+  html = html.replace(/\{\{#each\s+(\w+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (_, key, body) => {
+    const items = data[key];
+    if (!Array.isArray(items)) return '';
+    return items.map((item, i) => {
+      let chunk = body;
+      if (typeof item === 'object') {
+        for (const [k, v] of Object.entries(item)) chunk = chunk.replaceAll(`{{${k}}}`, String(v));
+      } else {
+        chunk = chunk.replaceAll('{{.}}', String(item));
+      }
+      return chunk.replaceAll('{{@index}}', String(i));
+    }).join('');
+  });
+
+  // {{key}} replacement
+  for (const [k, v] of Object.entries(data)) {
+    if (typeof v !== 'object') {
+      html = html.replaceAll(`{{${k}}}`, String(v));
+      css = css.replaceAll(`{{${k}}}`, String(v));
+    }
+  }
+
+  container.innerHTML = `<style>${css}</style>${html}`;
+
+  // Execute JS if present
+  if (template.js) {
+    try {
+      const fn = new Function('root', template.js);
+      fn(container);
+    } catch (_) {}
+  }
+}
+
+const _BADGE_CLASS = {
+  metrics: 'tpl-badge-metrics',
+  chart: 'tpl-badge-chart',
+  status: 'tpl-badge-status',
+  log: 'tpl-badge-log',
+  custom: 'tpl-badge-custom',
+};
+
 async function loadTemplateCatalog() {
   const grid = $('template-grid');
-  const count = $('template-catalog-count');
+  const count = $('studio-template-count');
   if (!grid) return;
 
   try {
@@ -477,22 +387,72 @@ async function loadTemplateCatalog() {
     const templates = await resp.json();
     if (count) count.textContent = templates.length;
 
-    if (templates.length === 0) {
-      grid.innerHTML = '<div class="template-grid-empty">No templates yet — create one above</div>';
+    // Also fetch full templates for preview rendering
+    const fullTemplates = await Promise.all(
+      templates.map(t =>
+        fetch(`/api/widget-catalog/${encodeURIComponent(t.id)}`)
+          .then(r => r.json())
+          .catch(() => t)
+      )
+    );
+
+    if (fullTemplates.length === 0) {
+      grid.innerHTML = `
+        <div class="studio-catalog-empty">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+            <rect x="8" y="8" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="26" y="8" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="8" y="26" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="26" y="26" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 3"/>
+          </svg>
+          <div class="studio-catalog-empty-title">No templates yet</div>
+          <div class="studio-catalog-empty-sub">Describe a widget above and generate your first reusable template</div>
+        </div>`;
       return;
     }
 
-    grid.innerHTML = templates.map(t => `
-      <div class="template-card" data-template-id="${t.id}">
-        <div class="template-card-name">${t.name || t.id}</div>
-        <div class="template-card-desc">${t.description || ''}</div>
-        <span class="template-card-category">${t.category || 'custom'}</span>
-        <button class="template-card-delete" data-id="${t.id}" title="Delete template">&times;</button>
-      </div>
-    `).join('');
+    grid.innerHTML = fullTemplates.map(t => {
+      const cat = t.category || 'custom';
+      const badgeClass = _BADGE_CLASS[cat] || _BADGE_CLASS.custom;
+      return `
+        <div class="tpl-card" data-template-id="${t.id}">
+          <div class="tpl-card-preview" data-tpl-preview="${t.id}"></div>
+          <div class="tpl-card-info">
+            <div class="tpl-card-top">
+              <span class="tpl-card-name">${t.name || t.id}</span>
+              <span class="tpl-card-badge ${badgeClass}">${cat}</span>
+            </div>
+            <div class="tpl-card-desc">${t.description || ''}</div>
+          </div>
+          <div class="tpl-card-actions">
+            <button class="tpl-btn-copy" data-id="${t.id}" title="Copy canvas_put snippet">Copy canvas_put</button>
+            <button class="tpl-btn-delete" data-id="${t.id}" title="Delete template">Delete</button>
+          </div>
+        </div>`;
+    }).join('');
+
+    // Render live previews into each card
+    for (const t of fullTemplates) {
+      const previewEl = grid.querySelector(`[data-tpl-preview="${t.id}"]`);
+      if (previewEl && (t.html || t.css)) {
+        _renderTemplatePreview(t, previewEl);
+      }
+    }
+
+    // Copy button — copy canvas_put snippet to clipboard
+    grid.querySelectorAll('.tpl-btn-copy').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.id;
+        const snippet = `canvas_put(project="PROJECT", widget_id="my-widget", title="Widget", template="${id}", data='{}')`;
+        navigator.clipboard.writeText(snippet).then(() => {
+          toast('canvas_put snippet copied', 'success', 2000);
+        });
+      });
+    });
 
     // Delete buttons
-    grid.querySelectorAll('.template-card-delete').forEach(btn => {
+    grid.querySelectorAll('.tpl-btn-delete').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
         const id = btn.dataset.id;
@@ -505,56 +465,18 @@ async function loadTemplateCatalog() {
         }
       });
     });
-
-    // Card click — insert template name into canvas prompt
-    grid.querySelectorAll('.template-card').forEach(card => {
-      card.addEventListener('click', () => {
-        const id = card.dataset.templateId;
-        const input = $('canvas-prompt-input');
-        if (input) {
-          input.value = `Use template "${id}" to show current project data`;
-          input.focus();
-        }
-      });
-    });
   } catch (e) {
     console.warn('[catalog] Failed to load templates:', e);
   }
 }
 
 function initTemplateCatalog() {
-  const toggle = $('template-catalog-toggle');
-  const body = $('template-catalog-body');
-  const createBtn = $('template-create-btn');
-  const builder = $('template-builder');
-  const closeBtn = $('template-builder-close');
   const promptEl = $('template-builder-prompt');
   const generateBtn = $('template-builder-generate');
   const statusEl = $('template-builder-status');
   const previewEl = $('template-builder-preview');
   const saveBtn = $('template-builder-save');
   const discardBtn = $('template-builder-discard');
-
-  // Toggle catalog collapse
-  toggle?.addEventListener('click', (e) => {
-    if (e.target.closest('.template-create-btn')) return; // don't toggle when clicking New
-    body?.classList.toggle('collapsed');
-  });
-
-  // New button — show builder
-  createBtn?.addEventListener('click', () => {
-    builder?.classList.remove('hidden');
-    promptEl?.focus();
-  });
-
-  // Close builder
-  closeBtn?.addEventListener('click', () => {
-    builder?.classList.add('hidden');
-    previewEl?.classList.add('hidden');
-    statusEl?.classList.add('hidden');
-    if (promptEl) promptEl.value = '';
-    _pendingTemplate = null;
-  });
 
   // Enable generate button when prompt has text
   promptEl?.addEventListener('input', () => {
@@ -589,33 +511,7 @@ function initTemplateCatalog() {
 
       const previewContent = $('template-preview-content');
       if (previewContent) {
-        // Render template with preview_data by substituting placeholders client-side
-        let html = template.html || '';
-        let css = template.css || '';
-        const data = template.preview_data || {};
-
-        // Simple {{#each key}}...{{/each}} expansion
-        html = html.replace(/\{\{#each\s+(\w+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (_, key, body) => {
-          const items = data[key];
-          if (!Array.isArray(items)) return '';
-          return items.map((item, i) => {
-            let chunk = body;
-            if (typeof item === 'object') {
-              for (const [k, v] of Object.entries(item)) chunk = chunk.replaceAll(`{{${k}}}`, String(v));
-            } else {
-              chunk = chunk.replaceAll('{{.}}', String(item));
-            }
-            return chunk.replaceAll('{{@index}}', String(i));
-          }).join('');
-        });
-
-        // Simple {{key}} replacement
-        for (const [k, v] of Object.entries(data)) {
-          if (typeof v !== 'object') html = html.replaceAll(`{{${k}}}`, String(v));
-          if (typeof v !== 'object') css = css.replaceAll(`{{${k}}}`, String(v));
-        }
-
-        previewContent.innerHTML = `<style>${css}</style>${html}`;
+        _renderTemplatePreview(template, previewContent);
       }
 
       previewEl?.classList.remove('hidden');
@@ -628,7 +524,7 @@ function initTemplateCatalog() {
       toast(`Generate failed: ${e.message}`, 'error');
     } finally {
       generateBtn.disabled = false;
-      generateBtn.textContent = 'Generate Template';
+      generateBtn.textContent = 'Generate';
     }
   });
 
@@ -644,7 +540,6 @@ function initTemplateCatalog() {
       if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
       toast('Template saved to catalog', 'success', 3000);
       _pendingTemplate = null;
-      builder?.classList.add('hidden');
       previewEl?.classList.add('hidden');
       if (promptEl) promptEl.value = '';
       loadTemplateCatalog();
@@ -703,12 +598,6 @@ async function init() {
   // Render tile grid after agents are loaded
   renderProjectTileGrid(state.projects, state.agents, selectProject);
 
-  // Mount canvas engine to its host element
-  if (dom.canvasRoot) {
-    canvasEngine.mount(dom.canvasRoot);
-  }
-
-  initCanvasPrompt();
   initTemplateCatalog();
 
   // WebSocket
@@ -752,7 +641,6 @@ async function init() {
         loadGlobalSettings();
       } else if (view === 'canvas') {
         canvasView?.classList.remove('hidden');
-        loadCanvasWidgets();
         loadTemplateCatalog();
       } else {
         // 'projects' (default)

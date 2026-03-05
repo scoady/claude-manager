@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Widget Studio — Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-base:       #080c14;
+  --bg-surface:    #0e1525;
+  --bg-elevated:   #141d30;
+  --bg-hover:      #1a2640;
+  --bg-border:     #243352;
+  --bg-border-dim: #1a2640;
+  --accent-cyan:    #67e8f9;
+  --accent-green:   #4ade80;
+  --accent-amber:   #fbbf24;
+  --accent-red:     #f87171;
+  --accent-purple:  #a78bfa;
+  --accent-teal:    #5eead4;
+  --accent-pink:    #f9a8d4;
+  --text-primary:   #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted:     #475569;
+  --font-mono:  'IBM Plex Mono', monospace;
+  --font-ui:    'DM Sans', sans-serif;
+  --font-title: 'Plus Jakarta Sans', sans-serif;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; background: var(--bg-base); color: var(--text-primary); font-family: var(--font-ui); font-size: 13px; -webkit-font-smoothing: antialiased; }
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bg-border); border-radius: 3px; }
+
+/* ── Page layout ─────────────────────────────────────────────────── */
+.studio {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Header bar (simulates app header) ───────────────────────────── */
+.studio-header {
+  height: 52px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--bg-border-dim);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 16px;
+  flex-shrink: 0;
+}
+.studio-header-title {
+  font-family: var(--font-title);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+.studio-header-sub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.studio-header-count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.studio-header-count span {
+  color: var(--accent-cyan);
+  font-weight: 600;
+}
+
+/* ── Builder strip ───────────────────────────────────────────────── */
+.studio-builder {
+  flex-shrink: 0;
+  padding: 20px 24px 0;
+}
+
+.builder-prompt-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.builder-prompt {
+  flex: 1;
+  background: var(--bg-surface);
+  border: 1px solid var(--bg-border-dim);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  padding: 12px 16px;
+  resize: none;
+  line-height: 1.5;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  min-height: 48px;
+}
+.builder-prompt:focus {
+  outline: none;
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 3px rgba(103, 232, 249, 0.1);
+}
+.builder-prompt::placeholder {
+  color: var(--text-muted);
+}
+
+.builder-generate-btn {
+  flex-shrink: 0;
+  height: 48px;
+  padding: 0 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(103, 232, 249, 0.25);
+  background: rgba(103, 232, 249, 0.08);
+  color: var(--accent-cyan);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.builder-generate-btn:hover {
+  background: rgba(103, 232, 249, 0.15);
+  border-color: rgba(103, 232, 249, 0.4);
+  box-shadow: 0 0 20px rgba(103, 232, 249, 0.1);
+}
+.builder-generate-btn svg {
+  opacity: 0.7;
+}
+
+/* ── Status / generating indicator ───────────────────────────────── */
+.builder-status {
+  padding: 10px 0 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--accent-cyan);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.builder-status.visible { opacity: 1; }
+.builder-status-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  animation: pulse-dot 1.2s ease infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.7); }
+}
+
+/* ── Preview card (shown after generation) ───────────────────────── */
+.builder-preview {
+  margin-top: 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--bg-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  animation: preview-slide-in 0.4s ease;
+}
+@keyframes preview-slide-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.builder-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--bg-border-dim);
+}
+.builder-preview-name {
+  font-family: var(--font-title);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.builder-preview-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.builder-preview-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+.builder-preview-actions button {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-save {
+  background: rgba(74, 222, 128, 0.12);
+  border: 1px solid rgba(74, 222, 128, 0.25);
+  color: var(--accent-green);
+}
+.btn-save:hover {
+  background: rgba(74, 222, 128, 0.2);
+  border-color: rgba(74, 222, 128, 0.4);
+}
+.btn-discard {
+  background: transparent;
+  border: 1px solid var(--bg-border-dim);
+  color: var(--text-muted);
+}
+.btn-discard:hover {
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+}
+.builder-preview-content {
+  padding: 20px;
+  min-height: 120px;
+  background: var(--bg-base);
+}
+
+/* ── Divider ─────────────────────────────────────────────────────── */
+.studio-divider {
+  margin: 16px 24px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.studio-divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--bg-border-dim);
+}
+.studio-divider-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* ── Template catalog grid ───────────────────────────────────────── */
+.studio-catalog {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 24px 24px;
+}
+
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+/* ── Template card ───────────────────────────────────────────────── */
+.tpl-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--bg-border-dim);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: all 0.25s ease;
+  display: flex;
+  flex-direction: column;
+  animation: card-fade-in 0.5s ease both;
+}
+.tpl-card:nth-child(1) { animation-delay: 0s; }
+.tpl-card:nth-child(2) { animation-delay: 0.06s; }
+.tpl-card:nth-child(3) { animation-delay: 0.12s; }
+.tpl-card:nth-child(4) { animation-delay: 0.18s; }
+.tpl-card:nth-child(5) { animation-delay: 0.24s; }
+.tpl-card:nth-child(6) { animation-delay: 0.30s; }
+
+@keyframes card-fade-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tpl-card:hover {
+  border-color: var(--bg-border);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(103, 232, 249, 0.06);
+  transform: translateY(-2px);
+}
+
+/* Card preview area — renders the actual widget */
+.tpl-card-preview {
+  padding: 20px;
+  min-height: 140px;
+  background: var(--bg-base);
+  border-bottom: 1px solid var(--bg-border-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+.tpl-card-preview::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 30% 70%, rgba(103, 232, 249, 0.03), transparent 50%),
+    radial-gradient(circle at 70% 30%, rgba(167, 139, 250, 0.02), transparent 50%);
+  pointer-events: none;
+}
+
+/* Card info */
+.tpl-card-info {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tpl-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tpl-card-name {
+  font-family: var(--font-title);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+.tpl-card-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.badge-metrics {
+  color: var(--accent-cyan);
+  background: rgba(103, 232, 249, 0.1);
+  border: 1px solid rgba(103, 232, 249, 0.15);
+}
+.badge-chart {
+  color: var(--accent-purple);
+  background: rgba(167, 139, 250, 0.1);
+  border: 1px solid rgba(167, 139, 250, 0.15);
+}
+.badge-status {
+  color: var(--accent-green);
+  background: rgba(74, 222, 128, 0.1);
+  border: 1px solid rgba(74, 222, 128, 0.15);
+}
+.badge-custom {
+  color: var(--accent-amber);
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.15);
+}
+
+.tpl-card-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* Card actions */
+.tpl-card-actions {
+  display: flex;
+  gap: 6px;
+  padding: 0 16px 14px;
+  margin-top: auto;
+}
+.tpl-card-actions button {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  letter-spacing: 0.3px;
+}
+.btn-use {
+  background: rgba(103, 232, 249, 0.08);
+  border: 1px solid rgba(103, 232, 249, 0.15);
+  color: var(--accent-cyan);
+}
+.btn-use:hover {
+  background: rgba(103, 232, 249, 0.18);
+  border-color: rgba(103, 232, 249, 0.35);
+}
+.btn-delete {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+.btn-delete:hover {
+  color: var(--accent-red);
+  border-color: rgba(248, 113, 113, 0.2);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+/* ── Empty state ─────────────────────────────────────────────────── */
+.catalog-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 40px;
+  text-align: center;
+  gap: 12px;
+}
+.catalog-empty-icon {
+  width: 48px; height: 48px;
+  color: var(--text-muted);
+  opacity: 0.3;
+}
+.catalog-empty-title {
+  font-family: var(--font-title);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+.catalog-empty-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  max-width: 300px;
+  line-height: 1.6;
+}
+
+/* ── Fake widget previews (for mockup only) ──────────────────────── */
+
+/* Progress bars widget */
+.mock-progress {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mock-progress-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+.mock-progress-item {
+  display: flex; align-items: center; gap: 10px;
+}
+.mock-progress-item span {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  width: 50px;
+}
+.mock-progress-track {
+  flex: 1; height: 5px;
+  background: var(--bg-border-dim);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.mock-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  animation: fill-in 1s ease forwards;
+}
+@keyframes fill-in {
+  from { width: 0; }
+}
+.mock-progress-pct {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  width: 30px;
+  text-align: right;
+}
+
+/* Status list widget */
+.mock-status-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mock-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+}
+.mock-status-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.mock-status-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  flex: 1;
+}
+.mock-status-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+/* Heatmap widget */
+.mock-heatmap {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 3px;
+  width: 100%;
+}
+.mock-heat-cell {
+  aspect-ratio: 1;
+  border-radius: 2px;
+  transition: transform 0.15s ease;
+}
+.mock-heat-cell:hover { transform: scale(1.3); }
+
+/* KV pairs widget */
+.mock-kv {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.mock-kv-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(26, 38, 64, 0.3);
+}
+.mock-kv-key {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.mock-kv-val {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+</style>
+</head>
+<body>
+<div class="studio">
+
+  <!-- Header -->
+  <div class="studio-header">
+    <span class="studio-header-title">Widget Studio</span>
+    <span class="studio-header-sub">template library</span>
+    <span class="studio-header-count"><span>4</span> templates</span>
+  </div>
+
+  <!-- Builder prompt -->
+  <div class="studio-builder">
+    <div class="builder-prompt-row">
+      <textarea class="builder-prompt" rows="1" placeholder="Describe a widget template to generate...  e.g. &quot;A radial gauge showing CPU usage with color thresholds&quot;"></textarea>
+      <button class="builder-generate-btn">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M7 1v4M7 9v4M1 7h4M9 7h4M2.8 2.8l2.8 2.8M8.4 8.4l2.8 2.8M11.2 2.8L8.4 5.6M5.6 8.4L2.8 11.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        </svg>
+        Generate
+      </button>
+    </div>
+
+    <!-- Example: generating state -->
+    <!--
+    <div class="builder-status visible">
+      <div class="builder-status-dot"></div>
+      Claude is designing your template...
+    </div>
+    -->
+
+    <!-- Example: preview after generation -->
+    <!--
+    <div class="builder-preview">
+      <div class="builder-preview-header">
+        <span class="builder-preview-name">CPU Radial Gauge</span>
+        <span class="builder-preview-desc">Animated gauge with threshold colors</span>
+        <div class="builder-preview-actions">
+          <button class="btn-save">Save to Catalog</button>
+          <button class="btn-discard">Discard</button>
+        </div>
+      </div>
+      <div class="builder-preview-content">
+        (rendered preview here)
+      </div>
+    </div>
+    -->
+  </div>
+
+  <!-- Divider -->
+  <div class="studio-divider">
+    <div class="studio-divider-line"></div>
+    <span class="studio-divider-label">Catalog</span>
+    <div class="studio-divider-line"></div>
+  </div>
+
+  <!-- Template catalog -->
+  <div class="studio-catalog">
+    <div class="catalog-grid">
+
+      <!-- Card 1: Progress Bar -->
+      <div class="tpl-card">
+        <div class="tpl-card-preview">
+          <div class="mock-progress">
+            <div class="mock-progress-label">Resource Usage</div>
+            <div class="mock-progress-item">
+              <span>CPU</span>
+              <div class="mock-progress-track"><div class="mock-progress-fill" style="width:72%;background:var(--accent-cyan);box-shadow:0 0 8px rgba(103,232,249,0.4)"></div></div>
+              <span class="mock-progress-pct">72%</span>
+            </div>
+            <div class="mock-progress-item">
+              <span>Memory</span>
+              <div class="mock-progress-track"><div class="mock-progress-fill" style="width:54%;background:var(--accent-green);box-shadow:0 0 8px rgba(74,222,128,0.4)"></div></div>
+              <span class="mock-progress-pct">54%</span>
+            </div>
+            <div class="mock-progress-item">
+              <span>Disk</span>
+              <div class="mock-progress-track"><div class="mock-progress-fill" style="width:88%;background:var(--accent-amber);box-shadow:0 0 8px rgba(251,191,36,0.4)"></div></div>
+              <span class="mock-progress-pct">88%</span>
+            </div>
+          </div>
+        </div>
+        <div class="tpl-card-info">
+          <div class="tpl-card-top">
+            <span class="tpl-card-name">Progress Bar</span>
+            <span class="tpl-card-badge badge-metrics">metrics</span>
+          </div>
+          <div class="tpl-card-desc">Labeled progress bars with animated fills and color-coded thresholds</div>
+        </div>
+        <div class="tpl-card-actions">
+          <button class="btn-use">Copy canvas_put</button>
+          <button class="btn-delete">Delete</button>
+        </div>
+      </div>
+
+      <!-- Card 2: Status List -->
+      <div class="tpl-card">
+        <div class="tpl-card-preview">
+          <div class="mock-status-list">
+            <div class="mock-status-row">
+              <div class="mock-status-dot" style="background:var(--accent-green);box-shadow:0 0 6px rgba(74,222,128,0.4)"></div>
+              <span class="mock-status-label">Auth service</span>
+              <span class="mock-status-badge" style="color:var(--accent-green);background:rgba(74,222,128,0.1)">HEALTHY</span>
+            </div>
+            <div class="mock-status-row">
+              <div class="mock-status-dot" style="background:var(--accent-amber);box-shadow:0 0 6px rgba(251,191,36,0.4)"></div>
+              <span class="mock-status-label">Task queue</span>
+              <span class="mock-status-badge" style="color:var(--accent-amber);background:rgba(251,191,36,0.1)">DEGRADED</span>
+            </div>
+            <div class="mock-status-row">
+              <div class="mock-status-dot" style="background:var(--accent-green);box-shadow:0 0 6px rgba(74,222,128,0.4)"></div>
+              <span class="mock-status-label">Database</span>
+              <span class="mock-status-badge" style="color:var(--accent-green);background:rgba(74,222,128,0.1)">HEALTHY</span>
+            </div>
+            <div class="mock-status-row">
+              <div class="mock-status-dot" style="background:var(--accent-red);box-shadow:0 0 6px rgba(248,113,113,0.4)"></div>
+              <span class="mock-status-label">CDN edge</span>
+              <span class="mock-status-badge" style="color:var(--accent-red);background:rgba(248,113,113,0.1)">DOWN</span>
+            </div>
+          </div>
+        </div>
+        <div class="tpl-card-info">
+          <div class="tpl-card-top">
+            <span class="tpl-card-name">Service Health</span>
+            <span class="tpl-card-badge badge-status">status</span>
+          </div>
+          <div class="tpl-card-desc">Service status list with health indicators and colored badges</div>
+        </div>
+        <div class="tpl-card-actions">
+          <button class="btn-use">Copy canvas_put</button>
+          <button class="btn-delete">Delete</button>
+        </div>
+      </div>
+
+      <!-- Card 3: Heatmap -->
+      <div class="tpl-card">
+        <div class="tpl-card-preview" id="heatmap-preview">
+          <div class="mock-heatmap" id="mock-heatmap"></div>
+        </div>
+        <div class="tpl-card-info">
+          <div class="tpl-card-top">
+            <span class="tpl-card-name">Activity Heatmap</span>
+            <span class="tpl-card-badge badge-chart">chart</span>
+          </div>
+          <div class="tpl-card-desc">Grid heatmap showing intensity over time with color gradients</div>
+        </div>
+        <div class="tpl-card-actions">
+          <button class="btn-use">Copy canvas_put</button>
+          <button class="btn-delete">Delete</button>
+        </div>
+      </div>
+
+      <!-- Card 4: Key-Value -->
+      <div class="tpl-card">
+        <div class="tpl-card-preview">
+          <div class="mock-kv">
+            <div class="mock-kv-row"><span class="mock-kv-key">Version</span><span class="mock-kv-val">2.0.0</span></div>
+            <div class="mock-kv-row"><span class="mock-kv-key">Uptime</span><span class="mock-kv-val" style="color:var(--accent-green)">14d 6h 32m</span></div>
+            <div class="mock-kv-row"><span class="mock-kv-key">Requests / sec</span><span class="mock-kv-val" style="color:var(--accent-cyan)">1,247</span></div>
+            <div class="mock-kv-row"><span class="mock-kv-key">Error rate</span><span class="mock-kv-val" style="color:var(--accent-amber)">0.3%</span></div>
+            <div class="mock-kv-row"><span class="mock-kv-key">Region</span><span class="mock-kv-val">us-west-2</span></div>
+          </div>
+        </div>
+        <div class="tpl-card-info">
+          <div class="tpl-card-top">
+            <span class="tpl-card-name">Key-Value Pairs</span>
+            <span class="tpl-card-badge badge-custom">custom</span>
+          </div>
+          <div class="tpl-card-desc">Clean key-value display for configuration and metadata</div>
+        </div>
+        <div class="tpl-card-actions">
+          <button class="btn-use">Copy canvas_put</button>
+          <button class="btn-delete">Delete</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+// Generate heatmap cells
+const heatmap = document.getElementById('mock-heatmap');
+const colors = ['var(--bg-border-dim)', 'rgba(103,232,249,0.15)', 'rgba(103,232,249,0.3)', 'rgba(103,232,249,0.5)', 'rgba(103,232,249,0.7)', 'rgba(167,139,250,0.5)', 'rgba(167,139,250,0.7)'];
+for (let i = 0; i < 48; i++) {
+  const cell = document.createElement('div');
+  cell.className = 'mock-heat-cell';
+  const intensity = Math.random();
+  const idx = intensity < 0.3 ? 0 : intensity < 0.5 ? 1 : intensity < 0.65 ? 2 : intensity < 0.78 ? 3 : intensity < 0.88 ? 4 : intensity < 0.95 ? 5 : 6;
+  cell.style.background = colors[idx];
+  heatmap.appendChild(cell);
+}
+</script>
+</body>
+</html>

@@ -144,100 +144,56 @@
 
     </div>
 
-    <!-- Canvas view (hidden by default) -->
+    <!-- Widget Studio view (hidden by default) -->
     <div id="canvas-view" class="canvas-view hidden">
-      <div class="canvas-prompt-bar">
-        <div class="canvas-prompt-row">
-          <select id="canvas-project-select" class="canvas-project-select" title="Target project">
-            <option value="">select project</option>
-          </select>
-          <textarea id="canvas-prompt-input" class="canvas-prompt-input" rows="1" placeholder="Describe what to display on the canvas..."></textarea>
-          <button id="canvas-prompt-btn" class="canvas-prompt-btn" disabled title="Generate">
-            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-              <path d="M2 7.5h11M9 3l5 4.5L9 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-          <button id="canvas-clear-btn" class="canvas-clear-btn" title="Clear canvas">
-            <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-              <path d="M3.5 3V2.5a1 1 0 011-1h4a1 1 0 011 1V3M2 3h9M4.5 5.5v4M6.5 5.5v4M8.5 5.5v4M3 3h7l-.5 7.5a1 1 0 01-1 .5h-4a1 1 0 01-1-.5L3 3z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-        </div>
-        <div id="canvas-prompt-status" class="canvas-prompt-status hidden"></div>
+
+      <!-- Studio header -->
+      <div class="studio-header">
+        <span class="studio-header-title">Widget Studio</span>
+        <span class="studio-header-sub">template library</span>
+        <span class="studio-header-count"><span id="studio-template-count">0</span> templates</span>
       </div>
 
-      <!-- Template Catalog -->
-      <div id="template-catalog" class="template-catalog">
-        <div class="template-catalog-header" id="template-catalog-toggle">
-          <svg class="template-catalog-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M5 3l5 5-5 5"/>
-          </svg>
-          <span class="template-catalog-title">Widget Templates</span>
-          <span class="template-catalog-count" id="template-catalog-count">0</span>
-          <button class="template-create-btn" id="template-create-btn" title="Create new template">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <!-- Builder prompt -->
+      <div class="studio-builder">
+        <div class="studio-builder-row">
+          <textarea class="studio-builder-prompt" id="template-builder-prompt" rows="1"
+            placeholder="Describe a widget template to generate...  e.g. &quot;A radial gauge showing CPU usage with color thresholds&quot;"></textarea>
+          <button class="studio-generate-btn" id="template-builder-generate" disabled>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M7 1v4M7 9v4M1 7h4M9 7h4M2.8 2.8l2.8 2.8M8.4 8.4l2.8 2.8M11.2 2.8L8.4 5.6M5.6 8.4L2.8 11.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
             </svg>
-            New
+            Generate
           </button>
         </div>
-        <div class="template-catalog-body collapsed" id="template-catalog-body">
-          <div class="template-grid" id="template-grid"></div>
-        </div>
+        <div class="studio-builder-status hidden" id="template-builder-status"></div>
 
-        <!-- Template Builder (hidden by default) -->
-        <div class="template-builder hidden" id="template-builder">
-          <div class="template-builder-header">
-            <span class="template-builder-title">Create Widget Template</span>
-            <button class="template-builder-close" id="template-builder-close">&times;</button>
-          </div>
-          <div class="template-builder-body">
-            <textarea class="template-builder-prompt" id="template-builder-prompt" rows="3"
-              placeholder="Describe the widget you want to create as a reusable template...&#10;e.g. 'A heatmap grid showing file change frequency with color intensity'"></textarea>
-            <div class="template-builder-actions">
-              <button class="template-builder-generate" id="template-builder-generate" disabled>Generate Template</button>
-            </div>
-            <div class="template-builder-status hidden" id="template-builder-status"></div>
-            <div class="template-builder-preview hidden" id="template-builder-preview">
-              <div class="template-preview-frame">
-                <div class="template-preview-header">
-                  <span class="template-preview-name" id="template-preview-name"></span>
-                  <span class="template-preview-desc" id="template-preview-desc"></span>
-                </div>
-                <div class="template-preview-content" id="template-preview-content"></div>
-              </div>
-              <div class="template-builder-save-row">
-                <button class="template-builder-save" id="template-builder-save">Save to Catalog</button>
-                <button class="template-builder-discard" id="template-builder-discard">Discard</button>
-              </div>
+        <!-- Preview card (shown after generation) -->
+        <div class="studio-builder-preview hidden" id="template-builder-preview">
+          <div class="studio-preview-header">
+            <span class="studio-preview-name" id="template-preview-name"></span>
+            <span class="studio-preview-desc" id="template-preview-desc"></span>
+            <div class="studio-preview-actions">
+              <button class="studio-btn-save" id="template-builder-save">Save to Catalog</button>
+              <button class="studio-btn-discard" id="template-builder-discard">Discard</button>
             </div>
           </div>
+          <div class="studio-preview-content" id="template-preview-content"></div>
         </div>
       </div>
 
-      <div id="canvas-root" class="canvas-root">
-        <!-- Empty state: constellation background -->
-        <div class="canvas-empty-state">
-          <div class="canvas-stars" aria-hidden="true"></div>
-          <div class="canvas-empty-content">
-            <svg width="40" height="40" viewBox="0 0 40 40" fill="none" opacity="0.35">
-              <circle cx="20" cy="20" r="2" fill="currentColor"/>
-              <circle cx="8"  cy="10" r="1.2" fill="currentColor"/>
-              <circle cx="32" cy="8"  r="1.5" fill="currentColor"/>
-              <circle cx="36" cy="28" r="1"   fill="currentColor"/>
-              <circle cx="6"  cy="30" r="1.3" fill="currentColor"/>
-              <circle cx="22" cy="34" r="1"   fill="currentColor"/>
-              <line x1="20" y1="20" x2="8"  y2="10" stroke="currentColor" stroke-width="0.5" opacity="0.4"/>
-              <line x1="20" y1="20" x2="32" y2="8"  stroke="currentColor" stroke-width="0.5" opacity="0.4"/>
-              <line x1="20" y1="20" x2="36" y2="28" stroke="currentColor" stroke-width="0.5" opacity="0.4"/>
-              <line x1="20" y1="20" x2="6"  y2="30" stroke="currentColor" stroke-width="0.5" opacity="0.4"/>
-              <line x1="20" y1="20" x2="22" y2="34" stroke="currentColor" stroke-width="0.5" opacity="0.4"/>
-            </svg>
-            <p class="canvas-empty-title">Canvas is empty</p>
-            <p class="canvas-empty-sub">Describe what you want to see, or agents will populate this automatically</p>
-          </div>
-        </div>
+      <!-- Divider -->
+      <div class="studio-divider">
+        <div class="studio-divider-line"></div>
+        <span class="studio-divider-label">Catalog</span>
+        <div class="studio-divider-line"></div>
       </div>
+
+      <!-- Template catalog grid -->
+      <div class="studio-catalog" id="studio-catalog">
+        <div class="studio-catalog-grid" id="template-grid"></div>
+      </div>
+
     </div>
 
     <!-- Settings view (hidden by default) -->
