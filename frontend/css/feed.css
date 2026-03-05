@@ -2342,10 +2342,12 @@
 
 .tree-container {
   display: grid;
-  grid-template-rows: auto auto 1fr;
+  grid-template-rows: minmax(0, auto) auto minmax(0, 1fr);
   gap: 0;
   padding: 16px 20px 0;
-  min-height: 0; /* allow shrinking inside flex parent */
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .tree-container.hidden {
@@ -2361,7 +2363,9 @@
   background: linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-surface) 100%);
   overflow: hidden;
   position: relative;
-  /* Intrinsic sizing: grows with content, never wastes width */
+  max-height: clamp(180px, 35vh, 45vh);
+  display: flex;
+  flex-direction: column;
 }
 
 .orch-header {
@@ -2445,11 +2449,52 @@
   font-family: var(--font-mono);
 }
 
+/* ─── Active Work Tracker ────────────────────────────────────────────────── */
+
+.orch-active-work {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 20px 10px;
+}
+
+.orch-active-work:empty {
+  display: none;
+}
+
+.orch-work-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid color-mix(in srgb, var(--work-color) 30%, transparent);
+  border-radius: 4px;
+  padding: 3px 8px;
+  animation: work-fade-in 0.3s ease;
+}
+
+.orch-work-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: orch-breathe 2s ease-in-out infinite;
+}
+
+@keyframes work-fade-in {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 /* ─── Controller Task Table ──────────────────────────────────────────────── */
 
-/* Table scrolls within remaining space — clamp prevents both too-tiny and too-tall */
+/* Table scrolls within remaining orch-node space */
 .orch-task-table-wrap {
-  max-height: clamp(160px, 35vh, 50vh);
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -2567,6 +2612,9 @@
   width: 100%;
   position: relative;
   align-items: start;
+  overflow-y: auto;
+  min-height: 0;
+  padding-bottom: 12px;
 }
 
 /* Horizontal connector line spanning between children */
@@ -2683,10 +2731,11 @@
   display: block !important;
 }
 
-/* Card body fills remaining vertical space — no fixed pixel height */
+/* Card body fills remaining vertical space — scroll within cap */
 .tree-agent-col .agent-section-body {
   flex: 1;
   min-height: 0;
+  max-height: clamp(120px, 30vh, 300px);
   overflow-y: auto;
 }
 

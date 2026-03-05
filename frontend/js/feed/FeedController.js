@@ -622,8 +622,9 @@ export class FeedController {
           controllerSection.appendChildSection(childSection);
         }
 
-        // Update controller's monitoring indicator
+        // Update controller's monitoring indicator + active work tracker
         this._updateControllerMonitoring();
+        this._orchestratorBanner?.addActiveWork(tool_use_id, description, color);
         break;
       }
 
@@ -642,6 +643,7 @@ export class FeedController {
 
         this._subagentMap.delete(tool_use_id);
         this._updateControllerMonitoring();
+        this._orchestratorBanner?.removeActiveWork(tool_use_id);
         break;
       }
 

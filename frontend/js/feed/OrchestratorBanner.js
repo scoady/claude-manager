@@ -11,6 +11,7 @@ export class OrchestratorBanner {
     this._summaryText = '';
     this._tasks = [];
     this._taskAgentMap = null; // Map<taskIndex, sessionId> — set by FeedController
+    this._activeWork = new Map(); // tool_use_id → { description, color }
     this._render();
   }
 
@@ -58,6 +59,18 @@ export class OrchestratorBanner {
     phaseEl.textContent = phase === 'idle' ? 'idle' : isWorking ? 'working' : phase;
   }
 
+  /** Track a new active subagent/task. */
+  addActiveWork(id, description, color) {
+    this._activeWork.set(id, { description, color });
+    this._renderActiveWork();
+  }
+
+  /** Remove a completed subagent/task. */
+  removeActiveWork(id) {
+    this._activeWork.delete(id);
+    this._renderActiveWork();
+  }
+
   // ── Internal ──────────────────────────────────────────────────────────────
 
   _render() {
@@ -72,6 +85,7 @@ export class OrchestratorBanner {
         <div class="orch-bar"><div class="orch-fill" style="width: 0%"></div></div>
         <span class="orch-pct"></span>
       </div>
+      <div class="orch-active-work"></div>
       <div class="orch-task-table-wrap"></div>
     `;
   }
@@ -110,6 +124,24 @@ export class OrchestratorBanner {
     }
 
     this._renderTaskTable();
+  }
+
+  _renderActiveWork() {
+    const wrap = this._el.querySelector('.orch-active-work');
+    if (!wrap) return;
+
+    if (!this._activeWork.size) {
+      wrap.innerHTML = '';
+      return;
+    }
+
+    const items = [...this._activeWork.values()];
+    wrap.innerHTML = items.map(({ description, color }) => {
+      const label = (description || '').length > 60
+        ? description.slice(0, 57) + '...'
+        : description;
+      return `<span class="orch-work-item" style="--work-color: ${color}"><span class="orch-work-dot" style="background: ${color}"></span>${escapeHtml(label)}</span>`;
+    }).join('');
   }
 
   /** Render the task table inside the controller root. */
