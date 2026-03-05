@@ -232,7 +232,7 @@ class AgentSession:
         self._subagent_captured_this_cycle = False
 
         cmd = [CLAUDE_BIN, "--print", "--output-format", "stream-json", "--verbose",
-               "--permission-mode", "bypassPermissions"]
+               "--permission-mode", "acceptEdits"]
 
         if resume and self._cli_session_id:
             cmd += ["--resume", self._cli_session_id]

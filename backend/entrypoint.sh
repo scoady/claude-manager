@@ -16,11 +16,21 @@ with open('$SETTINGS_FILE') as f:
     s = json.load(f)
 # Pre-approve MCP tool patterns
 allows = s.setdefault('permissions', {}).setdefault('allow', [])
-mcp_patterns = [
+auto_allow = [
     'mcp__canvas__*',
     'mcp__orchestrator__*',
+    'Bash',
+    'Read',
+    'Write',
+    'Edit',
+    'Glob',
+    'Grep',
+    'Agent',
+    'WebFetch',
+    'WebSearch',
+    'NotebookEdit',
 ]
-for p in mcp_patterns:
+for p in auto_allow:
     if p not in allows:
         allows.append(p)
 # Deny AskUserQuestion globally — agents must be fully autonomous
