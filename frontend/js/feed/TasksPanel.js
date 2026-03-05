@@ -1,4 +1,4 @@
-/** TasksPanel — renders and manages the tasks list from TASKS.md */
+/** TasksPanel — equalizer-style task progress visualization */
 import { escapeHtml, toast } from '../utils.js';
 import { renderMarkdown } from './MarkdownRenderer.js';
 import { api } from '../api.js';
@@ -10,30 +10,28 @@ export class TasksPanel {
     this._el = document.createElement('div');
     this._el.className = 'tasks-panel';
     this._expandedIndices = new Set();
+    this._collapsedGroups = new Set();
     this._lastStreamText = '';
     this._render();
   }
 
   get el() { return this._el; }
 
-  /** Load tasks from backend and render. */
   async load() {
     try {
       this._tasks = await api.getTasks(this._project);
-      this._renderList();
+      this._renderContent();
     } catch (e) {
-      this._el.querySelector('.tasks-list').innerHTML =
+      this._el.querySelector('.tasks-body').innerHTML =
         '<div class="tasks-empty">Failed to load tasks</div>';
     }
   }
 
-  /** Update tasks from a WS event payload. */
   updateTasks(tasks) {
     this._tasks = tasks;
-    this._renderList();
+    this._renderContent();
   }
 
-  /** Receive live agent stream text and push to expanded detail sections. */
   updateAgentStream(streamText) {
     this._lastStreamText = streamText;
     this._el.querySelectorAll('.task-detail:not(.hidden) .task-detail-content').forEach(el => {
@@ -55,52 +53,106 @@ export class TasksPanel {
           <button class="tasks-plan-btn" disabled title="Add task &amp; run planner">Plan</button>
         </div>
       </div>
-      <div class="tasks-summary"></div>
-      <div class="tasks-list"></div>
+      <div class="tasks-body"></div>
     `;
     this._bindAddForm();
   }
 
-  _renderList() {
-    const listEl = this._el.querySelector('.tasks-list');
-    const summaryEl = this._el.querySelector('.tasks-summary');
+  _renderContent() {
+    const body = this._el.querySelector('.tasks-body');
 
     if (!this._tasks.length) {
-      listEl.innerHTML = '<div class="tasks-empty">No tasks yet. Add one above.</div>';
-      summaryEl.innerHTML = '';
+      body.innerHTML = '<div class="tasks-empty">No tasks yet. Add one above.</div>';
       return;
     }
 
+    const done = this._tasks.filter(t => t.status === 'done');
+    const active = this._tasks.filter(t => t.status === 'in_progress');
+    const pending = this._tasks.filter(t => t.status === 'pending');
     const total = this._tasks.length;
-    const done = this._tasks.filter(t => t.status === 'done').length;
-    const inProgress = this._tasks.filter(t => t.status === 'in_progress').length;
-    const pending = total - done - inProgress;
-    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
-    summaryEl.innerHTML = `
-      <div class="tasks-progress-bar">
-        <div class="tasks-progress-fill" style="width: ${pct}%"></div>
+    // Build equalizer HTML
+    const eqBars = this._tasks.map((t, i) => {
+      if (t.status === 'done') {
+        const h = 28 + this._seededRandom(i) * 32;
+        return `<div class="eq-bar done" style="height:${h}px" data-index="${t.index}" title="${escapeHtml(t.text)}"></div>`;
+      } else if (t.status === 'in_progress') {
+        const low = 10 + this._seededRandom(i) * 16;
+        const high = 40 + this._seededRandom(i + 100) * 20;
+        const dur = (0.5 + this._seededRandom(i + 200) * 0.6).toFixed(2);
+        return `<div class="eq-bar active" style="--eq-low:${low}px;--eq-high:${high}px;--bounce-dur:${dur}s;height:${low}px" data-index="${t.index}" title="${escapeHtml(t.text)}"></div>`;
+      } else {
+        const h = 6 + this._seededRandom(i) * 10;
+        return `<div class="eq-bar queued" style="height:${h}px" data-index="${t.index}" title="${escapeHtml(t.text)}"></div>`;
+      }
+    }).join('');
+
+    body.innerHTML = `
+      <div class="tasks-eq-header">
+        <div class="tasks-eq-title-row">
+          <span class="tasks-eq-title">Task Progress</span>
+          <div class="tasks-eq-stats">
+            <span class="tasks-eq-stat"><span class="stat-dot done"></span> ${done.length} done</span>
+            <span class="tasks-eq-stat"><span class="stat-dot active"></span> ${active.length} active</span>
+            <span class="tasks-eq-stat"><span class="stat-dot queued"></span> ${pending.length} queued</span>
+          </div>
+        </div>
+        <div class="eq-container">${eqBars}</div>
       </div>
-      <div class="tasks-progress-label">
-        <span>${done}/${total} done</span>
-        ${inProgress ? `<span class="tasks-wip-count">${inProgress} in progress</span>` : ''}
-        ${pending ? `<span class="tasks-pending-count">${pending} pending</span>` : ''}
+      <div class="tasks-groups">
+        ${this._renderGroup('active', 'In Progress', active)}
+        ${this._renderGroup('queued', 'Pending', pending)}
+        ${this._renderGroup('done', 'Completed', done)}
       </div>
     `;
 
-    listEl.innerHTML = this._tasks.map(t => {
-      const expanded = this._expandedIndices.has(t.index);
-      return `
-      <div class="task-row task-${t.status}${expanded ? ' expanded' : ''}" data-index="${t.index}" style="padding-left: ${12 + t.indent * 20}px">
-        <div class="task-row-header">
-          <button class="task-checkbox" data-index="${t.index}" title="Toggle status">
-            ${this._checkboxIcon(t.status)}
-          </button>
-          <span class="task-text">${escapeHtml(t.text)}</span>
+    this._bindGroupEvents(body);
+    this._bindRowEvents(body);
+  }
+
+  _renderGroup(status, label, tasks) {
+    if (!tasks.length) return '';
+    const collapsed = this._collapsedGroups.has(status);
+    return `
+      <div class="task-group${collapsed ? ' collapsed' : ''}" data-group="${status}">
+        <div class="group-header">
+          <svg class="group-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 3l5 5-5 5"/>
+          </svg>
+          <span class="group-badge ${status}">${status === 'active' ? 'ACTIVE' : status === 'done' ? 'DONE' : 'QUEUED'}</span>
+          <span class="group-label">${label}</span>
+          <span class="group-count">${tasks.length} task${tasks.length !== 1 ? 's' : ''}</span>
+        </div>
+        <div class="group-rows">
+          ${tasks.map(t => this._renderTaskRow(t, status)).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  _renderTaskRow(t, groupStatus) {
+    const expanded = this._expandedIndices.has(t.index);
+    let indicator;
+    if (groupStatus === 'active') {
+      indicator = `<span class="task-status-indicator">
+        <span class="mini-eq-bar"></span>
+        <span class="mini-eq-bar"></span>
+        <span class="mini-eq-bar"></span>
+      </span>`;
+    } else {
+      indicator = `<span class="task-status-indicator"><span class="status-dot ${groupStatus}"></span></span>`;
+    }
+
+    return `
+      <div class="task-row${expanded ? ' expanded' : ''}" data-index="${t.index}">
+        <div class="task-row-main">
+          ${indicator}
+          <span class="task-name${groupStatus === 'queued' ? ' muted' : ''}">${escapeHtml(t.text)}</span>
           <div class="task-actions">
-            ${t.status === 'pending' ? `
-              <button class="task-start-btn" data-index="${t.index}" title="Start this task">Start</button>
-            ` : ''}
+            ${groupStatus === 'queued' ? `<button class="task-start-btn" data-index="${t.index}" title="Start this task">Start</button>` : ''}
+            <button class="task-cycle-btn" data-index="${t.index}" title="Cycle status">
+              ${this._statusIcon(t.status)}
+            </button>
             <button class="task-delete-btn" data-index="${t.index}" title="Remove task">
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                 <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
@@ -109,15 +161,13 @@ export class TasksPanel {
           </div>
         </div>
         <div class="task-detail${expanded ? '' : ' hidden'}">
-          <div class="task-detail-content agent-status-card">${expanded && this._lastStreamText ? renderMarkdown(this._lastStreamText) : '<span class="text-muted">Live agent output will appear here…</span>'}</div>
+          <div class="task-detail-content">${expanded && this._lastStreamText ? renderMarkdown(this._lastStreamText) : '<span class="text-muted">Live agent output will appear here...</span>'}</div>
         </div>
-      </div>`;
-    }).join('');
-
-    this._bindListEvents(listEl);
+      </div>
+    `;
   }
 
-  _checkboxIcon(status) {
+  _statusIcon(status) {
     if (status === 'done') return `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
       <rect x="1" y="1" width="12" height="12" rx="3" fill="var(--accent-green)" opacity="0.15" stroke="var(--accent-green)" stroke-width="1.3"/>
       <path d="M4 7l2 2 4-4" stroke="var(--accent-green)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -129,6 +179,12 @@ export class TasksPanel {
     return `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
       <rect x="1" y="1" width="12" height="12" rx="3" stroke="var(--text-muted)" stroke-width="1.3"/>
     </svg>`;
+  }
+
+  /** Deterministic pseudo-random based on index (stable across re-renders). */
+  _seededRandom(i) {
+    const x = Math.sin(i * 9301 + 49297) * 49297;
+    return x - Math.floor(x);
   }
 
   // ── Event binding ─────────────────────────────────────────────
@@ -155,13 +211,27 @@ export class TasksPanel {
     planBtn.addEventListener('click', () => this._addAndPlan(input));
   }
 
-  _bindListEvents(listEl) {
-    // Expand/collapse on row header click
-    listEl.querySelectorAll('.task-row-header').forEach(header => {
-      header.addEventListener('click', (e) => {
-        // Don't toggle if clicking a button inside the header
-        if (e.target.closest('.task-checkbox') || e.target.closest('.task-actions')) return;
-        const row = header.closest('.task-row');
+  _bindGroupEvents(root) {
+    root.querySelectorAll('.group-header').forEach(header => {
+      header.addEventListener('click', () => {
+        const group = header.closest('.task-group');
+        const groupName = group.dataset.group;
+        group.classList.toggle('collapsed');
+        if (group.classList.contains('collapsed')) {
+          this._collapsedGroups.add(groupName);
+        } else {
+          this._collapsedGroups.delete(groupName);
+        }
+      });
+    });
+  }
+
+  _bindRowEvents(root) {
+    // Expand/collapse on row click
+    root.querySelectorAll('.task-row-main').forEach(main => {
+      main.addEventListener('click', (e) => {
+        if (e.target.closest('.task-actions')) return;
+        const row = main.closest('.task-row');
         const idx = parseInt(row.dataset.index, 10);
         const detail = row.querySelector('.task-detail');
         const isExpanded = this._expandedIndices.has(idx);
@@ -174,7 +244,6 @@ export class TasksPanel {
           this._expandedIndices.add(idx);
           row.classList.add('expanded');
           detail.classList.remove('hidden');
-          // Populate with latest stream text
           const content = detail.querySelector('.task-detail-content');
           if (this._lastStreamText) {
             content.innerHTML = renderMarkdown(this._lastStreamText);
@@ -183,7 +252,7 @@ export class TasksPanel {
       });
     });
 
-    listEl.querySelectorAll('.task-checkbox').forEach(btn => {
+    root.querySelectorAll('.task-cycle-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const idx = parseInt(btn.dataset.index, 10);
@@ -194,14 +263,14 @@ export class TasksPanel {
       });
     });
 
-    listEl.querySelectorAll('.task-start-btn').forEach(btn => {
+    root.querySelectorAll('.task-start-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         this._startTask(parseInt(btn.dataset.index, 10));
       });
     });
 
-    listEl.querySelectorAll('.task-delete-btn').forEach(btn => {
+    root.querySelectorAll('.task-delete-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         this._deleteTask(parseInt(btn.dataset.index, 10));
@@ -218,7 +287,7 @@ export class TasksPanel {
       this._tasks = await api.addTask(this._project, text);
       input.value = '';
       input.dispatchEvent(new Event('input'));
-      this._renderList();
+      this._renderContent();
       toast('Task added', 'success', 2000);
     } catch (e) {
       toast(`Failed: ${e.message}`, 'error');
@@ -232,7 +301,6 @@ export class TasksPanel {
       await api.planTask(this._project, text);
       input.value = '';
       input.dispatchEvent(new Event('input'));
-      // Reload to show the newly added task
       await this.load();
       toast('Task added — planner agent started', 'success', 3000);
     } catch (e) {
@@ -243,7 +311,7 @@ export class TasksPanel {
   async _updateStatus(taskIndex, newStatus) {
     try {
       this._tasks = await api.updateTask(this._project, taskIndex, newStatus);
-      this._renderList();
+      this._renderContent();
     } catch (e) {
       toast(`Failed: ${e.message}`, 'error');
     }
@@ -254,7 +322,7 @@ export class TasksPanel {
       const result = await api.startTask(this._project, taskIndex);
       toast(`Agent started: ${result.task}`, 'success', 3000);
       this._tasks = await api.getTasks(this._project);
-      this._renderList();
+      this._renderContent();
     } catch (e) {
       toast(`Failed: ${e.message}`, 'error');
     }
@@ -263,7 +331,7 @@ export class TasksPanel {
   async _deleteTask(taskIndex) {
     try {
       this._tasks = await api.deleteTask(this._project, taskIndex);
-      this._renderList();
+      this._renderContent();
       toast('Task removed', 'success', 2000);
     } catch (e) {
       toast(`Failed: ${e.message}`, 'error');
