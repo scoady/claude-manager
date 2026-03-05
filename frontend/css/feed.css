@@ -2403,15 +2403,12 @@
 }
 
 .orch-progress {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 18px;
+  padding: 8px 18px 10px;
   border-bottom: 1px solid var(--bg-border-dim);
 }
 
 .orch-progress-bar {
-  flex: 1;
+  width: 100%;
   height: 3px;
   background: var(--bg-hover);
   border-radius: 2px;
@@ -2428,46 +2425,27 @@
 
 .orch-progress-label {
   display: flex;
+  justify-content: flex-end;
   gap: 12px;
+  margin-top: 4px;
   font-size: 10px;
   color: var(--text-muted);
   font-family: var(--font-mono);
   white-space: nowrap;
 }
 
+/* Hide orchestrator summary — controller agent already shows its own output */
 .orch-summary {
-  padding: 10px 18px;
-  font-size: 13px;
-  color: var(--text-secondary);
-  line-height: 1.5;
-  max-height: 60px;
-  overflow: hidden;
-  border-bottom: 1px solid var(--bg-border-dim);
-  mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
-}
-
-.orch-summary:empty,
-.orch-summary:has(.orch-placeholder) {
-  padding: 8px 18px;
-  max-height: none;
-  mask-image: none;
-  -webkit-mask-image: none;
-}
-
-.orch-placeholder {
-  color: var(--text-muted);
-  font-style: italic;
-  font-size: 12px;
+  display: none;
 }
 
 /* ─── Agent cards nested inside orchestrator ──────────────────────────────── */
 
 .orch-agents {
-  padding: 6px 10px 10px;
+  padding: 8px 12px 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .orch-agents:empty {
@@ -2475,7 +2453,7 @@
 }
 
 /* Agent section as a nested card */
-.orch-agents .agent-section {
+.orch-agents > .agent-section {
   margin: 0;
   border: 1px solid var(--bg-border-dim);
   border-radius: var(--radius-sm);
@@ -2483,18 +2461,56 @@
   overflow: hidden;
 }
 
-.orch-agents .agent-section:hover {
+.orch-agents > .agent-section:hover {
   background: var(--bg-elevated);
   border-color: var(--bg-border);
 }
 
-.orch-agents .agent-section-header {
+/* Compact header in nested cards */
+.orch-agents > .agent-section > .agent-section-header {
   padding: 10px 14px 10px 0;
+  min-height: 40px;
 }
 
-.orch-agents .agent-section-lane {
+/* Lane color strip — full height, no rounding */
+.orch-agents > .agent-section > .agent-section-header > .agent-section-lane {
   height: auto;
   align-self: stretch;
   border-radius: 0;
-  margin-right: 4px;
+  margin-right: 6px;
+}
+
+/* Hide action buttons by default — show on hover */
+.orch-agents > .agent-section .agent-section-actions .agent-status-btn,
+.orch-agents > .agent-section .agent-section-actions .agent-kill-btn {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.orch-agents > .agent-section:hover .agent-section-actions .agent-status-btn,
+.orch-agents > .agent-section:hover .agent-section-actions .agent-kill-btn {
+  opacity: 1;
+}
+
+/* Hide inject composer and raw log toggle in nested cards — cleaner look */
+.orch-agents > .agent-section .agent-inject-composer {
+  display: none;
+}
+.orch-agents > .agent-section .agent-detail-toggle {
+  display: none;
+}
+.orch-agents > .agent-section .agent-raw-log {
+  display: none;
+}
+
+/* Constrain body height for nested cards */
+.orch-agents > .agent-section .agent-section-body {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* Tighter stream area in nested cards */
+.orch-agents > .agent-section .agent-stream-area {
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 10px 14px;
 }
