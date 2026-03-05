@@ -293,10 +293,33 @@ class AgentBroker:
             except Exception as exc:
                 print(f"[task-queue] auto-dispatch error: {exc}")
 
-        # When a worker finishes, a slot opens — notify the controller
+        # When a worker finishes: mark its task done, then dispatch next
         if session and not session.is_controller and reason == "idle":
+            if session.task_index is not None:
+                try:
+                    from ..services import tasks as tasks_svc
+                    import asyncio
+                    loop = asyncio.get_event_loop()
+
+                    # Mark task done
+                    await loop.run_in_executor(
+                        None, tasks_svc.update_task_status,
+                        session.project_name, session.task_index, "done"
+                    )
+                    updated = await loop.run_in_executor(
+                        None, tasks_svc.get_tasks, session.project_name
+                    )
+                    await self._ws.broadcast(WSMessageType.TASKS_UPDATED, {
+                        "project_name": session.project_name,
+                        "tasks": updated,
+                    })
+                    print(f"[task-queue] auto-completed task #{session.task_index}")
+                except Exception as exc:
+                    print(f"[task-queue] auto-complete error: {exc}")
+
+            # Slot opened — dispatch next pending task
             controller = self.get_controller_for_project(session.project_name)
-            if controller and controller.phase == SessionPhase.IDLE:
+            if controller:
                 try:
                     await self._check_task_queue(controller)
                 except Exception as exc:
@@ -381,11 +404,11 @@ class AgentBroker:
     # ── Task queue auto-dispatch ──────────────────────────────────────────────
 
     async def _check_task_queue(self, controller: AgentSession) -> None:
-        """Check if there are pending tasks and inject a dispatch prompt.
+        """Directly dispatch workers for pending tasks when capacity exists.
 
-        Called when the controller goes idle. If pending tasks exist and
-        there is capacity (active workers < parallelism), tell the
-        controller to dispatch more work.
+        Bypasses the controller's Claude API to avoid latency — the broker
+        spawns worker agents directly for each pending task up to the
+        parallelism limit.
         """
         import asyncio
         from ..services import tasks as tasks_svc
@@ -416,12 +439,39 @@ class AgentBroker:
             return
 
         slots = parallelism - active_workers
-        msg = (
-            f"Queue check: {len(pending)} pending task(s), "
-            f"{active_workers}/{parallelism} worker slots in use, "
-            f"{slots} slot(s) available.\n\n"
-            f"Use list_tasks() and dispatch_agent() to fill available slots. "
-            f"Dispatch up to {slots} pending task(s) now."
-        )
-        await asyncio.sleep(1.0)
-        await controller.inject_message(msg)
+        to_dispatch = pending[:slots]
+
+        for task in to_dispatch:
+            task_index = task["index"]
+            task_text = task["text"]
+
+            # Mark in-progress
+            await loop.run_in_executor(
+                None, tasks_svc.update_task_status, project_name, task_index, "in_progress"
+            )
+
+            # Broadcast task update
+            updated = await loop.run_in_executor(None, tasks_svc.get_tasks, project_name)
+            await self._ws.broadcast(WSMessageType.TASKS_UPDATED, {
+                "project_name": project_name,
+                "tasks": updated,
+            })
+
+            # Spawn worker directly
+            task_prompt = (
+                f'You are a worker agent. Complete this task:\n\n'
+                f'"{task_text}"\n\n'
+                f'Read PROJECT.md and TASKS.md for context. '
+                f'Implement the task fully — write code, run tests, verify your work. '
+                f'When done, write a brief summary of what you accomplished.'
+            )
+
+            await self.create_session(
+                project_name=project_name,
+                project_path=project.path,
+                initial_task=task_prompt,
+                model=project.config.model,
+                task_index=task_index,
+            )
+
+            print(f"[task-queue] auto-dispatched task #{task_index}: {task_text[:60]}")

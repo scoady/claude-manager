@@ -22,6 +22,27 @@ MANAGER_API = os.environ.get("MANAGER_API_URL", "http://localhost:4040")
 
 
 @mcp.tool()
+def create_tasks(project: str, tasks: list[str]) -> list[dict]:
+    """
+    Add one or more tasks to TASKS.md for a project.
+
+    Each task is a string describing a single actionable unit of work.
+    Worker agents will be automatically dispatched for new tasks.
+    Returns the updated task list.
+
+    IMPORTANT: Always use this tool to add tasks instead of editing TASKS.md directly.
+    """
+    url = f"{MANAGER_API}/api/projects/{project}/tasks"
+    result = []
+    with httpx.Client(timeout=10) as client:
+        for text in tasks:
+            resp = client.post(url, json={"text": text})
+            resp.raise_for_status()
+            result = resp.json()
+    return result
+
+
+@mcp.tool()
 def list_tasks(project: str) -> list[dict]:
     """
     Get all tasks from TASKS.md for a project.

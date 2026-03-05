@@ -103,33 +103,15 @@ _task_cache: dict[str, list[dict]] = {}
 
 
 async def _notify_controller_queue(project_name: str, context: str) -> None:
-    """Inject a queue-check message into the controller for a project.
-
-    Called when tasks are added or completed so the controller can
-    dispatch the next pending task without polling.
-    """
+    """Trigger direct task dispatch when tasks are added or completed."""
     broker: AgentBroker = app.state.broker
     controller = broker.get_controller_for_project(project_name)
     if not controller:
         return
-
-    # Only inject if controller is idle — if it's already working,
-    # it will check the queue when it finishes its current cycle.
-    if controller.phase != SessionPhase.IDLE:
-        return
-
-    project = projects_svc.get_project(project_name, [])
-    parallelism = project.config.parallelism if project else 1
-
-    msg = (
-        f"{context}\n\n"
-        f"Check the queue: use list_tasks() to see pending tasks, "
-        f"get_agents() to see active workers. "
-        f"You may run up to {parallelism} worker(s) concurrently. "
-        f"Dispatch the next pending task if there is capacity. "
-        f"If no pending tasks remain, stop."
-    )
-    await broker.inject_message(controller.session_id, msg)
+    try:
+        await broker._check_task_queue(controller)
+    except Exception as exc:
+        print(f"[task-queue] notify error: {exc}")
 
 
 async def _task_poll_task(broker: AgentBroker) -> None:
@@ -147,11 +129,25 @@ async def _task_poll_task(broker: AgentBroker) -> None:
                 tasks = await loop.run_in_executor(None, tasks_svc.get_tasks, name)
                 cached = _task_cache.get(name)
                 if tasks != cached:
+                    # Check if new pending tasks appeared (controller wrote TASKS.md)
+                    old_pending = {t["index"] for t in (cached or []) if t["status"] == "pending"}
+                    new_pending = {t["index"] for t in tasks if t["status"] == "pending"}
+                    has_new_tasks = bool(new_pending - old_pending)
+
                     _task_cache[name] = tasks
                     await ws_manager.broadcast(WSMessageType.TASKS_UPDATED, {
                         "project_name": name,
                         "tasks": tasks,
                     })
+
+                    # Auto-dispatch if new pending tasks detected
+                    if has_new_tasks:
+                        controller = broker.get_controller_for_project(name)
+                        if controller:
+                            try:
+                                await broker._check_task_queue(controller)
+                            except Exception as exc:
+                                print(f"[task-poll] auto-dispatch error: {exc}")
         except Exception as exc:
             print(f"[task-poll] error: {exc}")
 
@@ -268,30 +264,20 @@ async def create_project(body: BootstrapProjectRequest) -> ManagedProject:
 
     project_name = project.name
 
-    parallelism = project.config.parallelism or 1
-
     async def _spawn_controller():
         controller_task = (
             "You are the CONTROLLER agent for this project.\n\n"
-            "You have MCP tools for managing agents and the dashboard:\n"
-            f"- list_tasks(project=\"{project_name}\") — get all tasks from TASKS.md\n"
-            f"- dispatch_agent(project=\"{project_name}\", task_index=N) — spawn a worker agent\n"
-            f"- get_agents(project=\"{project_name}\") — check status of all agents\n"
-            f"- report_complete(project=\"{project_name}\", task_index=N, summary=\"...\") — mark task done\n"
-            f"- dispatch_custom(project=\"{project_name}\", task=\"...\") — spawn ad-hoc agent\n"
-            f"- canvas_put(project=\"{project_name}\", ...) — publish a dashboard widget\n\n"
-            "Your workflow:\n"
+            "Your job is to READ PROJECT.md and CREATE a task plan.\n\n"
+            "Steps:\n"
             "1. Read PROJECT.md to understand the project goal\n"
-            "2. Open TASKS.md and replace the placeholder with a concrete checklist of tasks\n"
-            f"3. Immediately begin dispatching pending tasks — up to {parallelism} agents at a time\n\n"
-            "QUEUE MANAGEMENT — this is your primary job:\n"
-            f"- You may run up to {parallelism} worker agent(s) concurrently\n"
-            "- Use list_tasks() to see pending tasks, dispatch_agent() to start them\n"
-            "- When you receive a notification that a task completed, dispatch the next pending task\n"
-            "- Keep going until ALL tasks are done. Never stop with pending tasks remaining.\n"
-            "- Use get_agents() to check how many workers are currently active before dispatching more\n\n"
-            "IMPORTANT: You are a coordinator — NEVER write code or implement anything yourself.\n"
-            "Use dispatch_agent() to assign ALL work to workers."
+            f"2. Use create_tasks(project=\"{project_name}\", tasks=[...]) to add tasks\n"
+            "   - Each task should be a single actionable unit of work\n"
+            "   - Order them logically (dependencies first)\n"
+            "   - Be specific: 'Create hello.sh that prints Hello World' not 'Set up project'\n"
+            "3. Stop when all tasks are created.\n\n"
+            "IMPORTANT: You are a planner only. Do NOT write code, do NOT dispatch agents.\n"
+            "Worker agents are spawned automatically for each task you create.\n"
+            "Always use create_tasks() — NEVER edit TASKS.md directly."
         )
         await broker.create_session(
             project_name=project.name,
