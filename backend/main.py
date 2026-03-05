@@ -1415,28 +1415,10 @@ async def list_widget_templates() -> list[dict[str, Any]]:
     return await loop.run_in_executor(None, widget_catalog_svc.list_templates)
 
 
-@app.get("/api/widget-catalog/{template_id}")
-async def get_widget_template(template_id: str) -> dict[str, Any]:
-    loop = asyncio.get_event_loop()
-    tmpl = await loop.run_in_executor(None, widget_catalog_svc.get_template, template_id)
-    if not tmpl:
-        raise HTTPException(status_code=404, detail="Template not found")
-    return tmpl
-
-
 @app.post("/api/widget-catalog", status_code=201)
 async def save_widget_template(body: dict[str, Any]) -> dict[str, Any]:
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, widget_catalog_svc.save_template, body)
-
-
-@app.delete("/api/widget-catalog/{template_id}")
-async def delete_widget_template(template_id: str) -> dict[str, bool]:
-    loop = asyncio.get_event_loop()
-    ok = await loop.run_in_executor(None, widget_catalog_svc.delete_template, template_id)
-    if not ok:
-        raise HTTPException(status_code=404, detail="Template not found")
-    return {"ok": True}
 
 
 @app.post("/api/widget-catalog/generate")
@@ -1538,6 +1520,25 @@ async def preview_widget_template(template_id: str, body: dict[str, Any]) -> dic
         raise HTTPException(status_code=404, detail="Template not found")
     html, css, js = result
     return {"html": html, "css": css, "js": js}
+
+
+# Parameterized routes AFTER literal ones to avoid FastAPI matching "generate" as {template_id}
+@app.get("/api/widget-catalog/{template_id}")
+async def get_widget_template(template_id: str) -> dict[str, Any]:
+    loop = asyncio.get_event_loop()
+    tmpl = await loop.run_in_executor(None, widget_catalog_svc.get_template, template_id)
+    if not tmpl:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return tmpl
+
+
+@app.delete("/api/widget-catalog/{template_id}")
+async def delete_widget_template(template_id: str) -> dict[str, bool]:
+    loop = asyncio.get_event_loop()
+    ok = await loop.run_in_executor(None, widget_catalog_svc.delete_template, template_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return {"ok": True}
 
 
 @app.get("/api/stats", response_model=GlobalStats)
