@@ -263,22 +263,35 @@ async def create_project(body: BootstrapProjectRequest) -> ManagedProject:
 
     project_name = project.name
 
-    _CANVAS_MCP_CONFIG = str(
-        Path(__file__).resolve().parent / "mcp" / "canvas_mcp_config.json"
+    _CONTROLLER_MCP_CONFIG = str(
+        Path(__file__).resolve().parent / "mcp" / "controller_mcp_config.json"
     )
 
     async def _spawn_controller():
         controller_task = (
             "You are the CONTROLLER agent for this project.\n\n"
-            "Your job is to READ PROJECT.md and CREATE a task plan.\n\n"
-            "Steps:\n"
+            "Your job is to READ PROJECT.md, CREATE a task plan, and MAINTAIN the project dashboard.\n\n"
+            "## Planning\n"
             "1. Read PROJECT.md to understand the project goal\n"
-            f"2. Use create_tasks(project=\"{project_name}\", tasks=[...]) to add tasks\n"
+            f'2. Use create_tasks(project="{project_name}", tasks=[...]) to add tasks\n'
             "   - Each task should be a single actionable unit of work\n"
             "   - Order them logically (dependencies first)\n"
             "   - Be specific: 'Create hello.sh that prints Hello World' not 'Set up project'\n"
             "3. Stop when all tasks are created.\n\n"
-            "IMPORTANT: You are a planner only. Do NOT write code, do NOT dispatch agents.\n"
+            "## Dashboard Management\n"
+            "You OWN the project dashboard. After creating tasks, set up dashboard widgets:\n\n"
+            f'canvas_put(project="{project_name}", widget_id="task-progress", title="Task Progress",\n'
+            '  template="progress", data=\'{"value":0,"total":N,"label":"0 of N tasks","breakdown":{"pending":N}}\')\n\n'
+            f'canvas_put(project="{project_name}", widget_id="task-board", title="Task Board",\n'
+            '  template="status-card", data=\'{"status":"active","heading":"Sprint 1","description":"...",\n'
+            '  "items":[{"label":"task name","status":"pending"},...]}\')\n\n'
+            "Dashboard rules:\n"
+            "- YOU are the only agent that creates/updates/removes widgets\n"
+            "- Worker agents report results back to you; you update the dashboard\n"
+            "- Use stable widget_ids so updates replace existing widgets (not create duplicates)\n"
+            "- Standard widget_ids: task-progress, task-board, project-status, activity-log\n"
+            "- Update widgets when: tasks are created, tasks complete, status changes\n\n"
+            "IMPORTANT: You are a planner/coordinator only. Do NOT write code, do NOT dispatch agents.\n"
             "Worker agents are spawned automatically for each task you create.\n"
             "Always use create_tasks() — NEVER edit TASKS.md directly."
         )
@@ -288,7 +301,7 @@ async def create_project(body: BootstrapProjectRequest) -> ManagedProject:
             initial_task=controller_task,
             model=project.config.model,
             is_controller=True,
-            mcp_config_path=project.config.mcp_config or _CANVAS_MCP_CONFIG,
+            mcp_config_path=project.config.mcp_config or _CONTROLLER_MCP_CONFIG,
         )
 
     asyncio.create_task(_spawn_controller())
@@ -348,18 +361,19 @@ async def dispatch_task(name: str, body: DispatchRequest) -> dict[str, Any]:
             f'Give the worker a clear, detailed prompt with all context it needs. '
             f'Do NOT implement anything yourself — you are the coordinator. '
             f'Monitor with get_agents() and report results when done.\n\n'
-            f'After dispatching, UPDATE the dashboard using canvas_put(project="{name}", '
-            f'widget_id="project-status", ...) to reflect the new task and its status.'
+            f'After dispatching, update the dashboard:\n'
+            f'1. Update task-board widget to show the new task as "active"\n'
+            f'2. Update task-progress widget with current counts\n'
+            f'3. When the worker finishes, update both widgets again to reflect completion\n\n'
+            f'Use canvas_put() with the same widget_ids to update in-place. '
+            f'You own the dashboard — workers just do their tasks.'
         )
         await broker.inject_message(controller.session_id, task_prompt)
         return {"status": "delegated", "session_ids": [controller.session_id]}
 
-    # Fallback: controller busy or missing — spawn standalone agent with canvas MCP
-    _CANVAS_MCP_CONFIG = str(
-        Path(__file__).resolve().parent / "mcp" / "canvas_mcp_config.json"
-    )
+    # Fallback: controller busy or missing — spawn standalone agent (no canvas MCP)
     model = body.model or project.config.model
-    mcp_config = project.config.mcp_config or _CANVAS_MCP_CONFIG
+    mcp_config = project.config.mcp_config
 
     session_ids = []
     for _ in range(project.config.parallelism):
@@ -590,28 +604,48 @@ async def ensure_orchestrator(name: str):
             return {"status": "active", "session_id": controller.session_id}
     else:
         # No controller — spawn one with orchestrator MCP tools
+        _CONTROLLER_MCP = str(
+            Path(__file__).resolve().parent / "mcp" / "controller_mcp_config.json"
+        )
         session = await broker.create_session(
             project_name=name,
             project_path=project.path,
             initial_task=(
                 "You are the project orchestrator for this project.\n\n"
-                "You have MCP tools for managing agents and the dashboard:\n"
-                f"- list_tasks(project=\"{name}\") — get all tasks from TASKS.md\n"
-                f"- dispatch_agent(project=\"{name}\", task_index=N) — spawn a worker agent for a task\n"
-                f"- get_agents(project=\"{name}\") — check status of all agents\n"
-                f"- report_complete(project=\"{name}\", task_index=N, summary=\"...\") — mark a task done\n"
-                f"- dispatch_custom(project=\"{name}\", task=\"...\") — spawn an ad-hoc agent\n"
-                f"- canvas_put(project=\"{name}\", ...) — publish/update a dashboard widget\n\n"
-                "Your workflow:\n"
-                "1. Read PROJECT.md for context, then use list_tasks() to see current state\n"
-                "2. Wait for instructions — when told to work, use dispatch_agent() to assign tasks to workers\n"
-                "3. Monitor with get_agents(), then report_complete() when tasks finish\n"
-                "\nDo NOT implement anything yourself. You coordinate by dispatching agents via MCP tools."
+                "## MCP Tools\n"
+                "Task management:\n"
+                f'- list_tasks(project="{name}") — get all tasks from TASKS.md\n'
+                f'- dispatch_agent(project="{name}", task_index=N) — spawn a worker for a task\n'
+                f'- get_agents(project="{name}") — check status of all agents\n'
+                f'- report_complete(project="{name}", task_index=N, summary="...") — mark a task done\n'
+                f'- dispatch_custom(project="{name}", task="...") — spawn an ad-hoc agent\n\n'
+                "Dashboard management (you are the SOLE owner of the dashboard):\n"
+                f'- canvas_list(project="{name}") — see current widgets\n'
+                f'- canvas_put(project="{name}", widget_id="...", title="...", template="...", data="...") — create or update a widget\n'
+                f'- canvas_remove(project="{name}", widget_id="...") — remove a widget\n\n'
+                "## Dashboard Widget Templates\n"
+                '- "status-card": data={{status, heading, description, items:[{{label,status}}]}}\n'
+                '- "progress": data={{value, total, label, breakdown:{{done:N,active:N,pending:N}}}}\n'
+                '- "key-value": data={{pairs:{{key:value,...}}}}\n'
+                '- "log": data={{entries:[{{time,level,message}}]}}\n\n'
+                "## Standard Widget IDs\n"
+                "Use consistent IDs so updates replace widgets (not create duplicates):\n"
+                '- "task-progress" — overall progress bar\n'
+                '- "task-board" — status-card listing all tasks with their status\n'
+                '- "project-status" — high-level project health\n'
+                '- "activity-log" — recent events log\n\n'
+                "## Workflow\n"
+                "1. Read PROJECT.md for context, then list_tasks() to see current state\n"
+                "2. Set up initial dashboard widgets (task-progress, task-board)\n"
+                "3. When told to work: dispatch_agent() for tasks, monitor with get_agents()\n"
+                "4. When workers finish: report_complete(), then UPDATE dashboard widgets\n"
+                "5. Workers do NOT update the dashboard — only you do\n\n"
+                "Do NOT implement anything yourself. You coordinate by dispatching agents via MCP tools."
             ),
             model=project.config.model if project.config else None,
             is_controller=True,
             mcp_config_path=(project.config.mcp_config if project.config else None)
-                or str(Path(__file__).resolve().parent / "mcp" / "canvas_mcp_config.json"),
+                or _CONTROLLER_MCP,
         )
         return {"status": "spawned", "session_id": session.session_id}
 
@@ -741,7 +775,7 @@ async def start_workflow(name: str) -> dict[str, Any]:
                 model=project.config.model,
                 is_controller=True,
                 mcp_config_path=project.config.mcp_config
-                    or str(Path(__file__).resolve().parent / "mcp" / "canvas_mcp_config.json"),
+                    or str(Path(__file__).resolve().parent / "mcp" / "controller_mcp_config.json"),
             ))
 
     await ws_manager.broadcast(WSMessageType.WORKFLOW_UPDATED, {
