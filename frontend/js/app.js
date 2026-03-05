@@ -501,7 +501,10 @@ function initTemplateCatalog() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ description: prompt }),
       });
-      if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
+      if (!resp.ok) {
+        const detail = await resp.json().then(d => d.detail).catch(() => resp.statusText);
+        throw new Error(detail || `${resp.status} ${resp.statusText}`);
+      }
       const template = await resp.json();
       _pendingTemplate = template;
 
@@ -518,12 +521,12 @@ function initTemplateCatalog() {
       statusEl?.classList.add('hidden');
     } catch (e) {
       if (statusEl) {
-        statusEl.textContent = `Generation failed: ${e.message}`;
+        statusEl.textContent = `Generation failed — ${e.message}. Try again or simplify your prompt.`;
         statusEl.classList.remove('hidden');
       }
       toast(`Generate failed: ${e.message}`, 'error');
     } finally {
-      generateBtn.disabled = false;
+      generateBtn.disabled = !promptEl?.value.trim();
       generateBtn.textContent = 'Generate';
     }
   });

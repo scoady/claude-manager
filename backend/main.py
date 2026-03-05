@@ -3,8 +3,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import time
+
+logger = logging.getLogger(__name__)
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -1419,33 +1422,7 @@ async def save_widget_template(body: dict[str, Any]) -> dict[str, Any]:
     return await loop.run_in_executor(None, widget_catalog_svc.save_template, body)
 
 
-@app.post("/api/widget-catalog/generate")
-async def generate_widget_template(body: dict[str, Any]) -> dict[str, Any]:
-    """Generate a parameterized widget template from a natural language description.
-
-    Body: { description: "...", preview_data?: {...} }
-    Returns a full template with {{placeholder}} variables ready to save.
-    """
-    description = body.get("description", "")
-    preview_data = body.get("preview_data", {})
-
-    prompt = (
-        f"Create a PARAMETERIZED widget template.\n\n"
-        f"DESCRIPTION: {description}\n\n"
-        f"SAMPLE DATA: {json.dumps(preview_data, indent=2)}\n\n"
-        f"Create a reusable template where data values use {{{{key}}}} placeholders.\n"
-        f"For lists, use {{{{#each items}}}}...{{{{/each}}}} with {{{{property}}}} inside.\n"
-        f"Also use {{{{@index}}}} for the iteration index.\n\n"
-        f"Example placeholders: {{{{value}}}}, {{{{label}}}}, {{{{title}}}}\n"
-        f"Example each: {{{{#each entries}}}}<div>{{{{name}}}}: {{{{score}}}}</div>{{{{/each}}}}\n\n"
-        f"IMPORTANT: The template must work when placeholders are replaced with real data.\n"
-        f"Include realistic preview data that demonstrates the widget's capability."
-    )
-
-    import subprocess
-    from .broker.agent_session import CLAUDE_BIN, _get_spawn_env
-
-    _TEMPLATE_GEN_PROMPT = _DESIGN_SYSTEM_PROMPT + """
+_TEMPLATE_GEN_PROMPT = _DESIGN_SYSTEM_PROMPT + """
 
 ADDITIONAL FOR TEMPLATES:
 - Use {{placeholder}} syntax for all dynamic data values
@@ -1455,7 +1432,7 @@ ADDITIONAL FOR TEMPLATES:
 - Include a data_schema describing expected fields and their types
 - Include preview_data with realistic sample values
 
-OUTPUT FORMAT — respond with ONLY a JSON object:
+OUTPUT FORMAT — respond with ONLY a JSON object (no markdown fences, no explanation):
 {
   "name": "Short Template Name",
   "description": "What this template visualizes",
@@ -1470,42 +1447,113 @@ OUTPUT FORMAT — respond with ONLY a JSON object:
 }
 """
 
+
+def _extract_json(raw: str) -> dict:
+    """Extract JSON from Claude output — handles code fences, preamble, etc."""
+    import re as _re
+
+    text = raw.strip()
+    if not text:
+        raise ValueError("Empty response from Claude")
+
+    # Try direct parse first
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Strip markdown code fences (```json ... ``` or ``` ... ```)
+    fence_match = _re.search(r"```(?:json)?\s*\n?(.*?)```", text, _re.DOTALL)
+    if fence_match:
+        try:
+            return json.loads(fence_match.group(1).strip())
+        except json.JSONDecodeError:
+            pass
+
+    # Find first { ... last } — greedy brace extraction
+    first_brace = text.find("{")
+    last_brace = text.rfind("}")
+    if first_brace != -1 and last_brace > first_brace:
+        try:
+            return json.loads(text[first_brace : last_brace + 1])
+        except json.JSONDecodeError:
+            pass
+
+    raise ValueError(f"Could not extract JSON from response: {text[:200]}...")
+
+
+@app.post("/api/widget-catalog/generate")
+async def generate_widget_template(body: dict[str, Any]) -> dict[str, Any]:
+    """Generate a parameterized widget template from a natural language description.
+
+    Body: { description: "...", preview_data?: {...} }
+    Returns a full template with {{placeholder}} variables ready to save.
+    """
+    import subprocess
+    from .broker.agent_session import CLAUDE_BIN, _get_spawn_env
+
+    description = body.get("description", "")
+    preview_data = body.get("preview_data", {})
+
+    prompt = (
+        f"Create a PARAMETERIZED widget template.\n\n"
+        f"DESCRIPTION: {description}\n\n"
+        f"SAMPLE DATA: {json.dumps(preview_data, indent=2)}\n\n"
+        f"Create a reusable template where data values use {{{{key}}}} placeholders.\n"
+        f"For lists, use {{{{#each items}}}}...{{{{/each}}}} with {{{{property}}}} inside.\n"
+        f"Also use {{{{@index}}}} for the iteration index.\n\n"
+        f"Example placeholders: {{{{value}}}}, {{{{label}}}}, {{{{title}}}}\n"
+        f"Example each: {{{{#each entries}}}}<div>{{{{name}}}}: {{{{score}}}}</div>{{{{/each}}}}\n\n"
+        f"IMPORTANT: The template must work when placeholders are replaced with real data.\n"
+        f"Include realistic preview data that demonstrates the widget's capability.\n"
+        f"Respond with ONLY a JSON object — no markdown fences, no explanation."
+    )
+
     cmd = [
         CLAUDE_BIN, "--print",
         "--model", "claude-sonnet-4-6",
         "--system-prompt", _TEMPLATE_GEN_PROMPT,
         "--output-format", "text",
-        "--max-turns", "1",
+        "--max-turns", "3",
         "--", prompt,
     ]
 
     loop = asyncio.get_event_loop()
+    last_error = None
 
-    def _run():
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=120,
-            env=_get_spawn_env(),
-        )
-        return result.stdout.strip()
+    for attempt in range(2):
+        def _run():
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=180,
+                env=_get_spawn_env(),
+            )
+            if result.returncode != 0 and not result.stdout.strip():
+                stderr_msg = result.stderr.strip()[:300] if result.stderr else "no output"
+                raise RuntimeError(f"Claude exited {result.returncode}: {stderr_msg}")
+            return result.stdout.strip()
 
-    try:
-        raw = await loop.run_in_executor(None, _run)
+        try:
+            raw = await loop.run_in_executor(None, _run)
+            template_def = _extract_json(raw)
 
-        if "```" in raw:
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-            raw = raw.strip()
+            # Validate required fields
+            if "html" not in template_def and "css" not in template_def:
+                raise ValueError("Template missing html/css fields")
 
-        template_def = json.loads(raw)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Template generation failed: {exc}")
+            # Merge preview_data from request if provided
+            if preview_data and not template_def.get("preview_data"):
+                template_def["preview_data"] = preview_data
 
-    # Merge preview_data from request if provided
-    if preview_data and not template_def.get("preview_data"):
-        template_def["preview_data"] = preview_data
+            return template_def
 
-    return template_def
+        except Exception as exc:
+            last_error = exc
+            logger.warning("Template generation attempt %d failed: %s", attempt + 1, exc)
+            if attempt == 0:
+                continue  # retry once
+            break
+
+    raise HTTPException(status_code=500, detail=f"Template generation failed after 2 attempts: {last_error}")
 
 
 @app.post("/api/widget-catalog/{template_id}/preview")
