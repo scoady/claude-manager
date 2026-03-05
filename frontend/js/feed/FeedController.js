@@ -81,11 +81,6 @@ export class FeedController {
     this._overviewContainer.appendChild(this._dashboardWidgetGrid);
     this._dashboardCanvas.mount(this._dashboardWidgetGrid);
 
-    // 2c. Agent strip (compact live agent cards)
-    this._agentContainer = document.createElement('div');
-    this._agentContainer.className = 'agent-strip-container';
-    this._overviewContainer.appendChild(this._agentContainer);
-
     this._el.appendChild(this._overviewContainer);
 
     // 3. Tasks container (hidden by default)
@@ -138,7 +133,7 @@ export class FeedController {
       this._tasksPanel?.updateTasks(tasks);
     } catch (_) {}
 
-    // Load dashboard widgets — seed if none exist yet
+    // Load any existing dashboard widgets (no auto-seeding)
     await this._loadDashboardWidgets(project.name);
   }
 
@@ -447,28 +442,8 @@ export class FeedController {
       return section;
     }
 
-    // All agents (including controller) mount in the compact agent strip
-    section.setCompactMode(true);
-
     if (taskIndex != null) {
       this._taskAgentMap.set(taskIndex, sessionId);
-    }
-
-    // Mount in agent strip
-    if (this._agentContainer) {
-      const col = document.createElement('div');
-      col.className = 'agent-strip-card';
-      col.dataset.session = sessionId;
-      col.appendChild(section.el);
-      col.style.opacity = '0';
-      col.style.transform = 'translateY(8px)';
-      this._agentContainer.appendChild(col);
-
-      requestAnimationFrame(() => {
-        col.style.transition = 'opacity 280ms ease, transform 280ms ease';
-        col.style.opacity = '1';
-        col.style.transform = 'translateY(0)';
-      });
     }
 
     // Hydrate existing agent output on reconnect
@@ -645,22 +620,6 @@ export class FeedController {
         childSection.setCompactMode(true);
         this._sections.set(subId, childSection);
         this._subagentMap.set(tool_use_id, subId);
-
-        // Mount in agent strip
-        if (this._agentContainer) {
-          const col = document.createElement('div');
-          col.className = 'agent-strip-card';
-          col.dataset.session = subId;
-          col.appendChild(childSection.el);
-          col.style.opacity = '0';
-          col.style.transform = 'translateY(8px)';
-          this._agentContainer.appendChild(col);
-          requestAnimationFrame(() => {
-            col.style.transition = 'opacity 280ms ease, transform 280ms ease';
-            col.style.opacity = '1';
-            col.style.transform = 'translateY(0)';
-          });
-        }
 
         this._updateControllerMonitoring();
         break;

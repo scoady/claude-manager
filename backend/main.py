@@ -102,6 +102,36 @@ async def _stats_task(broker: AgentBroker) -> None:
 _task_cache: dict[str, list[dict]] = {}
 
 
+async def _notify_controller_queue(project_name: str, context: str) -> None:
+    """Inject a queue-check message into the controller for a project.
+
+    Called when tasks are added or completed so the controller can
+    dispatch the next pending task without polling.
+    """
+    broker: AgentBroker = app.state.broker
+    controller = broker.get_controller_for_project(project_name)
+    if not controller:
+        return
+
+    # Only inject if controller is idle — if it's already working,
+    # it will check the queue when it finishes its current cycle.
+    if controller.phase != SessionPhase.IDLE:
+        return
+
+    project = projects_svc.get_project(project_name, [])
+    parallelism = project.config.parallelism if project else 1
+
+    msg = (
+        f"{context}\n\n"
+        f"Check the queue: use list_tasks() to see pending tasks, "
+        f"get_agents() to see active workers. "
+        f"You may run up to {parallelism} worker(s) concurrently. "
+        f"Dispatch the next pending task if there is capacity. "
+        f"If no pending tasks remain, stop."
+    )
+    await broker.inject_message(controller.session_id, msg)
+
+
 async def _task_poll_task(broker: AgentBroker) -> None:
     """Poll TASKS.md every 3s for projects with active agents, broadcast changes."""
     while True:
@@ -238,6 +268,8 @@ async def create_project(body: BootstrapProjectRequest) -> ManagedProject:
 
     project_name = project.name
 
+    parallelism = project.config.parallelism or 1
+
     async def _spawn_controller():
         controller_task = (
             "You are the CONTROLLER agent for this project.\n\n"
@@ -251,11 +283,15 @@ async def create_project(body: BootstrapProjectRequest) -> ManagedProject:
             "Your workflow:\n"
             "1. Read PROJECT.md to understand the project goal\n"
             "2. Open TASKS.md and replace the placeholder with a concrete checklist of tasks\n"
-            "3. Stop and wait for instructions.\n\n"
+            f"3. Immediately begin dispatching pending tasks — up to {parallelism} agents at a time\n\n"
+            "QUEUE MANAGEMENT — this is your primary job:\n"
+            f"- You may run up to {parallelism} worker agent(s) concurrently\n"
+            "- Use list_tasks() to see pending tasks, dispatch_agent() to start them\n"
+            "- When you receive a notification that a task completed, dispatch the next pending task\n"
+            "- Keep going until ALL tasks are done. Never stop with pending tasks remaining.\n"
+            "- Use get_agents() to check how many workers are currently active before dispatching more\n\n"
             "IMPORTANT: You are a coordinator — NEVER write code or implement anything yourself.\n"
-            "When told to start work, use dispatch_agent() to assign tasks to workers.\n"
-            "Monitor with get_agents(). Use report_complete() when tasks finish.\n"
-            "Do NOT ask questions or offer to proceed. Stop when planning is done."
+            "Use dispatch_agent() to assign ALL work to workers."
         )
         await broker.create_session(
             project_name=project.name,
@@ -367,6 +403,8 @@ async def add_task(name: str, body: AddTaskRequest) -> list[dict[str, Any]]:
         "project_name": name,
         "tasks": tasks,
     })
+    # Notify controller about new work
+    await _notify_controller_queue(name, f'New task added: "{body.text}"')
     return tasks
 
 
@@ -527,6 +565,9 @@ async def complete_task(name: str, task_index: int, body: dict[str, Any] | None 
             "project_name": name,
             "milestones": all_milestones,
         })
+
+    # Notify controller to pick up next pending task
+    await _notify_controller_queue(name, f'Task #{task_index} "{tasks[task_index].get("text", "")}" is complete.')
 
     return {"status": "completed", "task": tasks[task_index].get("text", "")}
 

@@ -262,6 +262,7 @@ class AgentBroker:
             session._subagent_captured_this_cycle = False
 
         # ── Workflow auto-continuation ─────────────────────────────────────
+        workflow_injected = False
         if session and session.is_controller and reason == "idle":
             try:
                 from ..services import workflows as workflows_svc
@@ -279,10 +280,27 @@ class AgentBroker:
                         "workflow": updated_wf.model_dump() if updated_wf else None,
                     })
                     if next_prompt:
+                        workflow_injected = True
                         await asyncio.sleep(1.0)
                         await session.inject_message(next_prompt)
             except Exception as exc:
                 print(f"[workflow] auto-continue error: {exc}")
+
+        # ── Task queue auto-dispatch ──────────────────────────────────────
+        if session and session.is_controller and reason == "idle" and not workflow_injected:
+            try:
+                await self._check_task_queue(session)
+            except Exception as exc:
+                print(f"[task-queue] auto-dispatch error: {exc}")
+
+        # When a worker finishes, a slot opens — notify the controller
+        if session and not session.is_controller and reason == "idle":
+            controller = self.get_controller_for_project(session.project_name)
+            if controller and controller.phase == SessionPhase.IDLE:
+                try:
+                    await self._check_task_queue(controller)
+                except Exception as exc:
+                    print(f"[task-queue] worker-done dispatch error: {exc}")
 
         if self._db:
             import asyncio
@@ -359,3 +377,51 @@ class AgentBroker:
             "tool_use_id": tool_use_id,
             "todos": todos,
         })
+
+    # ── Task queue auto-dispatch ──────────────────────────────────────────────
+
+    async def _check_task_queue(self, controller: AgentSession) -> None:
+        """Check if there are pending tasks and inject a dispatch prompt.
+
+        Called when the controller goes idle. If pending tasks exist and
+        there is capacity (active workers < parallelism), tell the
+        controller to dispatch more work.
+        """
+        import asyncio
+        from ..services import tasks as tasks_svc
+        from ..services import projects as projects_svc
+
+        project_name = controller.project_name
+        loop = asyncio.get_event_loop()
+
+        tasks = await loop.run_in_executor(None, tasks_svc.get_tasks, project_name)
+        pending = [t for t in tasks if t["status"] == "pending"]
+        if not pending:
+            return
+
+        # Count active (non-idle, non-controller) workers
+        active_workers = sum(
+            1 for s in self._sessions.values()
+            if s.project_name == project_name
+            and not s.is_controller
+            and s.phase not in (SessionPhase.IDLE, SessionPhase.CANCELLED, SessionPhase.ERROR)
+        )
+
+        project = await loop.run_in_executor(
+            None, projects_svc.get_project, project_name, []
+        )
+        parallelism = project.config.parallelism if project else 1
+
+        if active_workers >= parallelism:
+            return
+
+        slots = parallelism - active_workers
+        msg = (
+            f"Queue check: {len(pending)} pending task(s), "
+            f"{active_workers}/{parallelism} worker slots in use, "
+            f"{slots} slot(s) available.\n\n"
+            f"Use list_tasks() and dispatch_agent() to fill available slots. "
+            f"Dispatch up to {slots} pending task(s) now."
+        )
+        await asyncio.sleep(1.0)
+        await controller.inject_message(msg)
