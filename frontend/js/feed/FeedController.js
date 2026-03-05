@@ -2,6 +2,7 @@
 import { escapeHtml } from '../utils.js';
 import { AgentSection } from './AgentSection.js';
 import { OrchestratorBanner } from './OrchestratorBanner.js';
+import { TasksPanel } from './TasksPanel.js';
 import { MilestonesPanel } from './MilestonesPanel.js';
 import { WorkflowPanel } from './WorkflowPanel.js';
 import { renderMarkdown } from './MarkdownRenderer.js';
@@ -33,6 +34,8 @@ export class FeedController {
     this._activeTab = 'overview';
     this._agentContainer = null;
     this._orchestratorBanner = null;
+    this._tasksContainer = null;
+    this._tasksPanel = null;
     this._milestonesContainer = null;
     this._milestonesPanel = null;
     this._workflowContainer = null;
@@ -66,7 +69,16 @@ export class FeedController {
     this._agentContainer.className = 'feed-agent-container';
     this._el.appendChild(this._agentContainer);
 
-    // 4. Milestones container (hidden by default)
+    // 4. Tasks container (hidden by default)
+    this._tasksContainer = document.createElement('div');
+    this._tasksContainer.className = 'feed-tasks-container hidden';
+    this._el.appendChild(this._tasksContainer);
+
+    if (this._tasksPanel) this._tasksPanel.destroy();
+    this._tasksPanel = new TasksPanel(project.name);
+    this._tasksContainer.appendChild(this._tasksPanel.el);
+
+    // 6. Milestones container (hidden by default)
     this._milestonesContainer = document.createElement('div');
     this._milestonesContainer.className = 'feed-milestones-container hidden';
     this._el.appendChild(this._milestonesContainer);
@@ -75,7 +87,7 @@ export class FeedController {
     this._milestonesPanel = new MilestonesPanel(project.name);
     this._milestonesContainer.appendChild(this._milestonesPanel.el);
 
-    // 5. Workflow container (hidden by default)
+    // 7. Workflow container (hidden by default)
     this._workflowContainer = document.createElement('div');
     this._workflowContainer.className = 'feed-workflow-container hidden';
     this._el.appendChild(this._workflowContainer);
@@ -95,6 +107,7 @@ export class FeedController {
     try {
       const tasks = await api.getTasks(project.name);
       this._orchestratorBanner?.setProject(project, tasks);
+      this._tasksPanel?.updateTasks(tasks);
     } catch (_) {}
 
     // Ensure orchestrator is alive
@@ -135,6 +148,7 @@ export class FeedController {
       </div>
       <div class="feed-tab-bar">
         <button class="feed-tab active" data-feed-tab="overview">Overview</button>
+        <button class="feed-tab" data-feed-tab="tasks">Tasks</button>
         <button class="feed-tab" data-feed-tab="milestones">Milestones</button>
         <button class="feed-tab" data-feed-tab="workflow">Workflow</button>
       </div>
@@ -587,6 +601,7 @@ export class FeedController {
         // Hide all containers
         this._agentContainer?.classList.add('hidden');
         this._orchestratorBanner?.el?.classList.add('hidden');
+        this._tasksContainer?.classList.add('hidden');
         this._milestonesContainer?.classList.add('hidden');
         this._workflowContainer?.classList.add('hidden');
 
@@ -602,6 +617,9 @@ export class FeedController {
         if (tabName === 'overview') {
           this._orchestratorBanner?.el?.classList.remove('hidden');
           this._agentContainer?.classList.remove('hidden');
+        } else if (tabName === 'tasks') {
+          this._tasksContainer?.classList.remove('hidden');
+          this._tasksPanel?.load();
         } else if (tabName === 'milestones') {
           this._milestonesContainer?.classList.remove('hidden');
           this._milestonesPanel?.load();
@@ -619,6 +637,7 @@ export class FeedController {
   handleTasksUpdated(projectName, tasks) {
     if (this._project && this._project.name === projectName) {
       this._orchestratorBanner?.updateProgress(tasks);
+      this._tasksPanel?.updateTasks(tasks);
     }
   }
 

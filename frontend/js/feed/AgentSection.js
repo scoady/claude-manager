@@ -163,6 +163,8 @@ export class AgentSection {
     this._currentChunkText = '';
     this._autoFollow = true;
     this._phaseHistory = [{ phase: this._phase, startTime: Date.now() }];
+    this._compact = false;
+    this._compactToolRows = new Map(); // toolId → DOM element (for compact mode)
 
     this.el = this._build();
     this._bindEvents();
@@ -437,6 +439,18 @@ export class AgentSection {
     const skeleton = this.el.querySelector('.skeleton-loader');
     if (skeleton) skeleton.remove();
 
+    // Compact mode: update single-line preview instead of full markdown
+    if (this._compact) {
+      const preview = this.el.querySelector('.compact-stream-preview');
+      if (preview) {
+        // Show last meaningful line as a brief text preview
+        const lines = this._currentChunkText.trim().split('\n').filter(l => l.trim());
+        const lastLine = lines[lines.length - 1] || '';
+        preview.textContent = lastLine.length > 120 ? lastLine.slice(0, 120) + '\u2026' : lastLine;
+      }
+      return;
+    }
+
     const streamArea = this.el.querySelector('.agent-stream-area');
     if (!streamArea) return;
     streamArea.classList.remove('hidden');
@@ -518,6 +532,46 @@ export class AgentSection {
 
   /** Render live task list from TodoWrite events in the subagent task header. */
   updateTaskList(todos) {
+    // Compact mode: render as primary content in compact-task-list
+    if (this._compact) {
+      const ctl = this.el.querySelector('.compact-task-list');
+      if (!ctl) return;
+
+      // Hide skeleton
+      const skeleton = this.el.querySelector('.skeleton-loader');
+      if (skeleton) skeleton.classList.add('hidden');
+
+      // Preserve existing compact tool rows by collecting them
+      const existingToolRows = new Map();
+      ctl.querySelectorAll('.compact-tool-row').forEach(row => {
+        existingToolRows.set(row.dataset.toolId, row);
+      });
+
+      ctl.innerHTML = todos.map((t, i) => {
+        const status = t.status || 'pending';
+        const text = t.content || t.subject || '';
+        const activeForm = t.activeForm || '';
+        const label = status === 'in_progress' && activeForm ? activeForm : text;
+        return `
+          <div class="ct-task ct-${status}" data-index="${i}">
+            <span class="ct-icon">${this._compactTaskIcon(status)}</span>
+            <span class="ct-text">${escapeHtml(label)}</span>
+            <span class="ct-status">${status === 'in_progress' ? (activeForm || 'working') : status}</span>
+          </div>
+          <div class="ct-task-detail" data-index="${i}"></div>`;
+      }).join('');
+
+      // Re-mount existing tool rows under the active task
+      const activeDetail = ctl.querySelector('.ct-task.ct-in_progress + .ct-task-detail');
+      if (activeDetail) {
+        for (const [, row] of existingToolRows) {
+          activeDetail.appendChild(row);
+        }
+      }
+      return;
+    }
+
+    // Standard mode: render in subagent-task-header
     const header = this.el.querySelector('.subagent-task-header');
     if (!header) return;
     header.classList.remove('hidden');
@@ -574,6 +628,14 @@ export class AgentSection {
 
   /** Add a new ToolBlock inline in the stream area. */
   addToolBlock({ toolId, toolName, toolInput }) {
+    // Compact mode: render a single-line tool row instead of full ToolBlock
+    if (this._compact) {
+      this._addCompactToolRow(toolId, toolName, toolInput);
+      this._currentPre = null;
+      this._currentChunkText = '';
+      return;
+    }
+
     const block = new ToolBlock({ toolId, toolName, toolInput });
     this._toolBlocks.set(toolId, block);
 
@@ -602,6 +664,19 @@ export class AgentSection {
 
   /** Update an existing ToolBlock with its output. */
   updateToolBlock(toolId, output) {
+    // Compact mode: update the time on the compact tool row
+    if (this._compact) {
+      const row = this._compactToolRows.get(toolId);
+      if (row) {
+        const timeEl = row.querySelector('.ctr-time');
+        if (timeEl) {
+          const dur = Date.now() - (row._startMs || Date.now());
+          timeEl.textContent = `${dur}ms`;
+        }
+      }
+      return;
+    }
+
     const block = this._toolBlocks.get(toolId);
     if (block) block.setOutput(output);
   }
@@ -711,6 +786,90 @@ export class AgentSection {
   updateSessionId(newId) {
     this.sessionId = newId;
     this.el.dataset.session = newId;
+  }
+
+  // ── Compact mode ──────────────────────────────────────────────────────────
+
+  /** Enable compact card rendering (task rows + compact tool rows). */
+  setCompactMode(enabled) {
+    this._compact = enabled;
+    this.el.classList.toggle('compact', enabled);
+
+    if (enabled) {
+      // Create compact task list container (replaces stream area as primary view)
+      const body = this.el.querySelector('.agent-section-body');
+      if (body && !body.querySelector('.compact-task-list')) {
+        const ctl = document.createElement('div');
+        ctl.className = 'compact-task-list';
+        body.insertBefore(ctl, body.firstChild);
+      }
+      // Create compact stream preview (single-line text preview)
+      const body2 = this.el.querySelector('.agent-section-body');
+      if (body2 && !body2.querySelector('.compact-stream-preview')) {
+        const preview = document.createElement('div');
+        preview.className = 'compact-stream-preview';
+        const taskList = body2.querySelector('.compact-task-list');
+        if (taskList) {
+          taskList.after(preview);
+        } else {
+          body2.insertBefore(preview, body2.firstChild);
+        }
+      }
+    }
+  }
+
+  /** Render compact tool row (icon + name + path + time). */
+  _addCompactToolRow(toolId, toolName, toolInput) {
+    const icon = this._compactToolIcon(toolName);
+    const preview = this._compactToolPreview(toolInput);
+    const row = document.createElement('div');
+    row.className = 'compact-tool-row';
+    row.dataset.toolId = toolId;
+    row.innerHTML = `
+      <span class="ctr-icon">${icon}</span>
+      <span class="ctr-name">${escapeHtml(toolName)}</span>
+      <span class="ctr-path">${escapeHtml(preview)}</span>
+      <span class="ctr-time"></span>`;
+    row._startMs = Date.now();
+    this._compactToolRows.set(toolId, row);
+
+    // Mount under the active task's detail area, or in the compact task list
+    const activeDetail = this.el.querySelector('.ct-task.ct-in_progress + .ct-task-detail');
+    if (activeDetail) {
+      activeDetail.appendChild(row);
+    } else {
+      // Fallback: append to compact task list
+      const ctl = this.el.querySelector('.compact-task-list');
+      if (ctl) ctl.appendChild(row);
+    }
+  }
+
+  _compactToolIcon(name) {
+    const icons = {
+      Read:  '\u{1F4C4}', Write: '\u270E', Edit: '\u270E',
+      Bash:  '\u25B6', Glob: '\u{1F50D}', Grep: '\u{1F50D}',
+      Agent: '\u{1F916}',
+    };
+    return icons[name] || '\u2022';
+  }
+
+  _compactToolPreview(input) {
+    if (!input || typeof input !== 'object') return '';
+    const vals = Object.values(input);
+    for (const v of vals) {
+      if (typeof v === 'string' && v.trim()) {
+        return v.length > 80 ? v.slice(0, 80) + '\u2026' : v;
+      }
+    }
+    return '';
+  }
+
+  _compactTaskIcon(status) {
+    if (status === 'completed' || status === 'done')
+      return '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="12" rx="3" fill="var(--accent-green)" opacity="0.15" stroke="var(--accent-green)" stroke-width="1.3"/><path d="M4 7l2 2 4-4" stroke="var(--accent-green)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    if (status === 'in_progress')
+      return '<svg class="sat-spinner" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5" stroke="var(--accent-amber)" stroke-width="1.5" fill="none" stroke-dasharray="20 12" stroke-linecap="round"/></svg>';
+    return '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5" stroke="var(--text-muted)" stroke-width="1.3" fill="none"/></svg>';
   }
 
   // ── Private helpers ─────────────────────────────────────────────────────────

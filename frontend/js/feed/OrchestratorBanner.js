@@ -60,6 +60,8 @@ export class OrchestratorBanner {
   appendAgent(agentSection) {
     const container = this._el.querySelector('.orch-agents');
     if (container) {
+      // Enable compact card rendering for nested agents
+      agentSection.setCompactMode(true);
       agentSection.el.style.opacity = '0';
       agentSection.el.style.transform = 'translateY(8px)';
       container.appendChild(agentSection.el);
