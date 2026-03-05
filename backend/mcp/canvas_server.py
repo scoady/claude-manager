@@ -66,13 +66,13 @@ def _status_color(status: str) -> str:
 
 
 def _badge_html(label: str, status: str = "") -> str:
-    """Render a small status pill badge."""
+    """Render a small status pill badge — matches project-tile-agents style."""
     color = _status_color(status or label)
     return (
         f'<span style="display:inline-block;font-family:{_FONTS["mono"]};font-size:9px;'
-        f"font-weight:500;color:{color};padding:2px 8px;"
-        f"background:{color}18;border:1px solid {color}25;"
-        f'border-radius:10px;letter-spacing:0.03em">'
+        f"font-weight:500;color:{color};padding:2px 7px;"
+        f"background:{color}14;border:1px solid {color}20;"
+        f'border-radius:8px;letter-spacing:0.03em;flex-shrink:0">'
         f"{escape(label.upper())}</span>"
     )
 
@@ -91,26 +91,28 @@ def _render_status_card(data: dict) -> tuple[str, str]:
     items_html = ""
     if items:
         rows = "".join(
-            f'<div style="display:flex;align-items:center;gap:8px;padding:6px 0;'
-            f'border-bottom:1px solid {_COLORS["border-dim"]}20">'
-            f'<span style="width:5px;height:5px;border-radius:50%;'
+            f'<div style="display:flex;align-items:center;gap:8px;padding:5px 0;'
+            f'border-bottom:1px solid rgba(26,38,64,0.3)">'
+            f'<span style="width:6px;height:6px;border-radius:50%;'
             f'background:{_status_color(it.get("status", "pending"))};flex-shrink:0;'
-            f'box-shadow:0 0 6px {_status_color(it.get("status", "pending"))}30"></span>'
-            f'<span style="font-family:{_FONTS["body"]};font-size:12px;color:{_COLORS["secondary"]};'
+            f'box-shadow:0 0 8px {_status_color(it.get("status", "pending"))}30;'
+            f'transition:all 0.3s ease"></span>'
+            f'<span style="font-size:11px;color:{_COLORS["secondary"]};'
             f'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
             f'{escape(str(it.get("label", "")))}</span>'
             f'{_badge_html(it.get("status", "pending"))}'
             f"</div>"
             for it in items[:20]
         )
-        items_html = f'<div style="margin-top:10px">{rows}</div>'
+        items_html = f'<div style="margin-top:10px;display:flex;flex-direction:column;gap:1px">{rows}</div>'
 
     details_html = ""
     if details:
         details_html = (
             f'<details style="margin-top:10px">'
             f'<summary style="font-family:{_FONTS["mono"]};font-size:10px;'
-            f'color:{_COLORS["cyan"]};cursor:pointer;letter-spacing:0.03em">'
+            f'color:{_COLORS["cyan"]};cursor:pointer;letter-spacing:0.03em;'
+            f'transition:color 0.2s ease">'
             f"Details</summary>"
             f'<div style="margin-top:8px;padding:10px;'
             f"background:linear-gradient(135deg,{_COLORS['elevated']},{_COLORS['surface']});"
@@ -121,13 +123,13 @@ def _render_status_card(data: dict) -> tuple[str, str]:
         )
 
     html = (
-        f'<div style="font-family:{_FONTS["body"]};color:{_COLORS["primary"]}">'
-        f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
+        f'<div>'
+        f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
         f"{badge}"
-        f'<span style="font-family:{_FONTS["title"]};font-size:14px;font-weight:600;'
+        f'<span style="font-family:{_FONTS["title"]};font-size:14px;font-weight:700;'
         f'color:{_COLORS["primary"]};letter-spacing:-0.01em">{heading}</span>'
         f"</div>"
-        f'<div style="font-size:12px;color:{_COLORS["secondary"]};line-height:1.6;'
+        f'<div style="font-size:11px;color:{_COLORS["secondary"]};line-height:1.6;'
         f'word-wrap:break-word">{description}</div>'
         f"{items_html}{details_html}</div>"
     )
@@ -144,30 +146,35 @@ def _render_progress(data: dict) -> tuple[str, str]:
 
     stats_html = ""
     if breakdown:
-        stats = " ".join(
-            f'<span style="color:{_status_color(k)}">{v}</span>'
-            f'<span style="color:{_COLORS["muted"]}">{escape(k)}</span>'
-            for k, v in breakdown.items()
-        )
+        stat_items = []
+        for k, v in breakdown.items():
+            color = _status_color(k)
+            stat_items.append(
+                f'<span style="display:inline-flex;align-items:center;gap:4px">'
+                f'<span style="font-weight:500;color:{color}">{v}</span>'
+                f'<span style="color:{_COLORS["muted"]}">{escape(k)}</span></span>'
+            )
+        sep = f'<span style="color:{_COLORS["border"]}">·</span>'
         stats_html = (
-            f'<div style="display:flex;gap:10px;font-family:{_FONTS["mono"]};'
-            f'font-size:10px;margin-top:8px">{stats}</div>'
+            f'<div style="display:flex;gap:8px;font-family:{_FONTS["mono"]};'
+            f'font-size:10px;margin-top:10px;align-items:center">'
+            f"{sep.join(stat_items)}</div>"
         )
 
     html = (
-        f'<div style="font-family:{_FONTS["body"]};color:{_COLORS["primary"]}">'
-        f'<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px">'
-        f'<span style="font-family:{_FONTS["title"]};font-size:28px;font-weight:700;'
+        f'<div>'
+        f'<div style="display:flex;align-items:baseline;gap:4px;margin-bottom:10px">'
+        f'<span style="font-family:{_FONTS["title"]};font-size:28px;font-weight:800;'
         f'color:{_COLORS["cyan"]};letter-spacing:-0.03em">{pct}</span>'
         f'<span style="font-family:{_FONTS["mono"]};font-size:11px;color:{_COLORS["muted"]}">%</span>'
-        f'<span style="font-family:{_FONTS["body"]};font-size:11px;color:{_COLORS["secondary"]};'
+        f'<span style="font-size:11px;color:{_COLORS["secondary"]};'
         f'margin-left:auto">{escape(label)}</span>'
         f"</div>"
         f'<div style="height:3px;background:{_COLORS["border-dim"]};border-radius:2px;overflow:hidden">'
         f'<div style="height:100%;width:{pct}%;'
         f"background:linear-gradient(90deg,{_COLORS['green']},{_COLORS['cyan']});"
-        f'border-radius:2px;box-shadow:0 0 10px {_COLORS["green"]}40;'
-        f'transition:width 0.6s ease"></div></div>'
+        f'border-radius:2px;box-shadow:0 0 12px {_COLORS["green"]}40;'
+        f'transition:width 0.6s cubic-bezier(0.4,0,0.2,1)"></div></div>'
         f"{stats_html}</div>"
     )
     return html, ""
@@ -178,15 +185,15 @@ def _render_key_value(data: dict) -> tuple[str, str]:
     pairs = data.get("pairs", {})
     rows = "".join(
         f'<div style="display:flex;justify-content:space-between;align-items:center;'
-        f'padding:6px 0;border-bottom:1px solid {_COLORS["border-dim"]}15">'
-        f'<span style="font-family:{_FONTS["body"]};font-size:12px;'
+        f'padding:6px 0;border-bottom:1px solid rgba(26,38,64,0.25)">'
+        f'<span style="font-size:11px;'
         f'color:{_COLORS["muted"]}">{escape(str(k))}</span>'
-        f'<span style="font-family:{_FONTS["mono"]};font-size:12px;'
-        f'color:{_COLORS["primary"]}">{escape(str(v))}</span>'
+        f'<span style="font-family:{_FONTS["mono"]};font-size:11px;'
+        f'color:{_COLORS["primary"]};font-weight:500">{escape(str(v))}</span>'
         f"</div>"
         for k, v in pairs.items()
     )
-    html = f'<div style="font-family:{_FONTS["body"]};color:{_COLORS["primary"]}">{rows}</div>'
+    html = f'<div style="display:flex;flex-direction:column;gap:1px">{rows}</div>'
     return html, ""
 
 
@@ -194,17 +201,17 @@ def _render_log(data: dict) -> tuple[str, str]:
     """Log stream / activity feed."""
     entries = data.get("entries", [])
     rows = "".join(
-        f'<div style="display:flex;gap:8px;padding:5px 0;'
-        f'border-bottom:1px solid {_COLORS["border-dim"]}12">'
+        f'<div style="display:flex;gap:8px;padding:4px 0;'
+        f'border-bottom:1px solid rgba(26,38,64,0.2)">'
         f'<span style="font-family:{_FONTS["mono"]};font-size:9px;color:{_COLORS["muted"]};'
         f'flex-shrink:0;min-width:50px">{escape(str(e.get("time", "")))}</span>'
         f'{_badge_html(e.get("level", "info"), e.get("level", "info")) if e.get("level") else ""}'
-        f'<span style="font-family:{_FONTS["body"]};font-size:11px;color:{_COLORS["secondary"]};'
-        f'word-wrap:break-word;overflow-wrap:break-word">{escape(str(e.get("message", "")))}</span>'
+        f'<span style="font-size:11px;color:{_COLORS["secondary"]};'
+        f'flex:1;word-wrap:break-word;overflow-wrap:break-word">{escape(str(e.get("message", "")))}</span>'
         f"</div>"
         for e in entries[:30]
     )
-    html = f'<div style="max-height:200px;overflow-y:auto">{rows}</div>'
+    html = f'<div style="display:flex;flex-direction:column;gap:1px;overflow-y:auto">{rows}</div>'
     return html, ""
 
 

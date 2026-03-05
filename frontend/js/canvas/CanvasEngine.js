@@ -6,7 +6,7 @@
  *  - All layout changes use CSS transitions: cubic-bezier(0.22, 1, 0.36, 1), 350ms
  *  - create() triggers an entrance animation: slide-up + fade-in
  *  - If multiple widgets arrive within 50ms they are staggered 60ms apart
- *  - Each widget is isolated in its own Shadow DOM (WidgetFrame)
+ *  - Each widget is wrapped in a WidgetFrame (no Shadow DOM — inherits host styles)
  *  - Grid placement via grid_col / grid_row / col_span / row_span (1-indexed)
  */
 
