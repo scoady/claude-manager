@@ -1645,6 +1645,27 @@
   box-shadow: 0 0 8px rgba(74, 222, 128, 0.15);
 }
 
+.task-tool-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--accent-purple);
+  background: rgba(167, 139, 250, 0.1);
+  border: 1px solid rgba(167, 139, 250, 0.15);
+  padding: 1px 7px;
+  border-radius: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+  flex-shrink: 0;
+  animation: tool-badge-in 200ms ease;
+}
+
+@keyframes tool-badge-in {
+  from { opacity: 0; transform: scale(0.9); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
 .task-cycle-btn {
   background: none;
   border: none;

@@ -95,6 +95,7 @@ export class FeedController {
 
     if (this._tasksPanel) this._tasksPanel.destroy();
     this._tasksPanel = new TasksPanel(project.name);
+    this._tasksPanel.setTaskAgentMap(this._taskAgentMap);
     this._tasksContainer.appendChild(this._tasksPanel.el);
 
     // 4. Milestones container (hidden by default)
@@ -555,6 +556,8 @@ export class FeedController {
         if (done) return;
         const section = this._sections.get(session_id);
         section?.appendChunk(chunk);
+        // Also route to TasksPanel for per-task output
+        this._tasksPanel?.appendAgentChunk(session_id, chunk);
         break;
       }
       case 'session_phase': {
@@ -565,6 +568,8 @@ export class FeedController {
       }
       case 'tool_start': {
         const { session_id, tool } = msg.data;
+        // Route milestone to TasksPanel
+        this._tasksPanel?.addToolMilestone(session_id, tool.tool_name, tool.tool_input);
         let startSection = null;
         if (tool.parent_tool_use_id) {
           const subId = this._subagentMap.get(tool.parent_tool_use_id);

@@ -1,4 +1,4 @@
-/** TasksPanel — equalizer-style task progress visualization */
+/** TasksPanel — equalizer-style task progress with per-task agent output */
 import { escapeHtml, toast } from '../utils.js';
 import { renderMarkdown } from './MarkdownRenderer.js';
 import { api } from '../api.js';
@@ -11,11 +11,19 @@ export class TasksPanel {
     this._el.className = 'tasks-panel';
     this._expandedIndices = new Set();
     this._collapsedGroups = new Set();
-    this._lastStreamText = '';
+    // Per-task stream buffers: taskIndex → accumulated markdown text
+    this._taskStreams = new Map();
+    // taskIndex → sessionId mapping (set externally by FeedController)
+    this._taskAgentMap = new Map();
     this._render();
   }
 
   get el() { return this._el; }
+
+  /** Set the task→agent mapping so streams route to the right row. */
+  setTaskAgentMap(map) {
+    this._taskAgentMap = map;
+  }
 
   async load() {
     try {
@@ -32,12 +40,73 @@ export class TasksPanel {
     this._renderContent();
   }
 
-  updateAgentStream(streamText) {
-    this._lastStreamText = streamText;
-    this._el.querySelectorAll('.task-detail:not(.hidden) .task-detail-content').forEach(el => {
-      el.innerHTML = renderMarkdown(streamText);
-      el.scrollTop = el.scrollHeight;
-    });
+  /**
+   * Append a stream chunk for a specific agent session.
+   * Routes to the correct task row via taskAgentMap.
+   */
+  appendAgentChunk(sessionId, chunk) {
+    // Find which task this agent is working on
+    let taskIndex = null;
+    for (const [idx, sid] of this._taskAgentMap) {
+      if (sid === sessionId) {
+        taskIndex = idx;
+        break;
+      }
+    }
+    if (taskIndex == null) return;
+
+    const prev = this._taskStreams.get(taskIndex) || '';
+    this._taskStreams.set(taskIndex, prev + chunk);
+
+    // If this task row is expanded, update the detail content live
+    const row = this._el.querySelector(`.task-row[data-index="${taskIndex}"]`);
+    if (row && this._expandedIndices.has(taskIndex)) {
+      const content = row.querySelector('.task-detail-content');
+      if (content) {
+        content.innerHTML = renderMarkdown(this._taskStreams.get(taskIndex));
+        content.scrollTop = content.scrollHeight;
+      }
+    }
+  }
+
+  /**
+   * Handle a tool_start event — show milestone on the task row.
+   */
+  addToolMilestone(sessionId, toolName, toolInput) {
+    let taskIndex = null;
+    for (const [idx, sid] of this._taskAgentMap) {
+      if (sid === sessionId) { taskIndex = idx; break; }
+    }
+    if (taskIndex == null) return;
+
+    const row = this._el.querySelector(`.task-row[data-index="${taskIndex}"]`);
+    if (!row) return;
+    let badge = row.querySelector('.task-tool-badge');
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'task-tool-badge';
+      const main = row.querySelector('.task-row-main');
+      main?.insertBefore(badge, main.querySelector('.task-actions'));
+    }
+    const label = this._toolLabel(toolName, toolInput);
+    badge.textContent = label;
+  }
+
+  _toolLabel(toolName, input) {
+    const name = (toolName || '').replace(/^mcp__\w+__/, '');
+    if (name === 'Read' && input?.file_path) {
+      return `Read · ${input.file_path.split('/').pop()}`;
+    }
+    if (name === 'Edit' && input?.file_path) {
+      return `Edit · ${input.file_path.split('/').pop()}`;
+    }
+    if (name === 'Bash') {
+      const cmd = (input?.command || '').slice(0, 30);
+      return `Bash · ${cmd}`;
+    }
+    if (name === 'Grep') return `Grep · ${input?.pattern || ''}`;
+    if (name === 'Glob') return `Glob · ${input?.pattern || ''}`;
+    return name;
   }
 
   destroy() {}
@@ -69,7 +138,6 @@ export class TasksPanel {
     const done = this._tasks.filter(t => t.status === 'done');
     const active = this._tasks.filter(t => t.status === 'in_progress');
     const pending = this._tasks.filter(t => t.status === 'pending');
-    const total = this._tasks.length;
 
     // Build equalizer HTML
     const eqBars = this._tasks.map((t, i) => {
@@ -132,6 +200,7 @@ export class TasksPanel {
 
   _renderTaskRow(t, groupStatus) {
     const expanded = this._expandedIndices.has(t.index);
+    const hasStream = this._taskStreams.has(t.index);
     let indicator;
     if (groupStatus === 'active') {
       indicator = `<span class="task-status-indicator">
@@ -142,6 +211,10 @@ export class TasksPanel {
     } else {
       indicator = `<span class="task-status-indicator"><span class="status-dot ${groupStatus}"></span></span>`;
     }
+
+    const streamContent = hasStream
+      ? renderMarkdown(this._taskStreams.get(t.index))
+      : '<span class="text-muted">Live agent output will appear here...</span>';
 
     return `
       <div class="task-row${expanded ? ' expanded' : ''}" data-index="${t.index}">
@@ -161,7 +234,7 @@ export class TasksPanel {
           </div>
         </div>
         <div class="task-detail${expanded ? '' : ' hidden'}">
-          <div class="task-detail-content">${expanded && this._lastStreamText ? renderMarkdown(this._lastStreamText) : '<span class="text-muted">Live agent output will appear here...</span>'}</div>
+          <div class="task-detail-content">${streamContent}</div>
         </div>
       </div>
     `;
@@ -181,7 +254,6 @@ export class TasksPanel {
     </svg>`;
   }
 
-  /** Deterministic pseudo-random based on index (stable across re-renders). */
   _seededRandom(i) {
     const x = Math.sin(i * 9301 + 49297) * 49297;
     return x - Math.floor(x);
@@ -227,7 +299,6 @@ export class TasksPanel {
   }
 
   _bindRowEvents(root) {
-    // Expand/collapse on row click
     root.querySelectorAll('.task-row-main').forEach(main => {
       main.addEventListener('click', (e) => {
         if (e.target.closest('.task-actions')) return;
@@ -245,8 +316,9 @@ export class TasksPanel {
           row.classList.add('expanded');
           detail.classList.remove('hidden');
           const content = detail.querySelector('.task-detail-content');
-          if (this._lastStreamText) {
-            content.innerHTML = renderMarkdown(this._lastStreamText);
+          if (this._taskStreams.has(idx)) {
+            content.innerHTML = renderMarkdown(this._taskStreams.get(idx));
+            content.scrollTop = content.scrollHeight;
           }
         }
       });

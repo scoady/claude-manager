@@ -62,83 +62,8 @@ _start_time = time.time()
 # ─── Agent widget helpers ─────────────────────────────────────────────────────
 
 
-async def _create_agent_widget(
-    project_name: str,
-    session_id: str,
-    task_summary: str,
-    is_controller: bool = False,
-) -> str:
-    """Create a placeholder dashboard widget for a newly spawned agent.
-
-    Returns the widget_id so it can be injected into the agent's prompt.
-    """
-    widget_id = f"agent-{session_id[:8]}"
-    role = "Controller" if is_controller else "Worker"
-    short_task = (task_summary or "")[:120]
-    # Escape HTML in task text
-    short_task = short_task.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
-    accent = "#fbbf24" if is_controller else "#a78bfa"
-    html = f"""<div style="font-family:'DM Sans',system-ui,sans-serif;color:#e2e8f0">
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-    <span style="width:8px;height:8px;border-radius:50%;background:{accent};box-shadow:0 0 12px {accent}40;animation:pulse 2s ease infinite"></span>
-    <span style="font-family:'Plus Jakarta Sans',system-ui;font-size:12px;color:{accent};font-weight:600;letter-spacing:0.03em">INITIALIZING</span>
-    <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#475569;margin-left:auto;padding:2px 8px;border:1px solid #243352;border-radius:10px">{role}</span>
-  </div>
-  <div style="font-size:12px;color:#94a3b8;line-height:1.6;word-wrap:break-word;overflow-wrap:break-word">{short_task}</div>
-  <div style="margin-top:12px;height:2px;background:#1a2640;border-radius:1px;overflow:hidden">
-    <div style="height:100%;width:30%;background:linear-gradient(90deg,{accent},transparent);border-radius:1px;animation:shimmer 1.5s ease infinite"></div>
-  </div>
-</div>"""
-
-    css = f"""@keyframes pulse {{
-  0%, 100% {{ opacity: 1; }}
-  50% {{ opacity: 0.35; }}
-}}
-@keyframes shimmer {{
-  0% {{ transform: translateX(-100%); }}
-  100% {{ transform: translateX(400%); }}
-}}"""
-
-    widget = WidgetCreate(
-        id=widget_id,
-        title=f"{role} — Starting...",
-        html=html,
-        css=css,
-        col_span=1,
-        row_span=1,
-    )
-    loop = asyncio.get_event_loop()
-    w = await loop.run_in_executor(
-        None, canvas_service.upsert_widget, project_name, widget_id, widget,
-    )
-    await ws_manager.broadcast(
-        WSMessageType.CANVAS_WIDGET_CREATED,
-        {"widget": w.model_dump(mode="json")},
-    )
-    return widget_id
-
-
 def _escape_html(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
-
-
-def _dashboard_instructions(project_name: str, widget_id: str) -> str:
-    """Return prompt text telling an agent about its dashboard widget."""
-    return (
-        f"\n\nDASHBOARD: You have a live widget on the project dashboard (widget_id=\"{widget_id}\"). "
-        f"Update it using canvas_put with a TEMPLATE — never write raw HTML.\n\n"
-        f"Example — update your status:\n"
-        f'  canvas_put(project="{project_name}", widget_id="{widget_id}", title="My Status",\n'
-        f'    template="status-card",\n'
-        f'    data=\'{{"status":"in_progress","heading":"Working on X",\n'
-        f'            "description":"Currently doing Y...",\n'
-        f'            "items":[{{"label":"Step 1","status":"done"}},{{"label":"Step 2","status":"active"}}],\n'
-        f'            "details":"Full log output here..."}}\' )\n\n'
-        f"Templates: status-card, progress, key-value, log (see canvas_put docs for data keys).\n"
-        f"Update your widget when you: start, make progress, hit errors, or finish.\n"
-        f"You may create ADDITIONAL widgets with unique widget_ids for extra views."
-    )
 
 
 # ─── Background tasks ─────────────────────────────────────────────────────────
@@ -314,10 +239,6 @@ async def create_project(body: BootstrapProjectRequest) -> ManagedProject:
     project_name = project.name
 
     async def _spawn_controller():
-        widget_id = await _create_agent_widget(
-            project_name, "controller", "Project controller — planning and coordination",
-            is_controller=True,
-        )
         controller_task = (
             "You are the CONTROLLER agent for this project.\n\n"
             "You have MCP tools for managing agents and the dashboard:\n"
@@ -330,13 +251,11 @@ async def create_project(body: BootstrapProjectRequest) -> ManagedProject:
             "Your workflow:\n"
             "1. Read PROJECT.md to understand the project goal\n"
             "2. Open TASKS.md and replace the placeholder with a concrete checklist of tasks\n"
-            "3. Update your dashboard widget with project status using canvas_put\n"
-            "4. Stop and wait for instructions.\n\n"
+            "3. Stop and wait for instructions.\n\n"
             "IMPORTANT: You are a coordinator — NEVER write code or implement anything yourself.\n"
             "When told to start work, use dispatch_agent() to assign tasks to workers.\n"
             "Monitor with get_agents(). Use report_complete() when tasks finish.\n"
-            + _dashboard_instructions(project_name, widget_id)
-            + "\nDo NOT ask questions or offer to proceed. Publish status to dashboard and stop."
+            "Do NOT ask questions or offer to proceed. Stop when planning is done."
         )
         await broker.create_session(
             project_name=project.name,
@@ -419,14 +338,10 @@ async def dispatch_task(name: str, body: DispatchRequest) -> dict[str, Any]:
 
     session_ids = []
     for _ in range(project.config.parallelism):
-        # Create agent widget first, then inject widget_id into prompt
-        widget_id = await _create_agent_widget(name, f"dispatch-{len(session_ids)}", body.task)
-        dashboard_task = body.task + _dashboard_instructions(name, widget_id)
-
         session = await broker.create_session(
             project_name=name,
             project_path=project.path,
-            initial_task=dashboard_task,
+            initial_task=body.task,
             model=model,
             mcp_config_path=mcp_config,
         )
@@ -562,13 +477,10 @@ async def start_task(name: str, task_index: int, body: DispatchRequest | None = 
 
     # Fallback: spawn standalone agent with its own dashboard widget
     model = (body.model if body else None) or project.config.model
-    widget_id = await _create_agent_widget(name, f"task-{task_index}", task["text"])
-    task_prompt_with_widget = task_prompt + _dashboard_instructions(name, widget_id)
-
     session = await broker.create_session(
         project_name=name,
         project_path=project.path,
-        initial_task=task_prompt_with_widget,
+        initial_task=task_prompt,
         model=model,
         task_index=task_index,
     )
@@ -648,10 +560,6 @@ async def ensure_orchestrator(name: str):
             return {"status": "active", "session_id": controller.session_id}
     else:
         # No controller — spawn one with orchestrator MCP tools
-        widget_id = await _create_agent_widget(
-            name, "controller", "Project controller — planning and coordination",
-            is_controller=True,
-        )
         session = await broker.create_session(
             project_name=name,
             project_path=project.path,
@@ -666,11 +574,9 @@ async def ensure_orchestrator(name: str):
                 f"- canvas_put(project=\"{name}\", ...) — publish/update a dashboard widget\n\n"
                 "Your workflow:\n"
                 "1. Read PROJECT.md for context, then use list_tasks() to see current state\n"
-                "2. Update your dashboard widget with project status using canvas_put\n"
-                "3. Wait for instructions — when told to work, use dispatch_agent() to assign tasks to workers\n"
-                "4. Monitor with get_agents(), then report_complete() when tasks finish\n"
-                + _dashboard_instructions(name, widget_id)
-                + "\n\nDo NOT implement anything yourself. You coordinate by dispatching agents via MCP tools."
+                "2. Wait for instructions — when told to work, use dispatch_agent() to assign tasks to workers\n"
+                "3. Monitor with get_agents(), then report_complete() when tasks finish\n"
+                "\nDo NOT implement anything yourself. You coordinate by dispatching agents via MCP tools."
             ),
             model=project.config.model if project.config else None,
             is_controller=True,
