@@ -43,6 +43,7 @@ export class TasksPanel {
   /**
    * Append a stream chunk for a specific agent session.
    * Routes to the correct task row via taskAgentMap.
+   * Falls back to any in_progress task if no explicit mapping.
    */
   appendAgentChunk(sessionId, chunk) {
     // Find which task this agent is working on
@@ -51,6 +52,19 @@ export class TasksPanel {
       if (sid === sessionId) {
         taskIndex = idx;
         break;
+      }
+    }
+    // Fallback: if no explicit mapping, route to any in_progress task
+    // that doesn't already have a mapped agent
+    if (taskIndex == null) {
+      const mappedIndices = new Set(this._taskAgentMap.values());
+      const activeTask = this._tasks.find(t =>
+        t.status === 'in_progress' && !mappedIndices.has(t.index)
+      );
+      if (activeTask) {
+        taskIndex = activeTask.index;
+        // Cache this mapping for future chunks
+        this._taskAgentMap.set(taskIndex, sessionId);
       }
     }
     if (taskIndex == null) return;
@@ -76,6 +90,16 @@ export class TasksPanel {
     let taskIndex = null;
     for (const [idx, sid] of this._taskAgentMap) {
       if (sid === sessionId) { taskIndex = idx; break; }
+    }
+    if (taskIndex == null) {
+      const mappedIndices = new Set(this._taskAgentMap.values());
+      const activeTask = this._tasks.find(t =>
+        t.status === 'in_progress' && !mappedIndices.has(t.index)
+      );
+      if (activeTask) {
+        taskIndex = activeTask.index;
+        this._taskAgentMap.set(taskIndex, sessionId);
+      }
     }
     if (taskIndex == null) return;
 
