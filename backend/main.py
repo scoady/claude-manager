@@ -263,6 +263,10 @@ async def create_project(body: BootstrapProjectRequest) -> ManagedProject:
 
     project_name = project.name
 
+    _CANVAS_MCP_CONFIG = str(
+        Path(__file__).resolve().parent / "mcp" / "canvas_mcp_config.json"
+    )
+
     async def _spawn_controller():
         controller_task = (
             "You are the CONTROLLER agent for this project.\n\n"
@@ -284,7 +288,7 @@ async def create_project(body: BootstrapProjectRequest) -> ManagedProject:
             initial_task=controller_task,
             model=project.config.model,
             is_controller=True,
-            mcp_config_path=project.config.mcp_config,
+            mcp_config_path=project.config.mcp_config or _CANVAS_MCP_CONFIG,
         )
 
     asyncio.create_task(_spawn_controller())
@@ -606,7 +610,8 @@ async def ensure_orchestrator(name: str):
             ),
             model=project.config.model if project.config else None,
             is_controller=True,
-            mcp_config_path=project.config.mcp_config if project.config else None,
+            mcp_config_path=(project.config.mcp_config if project.config else None)
+                or str(Path(__file__).resolve().parent / "mcp" / "canvas_mcp_config.json"),
         )
         return {"status": "spawned", "session_id": session.session_id}
 
@@ -735,7 +740,8 @@ async def start_workflow(name: str) -> dict[str, Any]:
                 initial_task=prompt,
                 model=project.config.model,
                 is_controller=True,
-                mcp_config_path=project.config.mcp_config,
+                mcp_config_path=project.config.mcp_config
+                    or str(Path(__file__).resolve().parent / "mcp" / "canvas_mcp_config.json"),
             ))
 
     await ws_manager.broadcast(WSMessageType.WORKFLOW_UPDATED, {

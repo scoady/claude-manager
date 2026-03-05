@@ -569,6 +569,8 @@ export class FeedController {
         }
         if (!doneSection) doneSection = this._sections.get(session_id);
         doneSection?.updateToolBlock(tool.tool_id, tool.output);
+        // Route tool completion to TasksPanel for modal tool timeline
+        this._tasksPanel?.completeToolMilestone(session_id, tool.output);
         break;
       }
       case 'turn_done': {
