@@ -44,7 +44,6 @@ from .rules.builtin_rules import SessionHealthRule
 from .services import milestones as milestones_svc
 from .services import workflows as workflows_svc
 from .services import projects as projects_svc
-from .services.projects import SUBAGENT_REPORT_INSTRUCTION
 from .services import settings as settings_svc
 from .services import skills as skills_svc
 from .services import tasks as tasks_svc
@@ -229,20 +228,27 @@ async def create_project(body: BootstrapProjectRequest) -> ManagedProject:
 
     await _broadcast_project_list(broker)
 
+    project_name = project.name
     controller_task = (
-        "You are the CONTROLLER agent for this project. "
-        "Read PROJECT.md to understand the project goal. "
-        "Then open TASKS.md and replace the placeholder with a concrete checklist of tasks. "
-        "IMPORTANT: You are a coordinator — you MUST NOT write code or implement anything yourself. "
-        "When you receive a task, ALWAYS use the Agent tool (subagent_type='general-purpose') to delegate the work to a subagent. "
-        "Your only job is to plan, delegate via Agent tool, review results, and update TASKS.md.\n\n"
-        "When done planning, end with a brief PROJECT STATUS block in this exact format:\n"
-        "## Project Status\n"
-        "**Goal**: (one-line summary of the project goal)\n\n"
-        "**Plan**: (numbered list of planned tasks)\n\n"
-        "**Status**: Ready for instructions.\n\n"
-        "Do NOT ask questions or offer to proceed. Just report the status and stop."
-        + SUBAGENT_REPORT_INSTRUCTION
+        "You are the CONTROLLER agent for this project.\n\n"
+        "You have MCP tools for managing agents:\n"
+        f"- list_tasks(project=\"{project_name}\") — get all tasks from TASKS.md\n"
+        f"- dispatch_agent(project=\"{project_name}\", task_index=N) — spawn a worker agent\n"
+        f"- get_agents(project=\"{project_name}\") — check status of all agents\n"
+        f"- report_complete(project=\"{project_name}\", task_index=N, summary=\"...\") — mark task done\n"
+        f"- dispatch_custom(project=\"{project_name}\", task=\"...\") — spawn ad-hoc agent\n\n"
+        "Your workflow:\n"
+        "1. Read PROJECT.md to understand the project goal\n"
+        "2. Open TASKS.md and replace the placeholder with a concrete checklist of tasks\n"
+        "3. Report a brief PROJECT STATUS and stop:\n"
+        "   ## Project Status\n"
+        "   **Goal**: (one-line summary)\n"
+        "   **Plan**: (numbered list of planned tasks)\n"
+        "   **Status**: Ready for instructions.\n\n"
+        "IMPORTANT: You are a coordinator — NEVER write code or implement anything yourself.\n"
+        "When told to start work, use dispatch_agent() to assign tasks to workers.\n"
+        "Monitor with get_agents(). Use report_complete() when tasks finish.\n"
+        "Do NOT ask questions or offer to proceed. Just report status and stop."
     )
     asyncio.create_task(broker.create_session(
         project_name=project.name,
@@ -304,11 +310,10 @@ async def dispatch_task(name: str, body: DispatchRequest) -> dict[str, Any]:
     if controller and controller.phase == SessionPhase.IDLE:
         task_prompt = (
             f'New task dispatched: "{body.task}"\n\n'
-            f'IMMEDIATELY use the Agent tool (subagent_type="general-purpose") to delegate this work to a subagent. '
+            f'Use dispatch_custom(project="{name}", task="...") to spawn a worker agent for this. '
+            f'Give the worker a clear, detailed prompt with all context it needs. '
             f'Do NOT implement anything yourself — you are the coordinator. '
-            f'Give the subagent a clear, detailed prompt with all context it needs from PROJECT.md. '
-            f'After the subagent finishes, update TASKS.md if applicable and report the result.'
-            + SUBAGENT_REPORT_INSTRUCTION
+            f'Monitor with get_agents() and report results when done.'
         )
         await broker.inject_message(controller.session_id, task_prompt)
         return {"status": "delegated", "session_ids": [controller.session_id]}
@@ -437,11 +442,9 @@ async def start_task(name: str, task_index: int, body: DispatchRequest | None = 
 
     task_prompt = (
         f'Start this task from TASKS.md: "{task["text"]}"\n\n'
-        f'IMMEDIATELY use the Agent tool (subagent_type="general-purpose") to delegate this to a subagent. '
-        f'Do NOT implement anything yourself — you are the coordinator. '
-        f'Give the subagent a clear, detailed prompt including context from PROJECT.md and TASKS.md. '
-        f'After the subagent finishes, update the checkbox in TASKS.md (change [~] to [x]) and report the result.'
-        + SUBAGENT_REPORT_INSTRUCTION
+        f'Use dispatch_agent(project="{name}", task_index={task_index}) to spawn a worker agent. '
+        f'Monitor with get_agents(). When complete, use report_complete(project="{name}", task_index={task_index}, summary="..."). '
+        f'Do NOT implement anything yourself — you coordinate via MCP tools only.'
     )
 
     await ws_manager.broadcast(WSMessageType.TASKS_UPDATED, {
@@ -466,6 +469,49 @@ async def start_task(name: str, task_index: int, body: DispatchRequest | None = 
     )
 
     return {"status": "started", "session_id": session.session_id, "task": task["text"]}
+
+
+@app.post("/api/projects/{name}/tasks/{task_index}/complete")
+async def complete_task(name: str, task_index: int, body: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Mark a task as completed. Called by orchestrator MCP report_complete tool."""
+    loop = asyncio.get_event_loop()
+    project = await loop.run_in_executor(None, projects_svc.get_project, name, [])
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    tasks = tasks_svc.get_tasks(name)
+    if task_index >= len(tasks):
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # Mark done
+    await loop.run_in_executor(
+        None, tasks_svc.update_task_status, name, task_index, "done"
+    )
+
+    updated_tasks = tasks_svc.get_tasks(name)
+    await ws_manager.broadcast(WSMessageType.TASKS_UPDATED, {
+        "project_name": name,
+        "tasks": updated_tasks,
+    })
+
+    # Record milestone if summary provided
+    summary = (body or {}).get("summary", "")
+    if summary:
+        milestones_svc.add_milestone(
+            project_name=name,
+            session_id="orchestrator",
+            task=tasks[task_index].get("text", ""),
+            summary=summary,
+            agent_type="orchestrator",
+            model="",
+        )
+        all_milestones = milestones_svc.get_milestones(name)
+        await ws_manager.broadcast(WSMessageType.MILESTONES_UPDATED, {
+            "project_name": name,
+            "milestones": all_milestones,
+        })
+
+    return {"status": "completed", "task": tasks[task_index].get("text", "")}
 
 
 # ─── Orchestrator API ────────────────────────────────────────────────────────
@@ -496,14 +542,24 @@ async def ensure_orchestrator(name: str):
             # Controller is already working
             return {"status": "active", "session_id": controller.session_id}
     else:
-        # No controller — spawn one
+        # No controller — spawn one with orchestrator MCP tools
         session = await broker.create_session(
             project_name=name,
             project_path=project.path,
             initial_task=(
-                "You are the project orchestrator. Read PROJECT.md and TASKS.md. "
-                "Give a brief status summary: what's done, what's in progress, what's next. "
-                "Then wait for instructions."
+                "You are the project orchestrator for this project.\n\n"
+                "You have MCP tools for managing agents:\n"
+                f"- list_tasks(project=\"{name}\") — get all tasks from TASKS.md\n"
+                f"- dispatch_agent(project=\"{name}\", task_index=N) — spawn a worker agent for a task\n"
+                f"- get_agents(project=\"{name}\") — check status of all agents\n"
+                f"- report_complete(project=\"{name}\", task_index=N, summary=\"...\") — mark a task done\n"
+                f"- dispatch_custom(project=\"{name}\", task=\"...\") — spawn an ad-hoc agent\n\n"
+                "Your workflow:\n"
+                "1. Read PROJECT.md for context, then use list_tasks() to see current state\n"
+                "2. Give a brief status summary\n"
+                "3. Wait for instructions — when told to work, use dispatch_agent() to assign tasks to workers\n"
+                "4. Monitor with get_agents(), then report_complete() when tasks finish\n\n"
+                "Do NOT implement anything yourself. You coordinate by dispatching agents via MCP tools."
             ),
             model=project.config.model if project.config else None,
             is_controller=True,
@@ -1027,9 +1083,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         await ws_manager.send(
             websocket, WSMessageType.STATS_UPDATE, _compute_stats(broker).model_dump()
         )
-        # Send current agent states
-        for s in broker.get_all_sessions():
-            await ws_manager.send(websocket, WSMessageType.AGENT_SPAWNED, s.to_dict())
+        # Send current agent states as a sync batch (not agent_spawned)
+        # so the frontend can distinguish "here's existing state" from "new agent just appeared"
+        agents = [s.to_dict() for s in broker.get_all_sessions()]
+        await ws_manager.send(websocket, WSMessageType.AGENT_STATE_SYNC, {"agents": agents})
 
         while True:
             data = await websocket.receive_text()

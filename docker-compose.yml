@@ -50,3 +50,16 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+
+  mcp-orchestrator:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: python3 -m backend.mcp.orchestrator_server
+    ports:
+      - "4042:4042"
+    environment:
+      MANAGER_API_URL: "http://backend:4040"
+    depends_on:
+      - backend
+    restart: unless-stopped

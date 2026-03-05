@@ -132,19 +132,20 @@ export class FeedController {
   }
 
   async _loadInitialData(project) {
-    // Fetch tasks
+    // Fetch tasks (read-only — no side effects)
     try {
       const tasks = await api.getTasks(project.name);
       this._orchestratorBanner?.setProject(project, tasks);
       this._tasksPanel?.updateTasks(tasks);
     } catch (_) {}
 
-    // Ensure orchestrator is alive
-    try {
-      const result = await api.ensureOrchestrator(project.name);
-      this._orchestratorBanner?.setControllerSession(result.session_id);
-    } catch (_) {
-      // Non-fatal — banner shows without live orchestrator
+    // If a controller session already exists in our state, wire it up
+    // (no auto-spawning — orchestrator is only created via explicit dispatch)
+    for (const [sid, section] of this._sections) {
+      if (section._isController && section.sessionId) {
+        this._orchestratorBanner?.setControllerSession(sid);
+        break;
+      }
     }
   }
 
@@ -473,6 +474,44 @@ export class FeedController {
         break;
       }
     }
+  }
+
+  /** Handle full agent state sync from server (on connect/reconnect). */
+  handleStateSync(agents) {
+    if (!this._project) return;
+
+    // Collect session IDs from the sync that belong to the current project
+    const projectAgents = agents.filter(a => a.project_name === this._project.name);
+    const syncIds = new Set(projectAgents.map(a => a.session_id));
+
+    // Remove sections that no longer exist on the server
+    for (const [sid] of this._sections) {
+      if (!syncIds.has(sid)) {
+        const col = this._treeChildren?.querySelector(`[data-session="${sid}"]`);
+        if (col) col.remove();
+        this._sections.delete(sid);
+      }
+    }
+
+    // Add/update sections for each agent in the sync
+    for (const a of projectAgents) {
+      const existing = this._sections.get(a.session_id);
+      if (existing) {
+        // Update phase + turn count for existing sections
+        existing.setPhase(a.phase || 'idle');
+        if (a.turn_count) existing.setTurnCount(a.turn_count);
+      } else {
+        // Create new section
+        this.appendAgentSection(a.session_id, a.task, {
+          phase: a.phase,
+          turnCount: a.turn_count,
+          isController: a.is_controller,
+          taskIndex: a.task_index ?? null,
+        });
+      }
+    }
+
+    this._updateTreeChildCount();
   }
 
   // ── WS event routing ───────────────────────────────────────────────────────

@@ -13,9 +13,16 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, TYPE_CHECKING
 
+from pathlib import Path
+
 from ..models import SessionPhase, WSMessageType
 from ..services import milestones as milestones_svc
 from .agent_session import AgentSession
+
+# Default MCP config for controller agents (canvas + orchestrator tools)
+_CONTROLLER_MCP_CONFIG = str(
+    Path(__file__).resolve().parent.parent / "mcp" / "controller_mcp_config.json"
+)
 
 if TYPE_CHECKING:
     from ..ws_manager import WSManager
@@ -53,8 +60,14 @@ class AgentBroker:
         model: str | None = None,
         is_controller: bool = False,
         task_index: int | None = None,
+        mcp_config_path: str | None = None,
     ) -> AgentSession:
         session_id = str(uuid.uuid4())
+
+        # Controller agents get the combined MCP config (canvas + orchestrator) by default
+        effective_mcp = mcp_config_path
+        if effective_mcp is None and is_controller:
+            effective_mcp = _CONTROLLER_MCP_CONFIG
 
         session = AgentSession(
             session_id=session_id,
@@ -63,6 +76,7 @@ class AgentBroker:
             model=model or self._default_model,
             is_controller=is_controller,
             task_index=task_index,
+            mcp_config_path=effective_mcp,
         )
 
         # Wire callbacks

@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "canvas": {
+      "url": "http://localhost:4041/sse"
+    },
+    "orchestrator": {
+      "url": "http://localhost:4042/sse"
+    }
+  }
+}

@@ -367,6 +367,7 @@ class WSMessageType(str, Enum):
     WORKFLOW_UPDATED    = "workflow_updated"
     ERROR               = "error"
     # Canvas events
+    AGENT_STATE_SYNC      = "agent_state_sync"
     CANVAS_WIDGET_CREATED = "canvas_widget_created"
     CANVAS_WIDGET_UPDATED = "canvas_widget_updated"
     CANVAS_WIDGET_REMOVED = "canvas_widget_removed"

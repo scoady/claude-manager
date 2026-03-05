@@ -122,7 +122,32 @@ function onWSMessage(msg) {
       break;
     }
 
+    case 'agent_state_sync': {
+      // Full state replacement on (re)connect — clear and rebuild
+      const agents = msg.data.agents || [];
+      state.agents = agents.map(a => ({
+        session_id: a.session_id,
+        project_name: a.project_name,
+        task: a.task,
+        status: a.status || 'idle',
+        phase: a.phase || 'idle',
+        turn_count: a.turn_count || 0,
+        started_at: a.started_at || msg.timestamp,
+        model: a.model,
+        is_controller: a.is_controller || false,
+        task_index: a.task_index ?? null,
+        latest_milestone: '',
+      }));
+      // Re-render tiles for all affected projects
+      const projects = new Set(agents.map(a => a.project_name));
+      for (const p of projects) updateTileForProject(p, state.agents);
+      // Sync feed sections
+      feed.handleStateSync(agents);
+      break;
+    }
+
     case 'agent_spawned': {
+      // New agent just appeared — append only
       const d = msg.data;
       if (!state.agents.find(a => a.session_id === d.session_id)) {
         state.agents.push({

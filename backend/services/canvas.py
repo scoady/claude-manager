@@ -109,6 +109,9 @@ class CanvasService:
         else:
             # Create new widget — use the caller-supplied widget_id as the id.
             create_fields = data.model_dump(exclude_none=True)
+            # Remove 'id' and 'project' from spread to avoid duplicate keyword args
+            create_fields.pop("id", None)
+            create_fields.pop("project", None)
             widget = WidgetState(
                 id=widget_id,
                 project=project,

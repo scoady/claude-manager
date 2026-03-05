@@ -26,7 +26,7 @@ COPY backend/ ./backend/
 COPY backend/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-EXPOSE 4040
+EXPOSE 4040 4041 4042
 
 ENV CLAUDE_DATA_DIR=/root/.claude
 # npm install -g puts `claude` on PATH at /usr/local/bin/claude

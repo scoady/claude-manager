@@ -69,6 +69,7 @@ class AgentSession:
     task: str = ""
     is_controller: bool = False
     task_index: int | None = None  # TASKS.md index if started via /tasks/{index}/start
+    mcp_config_path: str | None = None  # Path to MCP config JSON for --mcp-config
 
     # Runtime state
     phase: SessionPhase = SessionPhase.STARTING
@@ -236,6 +237,9 @@ class AgentSession:
             cmd += ["--resume", self._cli_session_id]
         else:
             cmd += ["--model", self.model]
+            # Add MCP config for initial spawn (resume inherits from session)
+            if self.mcp_config_path and Path(self.mcp_config_path).is_file():
+                cmd += ["--mcp-config", self.mcp_config_path]
 
         cmd.append(message)
 
