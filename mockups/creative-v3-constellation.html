@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Task Progress - Constellation Map</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-base: #080c14; --bg-surface: #0e1525; --bg-elevated: #141d30; --bg-hover: #1a2640;
+    --bg-border: #243352; --bg-border-dim: #1a2640;
+    --accent-green: #4ade80; --accent-amber: #fbbf24; --accent-red: #f87171;
+    --accent-purple: #a78bfa; --accent-cyan: #67e8f9; --accent-magenta: #c084fc;
+    --accent-teal: #5eead4; --accent-pink: #f9a8d4;
+    --text-primary: #e2e8f0; --text-secondary: #94a3b8; --text-muted: #475569;
+    --font-mono: 'IBM Plex Mono', monospace; --font-ui: 'DM Sans', sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    padding: 32px;
+    min-height: 100vh;
+  }
+
+  .panel {
+    background: var(--bg-surface);
+    border: 1px solid var(--bg-border-dim);
+    border-radius: 12px;
+    overflow: hidden;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+
+  /* --- Header --- */
+  .panel-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--bg-border-dim);
+  }
+  .panel-title-row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .panel-title {
+    font-family: var(--font-mono); font-size: 13px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-secondary);
+  }
+  .panel-stats { display: flex; gap: 16px; font-family: var(--font-mono); font-size: 12px; }
+  .stat { display: flex; align-items: center; gap: 5px; }
+  .stat-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .stat-dot.done { background: var(--accent-green); }
+  .stat-dot.active { background: var(--accent-amber); }
+  .stat-dot.queued { background: var(--text-muted); }
+
+  /* --- Constellation Map --- */
+  .constellation {
+    position: relative; height: 160px;
+    background: radial-gradient(ellipse at 30% 50%, rgba(74,222,128,0.03) 0%, transparent 60%),
+                radial-gradient(ellipse at 70% 40%, rgba(251,191,36,0.03) 0%, transparent 50%),
+                var(--bg-elevated);
+    border-radius: 8px; overflow: hidden;
+  }
+  .constellation svg {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;
+  }
+  .constellation svg line {
+    stroke: var(--bg-border); stroke-width: 0.5; opacity: 0.5;
+  }
+
+  /* Star nodes */
+  .star {
+    position: absolute; border-radius: 50%; transform: translate(-50%, -50%);
+    cursor: pointer; z-index: 1;
+    /* Larger hit area for clickability */
+    padding: 6px; margin: -6px;
+    background: transparent;
+  }
+  .star::after {
+    content: ''; display: block; border-radius: 50%;
+  }
+  .star.done::after {
+    width: 5px; height: 5px;
+    background: var(--accent-green);
+    box-shadow: 0 0 4px rgba(74,222,128,0.6), 0 0 10px rgba(74,222,128,0.2);
+  }
+  .star.active::after {
+    width: 7px; height: 7px;
+    background: var(--accent-amber);
+    box-shadow: 0 0 6px rgba(251,191,36,0.7), 0 0 16px rgba(251,191,36,0.3);
+    animation: star-pulse 2s ease-in-out infinite;
+  }
+  .star.queued::after {
+    width: 3px; height: 3px;
+    background: var(--text-muted); opacity: 0.4;
+  }
+
+  /* Active star ripple rings */
+  .star.active .ripple {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    border-radius: 50%; border: 1px solid var(--accent-amber); pointer-events: none;
+  }
+  .star.active .ripple:nth-child(1) { width: 18px; height: 18px; animation: ripple 2s ease-out infinite; }
+  .star.active .ripple:nth-child(2) { width: 30px; height: 30px; animation: ripple 2s ease-out 0.5s infinite; }
+
+  /* Hover: enlarge + brighten */
+  .star:hover::after {
+    transform: scale(1.8);
+    filter: brightness(1.4);
+    transition: transform 0.15s ease, filter 0.15s ease;
+  }
+
+  /* Selected star: bright ring around it */
+  .star.selected::before {
+    content: ''; position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 1.5px solid var(--accent-cyan);
+    box-shadow: 0 0 12px rgba(103, 232, 249, 0.4);
+    animation: select-ring 0.4s ease-out;
+  }
+  @keyframes select-ring {
+    from { width: 8px; height: 8px; opacity: 0; }
+    to { width: 22px; height: 22px; opacity: 1; }
+  }
+
+  @keyframes star-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.3); }
+  }
+  @keyframes ripple {
+    0% { opacity: 0.6; transform: translate(-50%, -50%) scale(0.5); }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
+  }
+
+  /* Tooltip */
+  .star-tooltip {
+    position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+    background: var(--bg-elevated); border: 1px solid var(--bg-border);
+    border-radius: 6px; padding: 6px 10px;
+    font-family: var(--font-mono); font-size: 10px; color: var(--text-primary);
+    white-space: nowrap; pointer-events: none;
+    opacity: 0; transition: opacity 0.15s;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    z-index: 10;
+  }
+  .star-tooltip .tt-status {
+    font-weight: 600; margin-right: 4px;
+  }
+  .star-tooltip .tt-status.done { color: var(--accent-green); }
+  .star-tooltip .tt-status.active { color: var(--accent-amber); }
+  .star-tooltip .tt-status.queued { color: var(--text-muted); }
+
+  .star:hover .star-tooltip { opacity: 1; }
+
+  /* --- Task List --- */
+  .task-list { max-height: 45vh; overflow-y: auto; scroll-behavior: smooth; }
+
+  .task-group { border-bottom: 1px solid var(--bg-border-dim); }
+  .task-group:last-child { border-bottom: none; }
+
+  .group-header {
+    display: flex; align-items: center; gap: 10px; padding: 10px 24px;
+    cursor: pointer; user-select: none; transition: background 0.15s;
+    position: sticky; top: 0; z-index: 2; background: var(--bg-surface);
+  }
+  .group-header:hover { background: var(--bg-hover); }
+
+  .group-chevron {
+    width: 16px; height: 16px; color: var(--text-muted);
+    transition: transform 0.25s ease; flex-shrink: 0;
+  }
+  .task-group.collapsed .group-chevron { transform: rotate(-90deg); }
+
+  .group-badge {
+    display: inline-block; padding: 1px 8px; border-radius: 10px;
+    font-family: var(--font-mono); font-size: 10px; font-weight: 600;
+  }
+  .group-badge.done { background: rgba(74,222,128,0.12); color: var(--accent-green); }
+  .group-badge.active { background: rgba(251,191,36,0.12); color: var(--accent-amber); }
+  .group-badge.queued { background: rgba(71,85,105,0.2); color: var(--text-muted); }
+
+  .group-label {
+    font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 1.2px; color: var(--text-secondary);
+  }
+  .group-count {
+    font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin-left: auto;
+  }
+
+  .group-rows {
+    overflow: hidden; max-height: 500px;
+    transition: max-height 0.35s ease, opacity 0.25s ease; opacity: 1;
+  }
+  .task-group.collapsed .group-rows { max-height: 0; opacity: 0; }
+
+  .task-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 24px 8px 50px; font-size: 13px;
+    transition: background 0.15s; cursor: pointer; position: relative;
+  }
+  .task-row:hover { background: var(--bg-hover); }
+
+  /* Highlighted row when clicked from constellation */
+  .task-row.highlighted {
+    animation: row-highlight 1.5s ease-out;
+  }
+  @keyframes row-highlight {
+    0%   { background: rgba(103, 232, 249, 0.15); box-shadow: inset 3px 0 0 var(--accent-cyan); }
+    100% { background: transparent; box-shadow: inset 3px 0 0 transparent; }
+  }
+
+  .status-indicator {
+    width: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .row-star { border-radius: 50%; }
+  .row-star.done {
+    width: 7px; height: 7px; background: var(--accent-green);
+    box-shadow: 0 0 5px rgba(74,222,128,0.5);
+  }
+  .row-star.active {
+    width: 8px; height: 8px; background: var(--accent-amber);
+    box-shadow: 0 0 8px rgba(251,191,36,0.6);
+    animation: row-glow 1.5s ease-in-out infinite;
+  }
+  .row-star.queued {
+    width: 5px; height: 5px; background: var(--text-muted); opacity: 0.5;
+  }
+  @keyframes row-glow {
+    0%, 100% { box-shadow: 0 0 5px rgba(251,191,36,0.4); }
+    50% { box-shadow: 0 0 12px rgba(251,191,36,0.8), 0 0 20px rgba(251,191,36,0.2); }
+  }
+
+  .task-name { flex: 1; color: var(--text-primary); }
+  .task-name.muted { color: var(--text-muted); }
+
+  .task-agent {
+    font-family: var(--font-mono); font-size: 10px; color: var(--accent-purple);
+    min-width: 60px; text-align: right;
+  }
+  .task-agent.no-agent { color: var(--text-muted); opacity: 0.4; }
+
+  .task-coord {
+    font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);
+    letter-spacing: 0.3px; min-width: 48px; text-align: right;
+  }
+  .task-coord.done-coord { color: rgba(74,222,128,0.5); }
+  .task-coord.active-coord { color: rgba(251,191,36,0.6); }
+
+  /* Row click → highlight star */
+  .task-row:active { background: rgba(103, 232, 249, 0.08); }
+</style>
+</head>
+<body>
+
+<div class="panel">
+  <div class="panel-header">
+    <div class="panel-title-row">
+      <span class="panel-title">Constellation Map</span>
+      <div class="panel-stats">
+        <span class="stat"><span class="stat-dot done"></span> 12 done</span>
+        <span class="stat"><span class="stat-dot active"></span> 3 active</span>
+        <span class="stat"><span class="stat-dot queued"></span> 31 queued</span>
+      </div>
+    </div>
+    <div class="constellation" id="constellation">
+      <svg id="constellationSvg"></svg>
+    </div>
+  </div>
+
+  <div class="task-list" id="taskList">
+    <!-- Active Group -->
+    <div class="task-group" id="group-active">
+      <div class="group-header" onclick="toggleGroup('group-active')">
+        <svg class="group-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l5 5-5 5"/></svg>
+        <span class="group-badge active">ACTIVE</span>
+        <span class="group-label">In Progress</span>
+        <span class="group-count">3 tasks</span>
+      </div>
+      <div class="group-rows"></div>
+    </div>
+
+    <!-- Queued Group -->
+    <div class="task-group" id="group-queued">
+      <div class="group-header" onclick="toggleGroup('group-queued')">
+        <svg class="group-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l5 5-5 5"/></svg>
+        <span class="group-badge queued">QUEUED</span>
+        <span class="group-label">Pending</span>
+        <span class="group-count">31 tasks</span>
+      </div>
+      <div class="group-rows"></div>
+    </div>
+
+    <!-- Done Group (collapsed by default) -->
+    <div class="task-group collapsed" id="group-done">
+      <div class="group-header" onclick="toggleGroup('group-done')">
+        <svg class="group-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l5 5-5 5"/></svg>
+        <span class="group-badge done">DONE</span>
+        <span class="group-label">Completed</span>
+        <span class="group-count">12 tasks</span>
+      </div>
+      <div class="group-rows"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const TASKS = [
+    // Done (12)
+    { id: 0,  text: 'Set up project scaffolding with Express + React + PostgreSQL', status: 'done', agent: 'eng-a4f2' },
+    { id: 1,  text: 'Implement user authentication with JWT + refresh tokens', status: 'done', agent: 'eng-b7c3' },
+    { id: 2,  text: 'Design product catalog data model with search indexing', status: 'done', agent: 'eng-c1e9' },
+    { id: 3,  text: 'Configure TypeScript, ESLint, and Prettier', status: 'done', agent: 'eng-a4f2' },
+    { id: 4,  text: 'Set up database schema migrations with Prisma', status: 'done', agent: 'eng-b7c3' },
+    { id: 5,  text: 'Implement product CRUD API endpoints', status: 'done', agent: 'eng-d3a8' },
+    { id: 6,  text: 'Build responsive product listing page', status: 'done', agent: 'eng-e5f1' },
+    { id: 7,  text: 'Add image upload and CDN integration', status: 'done', agent: 'eng-c1e9' },
+    { id: 8,  text: 'Implement user profile management', status: 'done', agent: 'eng-a4f2' },
+    { id: 9,  text: 'Set up Redis caching layer', status: 'done', agent: 'eng-d3a8' },
+    { id: 10, text: 'Build product detail page with reviews', status: 'done', agent: 'eng-e5f1' },
+    { id: 11, text: 'Implement order history and tracking page', status: 'done', agent: 'eng-b7c3' },
+    // Active (3)
+    { id: 12, text: 'Write unit tests for critical backend endpoints (auth, cart, orders)', status: 'active', agent: 'eng-d3a8' },
+    { id: 13, text: 'Frontend component tests for ProductCard, CartItem, CheckoutForm', status: 'active', agent: 'eng-e5f1' },
+    { id: 14, text: 'Integration testing with Playwright for checkout flow E2E', status: 'active', agent: 'eng-f8b2' },
+    // Queued (31) — show first 8, rest implied
+    { id: 15, text: 'Implement shopping cart with session persistence', status: 'queued', agent: null },
+    { id: 16, text: 'Build checkout flow with Stripe payment integration', status: 'queued', agent: null },
+    { id: 17, text: 'Admin dashboard with inventory management', status: 'queued', agent: null },
+    { id: 18, text: 'Email notification system for orders and shipping', status: 'queued', agent: null },
+    { id: 19, text: 'Product search with fuzzy matching and filters', status: 'queued', agent: null },
+    { id: 20, text: 'Implement wishlist and saved items feature', status: 'queued', agent: null },
+    { id: 21, text: 'Build product comparison page', status: 'queued', agent: null },
+    { id: 22, text: 'Add internationalization (i18n) support', status: 'queued', agent: null },
+  ];
+
+  // Seeded random
+  let seed = 42;
+  function rand() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+
+  // Generate hex coordinates for aesthetics
+  function hexCoord(id) {
+    const a = String.fromCharCode(97 + (id % 26));
+    return `${a}${(id * 7 % 99).toString().padStart(2, '0')}.${((id * 13) % 10)}${String.fromCharCode(97 + (id * 3 % 26))}`;
+  }
+
+  const constellation = document.getElementById('constellation');
+  const svg = document.getElementById('constellationSvg');
+  const svgNS = 'http://www.w3.org/2000/svg';
+
+  // Place all stars
+  const nodes = [];
+  const starEls = [];
+
+  TASKS.forEach((task, i) => {
+    let x, y;
+    if (task.status === 'done') {
+      x = 4 + rand() * 30;
+      y = 8 + rand() * 84;
+    } else if (task.status === 'active') {
+      x = 32 + rand() * 24;
+      y = 15 + rand() * 70;
+    } else {
+      x = 52 + rand() * 44;
+      y = 6 + rand() * 88;
+    }
+    nodes.push({ x, y, task });
+
+    const star = document.createElement('div');
+    star.className = `star ${task.status}`;
+    star.style.left = x + '%';
+    star.style.top = y + '%';
+    star.dataset.taskId = task.id;
+
+    // Ripple rings for active stars
+    if (task.status === 'active') {
+      star.innerHTML = '<span class="ripple"></span><span class="ripple"></span>';
+    }
+
+    // Tooltip
+    const tip = document.createElement('div');
+    tip.className = 'star-tooltip';
+    const statusLabel = task.status === 'done' ? '✓' : task.status === 'active' ? '●' : '○';
+    tip.innerHTML = `<span class="tt-status ${task.status}">${statusLabel}</span>${task.text.length > 50 ? task.text.slice(0, 47) + '...' : task.text}`;
+    star.appendChild(tip);
+
+    // Click → scroll to task row
+    star.addEventListener('click', () => selectTask(task.id));
+
+    constellation.appendChild(star);
+    starEls.push(star);
+  });
+
+  // Draw constellation lines
+  for (let i = 0; i < nodes.length; i++) {
+    let conns = 0;
+    for (let j = i + 1; j < nodes.length && conns < 2; j++) {
+      const dx = nodes[i].x - nodes[j].x;
+      const dy = nodes[i].y - nodes[j].y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 16 && rand() > 0.35) {
+        const line = document.createElementNS(svgNS, 'line');
+        line.setAttribute('x1', nodes[i].x + '%');
+        line.setAttribute('y1', nodes[i].y + '%');
+        line.setAttribute('x2', nodes[j].x + '%');
+        line.setAttribute('y2', nodes[j].y + '%');
+        svg.appendChild(line);
+        conns++;
+      }
+    }
+  }
+
+  // Build task rows in grouped sections
+  const groups = { active: [], queued: [], done: [] };
+  TASKS.forEach(t => groups[t.status === 'active' ? 'active' : t.status === 'done' ? 'done' : 'queued'].push(t));
+
+  function buildRow(task) {
+    const isMuted = task.status === 'queued';
+    return `<div class="task-row" data-task-id="${task.id}" onclick="selectTaskFromRow(${task.id})">
+      <span class="status-indicator"><span class="row-star ${task.status}"></span></span>
+      <span class="task-name ${isMuted ? 'muted' : ''}">${task.text}</span>
+      <span class="task-agent ${task.agent ? '' : 'no-agent'}">${task.agent || '—'}</span>
+      <span class="task-coord ${task.status}-coord">${hexCoord(task.id)}</span>
+    </div>`;
+  }
+
+  document.querySelector('#group-active .group-rows').innerHTML = groups.active.map(buildRow).join('');
+  document.querySelector('#group-queued .group-rows').innerHTML = groups.queued.map(buildRow).join('');
+  document.querySelector('#group-done .group-rows').innerHTML = groups.done.map(buildRow).join('');
+
+  // --- Interaction ---
+
+  let selectedStar = null;
+
+  function selectTask(taskId) {
+    // Highlight star
+    if (selectedStar) selectedStar.classList.remove('selected');
+    const star = document.querySelector(`.star[data-task-id="${taskId}"]`);
+    if (star) { star.classList.add('selected'); selectedStar = star; }
+
+    // Find the task's group and expand it if collapsed
+    const task = TASKS.find(t => t.id === taskId);
+    if (!task) return;
+    const groupId = task.status === 'active' ? 'group-active' : task.status === 'done' ? 'group-done' : 'group-queued';
+    const group = document.getElementById(groupId);
+    if (group.classList.contains('collapsed')) {
+      group.classList.remove('collapsed');
+    }
+
+    // Scroll to and highlight the row
+    requestAnimationFrame(() => {
+      const row = document.querySelector(`.task-row[data-task-id="${taskId}"]`);
+      if (!row) return;
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      row.classList.remove('highlighted');
+      void row.offsetWidth; // force reflow
+      row.classList.add('highlighted');
+    });
+  }
+
+  function selectTaskFromRow(taskId) {
+    // Highlight star when clicking a row
+    if (selectedStar) selectedStar.classList.remove('selected');
+    const star = document.querySelector(`.star[data-task-id="${taskId}"]`);
+    if (star) { star.classList.add('selected'); selectedStar = star; }
+  }
+
+  function toggleGroup(id) {
+    document.getElementById(id).classList.toggle('collapsed');
+  }
+</script>
+</body>
+</html>

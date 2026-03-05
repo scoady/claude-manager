@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>V4 — Command Deck</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-void: #04060b;
+    --bg-base: #080c14;
+    --bg-surface: #0e1525;
+    --bg-elevated: #141d30;
+    --bg-hover: #1a2640;
+    --bg-border: #243352;
+    --bg-border-dim: #1a2640;
+    --accent-green: #4ade80;
+    --accent-amber: #fbbf24;
+    --accent-red: #f87171;
+    --accent-purple: #a78bfa;
+    --accent-cyan: #67e8f9;
+    --accent-magenta: #c084fc;
+    --accent-teal: #5eead4;
+    --accent-pink: #f9a8d4;
+    --text-primary: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --text-muted: #475569;
+    --font-mono: 'IBM Plex Mono', monospace;
+    --font-ui: 'DM Sans', sans-serif;
+    --font-title: 'Plus Jakarta Sans', sans-serif;
+    --font-display: 'Instrument Serif', Georgia, serif;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: var(--bg-void); color: var(--text-primary); font-family: var(--font-ui); font-size: 13px; -webkit-font-smoothing: antialiased; }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--bg-border); border-radius: 2px; }
+
+  /* 3 horizontal bands */
+  #app {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    grid-template-rows: auto 1fr auto;
+    height: 100vh;
+  }
+
+  /* === TOP BAND: Header + progress === */
+  .top-band {
+    grid-column: 1 / -1;
+    background: linear-gradient(180deg, rgba(14,21,37,0.95) 0%, rgba(8,12,20,0.9) 100%);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--bg-border-dim);
+    display: flex; align-items: center;
+    padding: 0 16px;
+    height: 80px;
+    z-index: 50;
+  }
+
+  /* Logo + name */
+  .tb-brand { display: flex; align-items: center; gap: 8px; margin-right: 24px; }
+  .tb-logo { width: 28px; height: 28px; background: linear-gradient(135deg, var(--accent-cyan), var(--accent-magenta)); border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: white; }
+  .tb-name { font-family: var(--font-title); font-size: 14px; font-weight: 700; }
+  .tb-tag { font-family: var(--font-mono); font-size: 7px; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 0.15em; opacity: 0.5; }
+
+  /* Big orbital ring */
+  .tb-ring { width: 54px; height: 54px; position: relative; margin-right: 14px; flex-shrink: 0; }
+  .tb-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .tbr-bg { fill: none; stroke: rgba(36,51,82,0.4); stroke-width: 4; }
+  .tbr-done { fill: none; stroke: var(--accent-green); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 138.2; stroke-dashoffset: 102.3; filter: drop-shadow(0 0 4px rgba(74,222,128,0.3)); }
+  .tbr-active { fill: none; stroke: var(--accent-amber); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 138.2; stroke-dashoffset: 94.4; animation: rbr 3s ease-in-out infinite; }
+  @keyframes rbr { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .tbr-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .tbr-pct { font-family: var(--font-mono); font-size: 15px; font-weight: 700; }
+  .tbr-lbl { font-family: var(--font-mono); font-size: 6px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-muted); }
+
+  /* Stats + segment bar + active work */
+  .tb-info { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+  .tb-stats { display: flex; gap: 12px; font-family: var(--font-mono); font-size: 10px; }
+  .tbs { display: flex; align-items: center; gap: 3px; }
+  .tbs-dot { width: 4px; height: 4px; border-radius: 50%; }
+  .tbs-dot.d { background: var(--accent-green); box-shadow: 0 0 3px var(--accent-green); }
+  .tbs-dot.a { background: var(--accent-amber); box-shadow: 0 0 3px var(--accent-amber); }
+  .tbs-dot.q { background: var(--text-muted); }
+  .tbs-v { color: var(--text-primary); font-weight: 600; }
+  .tbs-l { color: var(--text-muted); }
+  .seg-bar { display: flex; height: 5px; border-radius: 3px; overflow: hidden; background: rgba(36,51,82,0.3); gap: 2px; }
+  .seg { border-radius: 3px; }
+  .seg.d { flex: 12; background: linear-gradient(90deg, var(--accent-green), var(--accent-teal)); box-shadow: 0 0 6px rgba(74,222,128,0.15); }
+  .seg.a { flex: 3; background: var(--accent-amber); }
+  .seg.q { flex: 10; background: rgba(36,51,82,0.4); }
+  .tb-work { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tw-pill { display: flex; align-items: center; gap: 4px; font-family: var(--font-mono); font-size: 9px; color: var(--text-secondary); background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: 3px; padding: 2px 6px; }
+  .tw-dot { width: 3px; height: 3px; border-radius: 50%; animation: p 2s ease-in-out infinite; }
+  @keyframes p { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* Right side of top band: nav */
+  .tb-right { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+  .tb-btn { padding: 5px 10px; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--text-muted); font-family: var(--font-ui); font-size: 11px; cursor: pointer; }
+  .tb-btn.on { color: var(--text-primary); background: var(--bg-elevated); border-color: var(--bg-border); }
+  .tb-cdot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent-green); box-shadow: 0 0 6px var(--accent-green); margin-left: 8px; }
+
+  /* === SIDEBAR === */
+  .sidebar {
+    background: rgba(14,21,37,0.5);
+    border-right: 1px solid rgba(36,51,82,0.25);
+    overflow-y: auto; padding: 8px 0;
+  }
+  .sl { font-family: var(--font-mono); font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); padding: 8px 12px 4px; }
+  .si { display: flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 11px; color: var(--text-secondary); cursor: pointer; }
+  .si:hover { background: rgba(26,38,64,0.3); }
+  .si.on { background: rgba(20,29,48,0.6); color: var(--text-primary); border-right: 2px solid var(--accent-cyan); }
+  .sd { width: 4px; height: 4px; border-radius: 50%; }
+  .sd.w { background: var(--accent-amber); box-shadow: 0 0 4px var(--accent-amber); animation: p 2s ease-in-out infinite; }
+  .sd.i { background: var(--accent-green); }
+  .sd.o { background: var(--text-muted); opacity: 0.3; }
+
+  /* Tabs in sidebar */
+  .stabs { margin-top: 16px; padding: 8px 0; border-top: 1px solid rgba(36,51,82,0.2); }
+  .stab { display: block; width: 100%; padding: 5px 12px; border: none; background: transparent; color: var(--text-muted); font-family: var(--font-ui); font-size: 11px; text-align: left; cursor: pointer; }
+  .stab:hover { color: var(--text-secondary); }
+  .stab.on { color: var(--accent-cyan); }
+
+  /* === MIDDLE BAND: Constellation === */
+  .mid-band {
+    position: relative; overflow: hidden;
+    background:
+      radial-gradient(ellipse at 20% 35%, rgba(74,222,128,0.025) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 45%, rgba(251,191,36,0.02) 0%, transparent 40%),
+      radial-gradient(ellipse at 80% 55%, rgba(103,232,249,0.015) 0%, transparent 45%),
+      var(--bg-void);
+  }
+
+  /* Nebula fog for pending cluster */
+  .nebula-fog {
+    position: absolute; right: 0; top: 0; bottom: 0; width: 45%;
+    background: radial-gradient(ellipse at 60% 50%, rgba(71,85,105,0.04) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  /* Region labels */
+  .rl { position: absolute; z-index: 5; font-family: var(--font-mono); font-size: 7px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.2em; opacity: 0.1; pointer-events: none; }
+
+  .constellation { position: absolute; inset: 0; }
+  .constellation svg.lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .constellation svg.lines line { stroke-width: 0.5; opacity: 0.3; }
+  .constellation svg.lines line.dl { stroke: rgba(74,222,128,0.3); }
+  .constellation svg.lines line.al { stroke: rgba(251,191,36,0.35); }
+  .constellation svg.lines line.ql { stroke: rgba(71,85,105,0.15); }
+
+  .star { position: absolute; border-radius: 50%; transform: translate(-50%, -50%); cursor: pointer; z-index: 2; padding: 8px; margin: -8px; background: transparent; }
+  .star::after { content: ''; display: block; border-radius: 50%; transition: transform 0.2s, filter 0.2s; }
+  .star.done::after { width: 5px; height: 5px; background: var(--accent-green); box-shadow: 0 0 4px rgba(74,222,128,0.5), 0 0 10px rgba(74,222,128,0.12); }
+  .star.active::after { width: 8px; height: 8px; background: var(--accent-amber); box-shadow: 0 0 7px rgba(251,191,36,0.6), 0 0 18px rgba(251,191,36,0.2); animation: sg 2s ease-in-out infinite; }
+  .star.queued::after { width: 3px; height: 3px; background: var(--text-muted); opacity: 0.3; }
+  @keyframes sg { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .star:hover::after { transform: scale(2.2); filter: brightness(1.5); }
+  .star:hover { z-index: 20; }
+
+  .star .rp { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); border-radius: 50%; pointer-events: none; }
+  .star.active .rp:nth-child(1) { width: 20px; height: 20px; border: 1px solid rgba(251,191,36,0.4); animation: rp 2.5s ease-out infinite; }
+  .star.active .rp:nth-child(2) { width: 34px; height: 34px; border: 1px solid rgba(251,191,36,0.2); animation: rp 2.5s ease-out 0.7s infinite; }
+  @keyframes rp { 0% { opacity: 0.5; transform: translate(-50%,-50%) scale(0.3); } 100% { opacity: 0; transform: translate(-50%,-50%) scale(1.4); } }
+
+  .star.selected::before {
+    content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--accent-cyan);
+    box-shadow: 0 0 14px rgba(103,232,249,0.4); animation: sel 0.3s ease-out;
+  }
+  @keyframes sel { from { width: 6px; height: 6px; opacity: 0; } to { width: 24px; height: 24px; opacity: 1; } }
+
+  .star-tip {
+    position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+    background: rgba(14,21,37,0.95); border: 1px solid var(--bg-border);
+    border-radius: var(--radius-sm); padding: 7px 10px;
+    font-family: var(--font-mono); font-size: 10px; color: var(--text-primary);
+    pointer-events: none; opacity: 0; transition: opacity 0.12s;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+    max-width: 260px; line-height: 1.4; white-space: normal; z-index: 30;
+  }
+  .star-tip .s { font-weight: 600; margin-right: 3px; }
+  .star-tip .s.done { color: var(--accent-green); }
+  .star-tip .s.active { color: var(--accent-amber); }
+  .star-tip .s.queued { color: var(--text-muted); }
+  .star-tip .ag { display: block; margin-top: 2px; color: var(--accent-purple); font-size: 9px; }
+  .star:hover .star-tip { opacity: 1; }
+
+  /* Shooting stars (completed task effect) */
+  .shooting-star {
+    position: absolute; pointer-events: none; z-index: 0;
+    width: 40px; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(74,222,128,0.4), transparent);
+    transform-origin: left center;
+    animation: shoot 4s linear infinite;
+    opacity: 0;
+  }
+  @keyframes shoot {
+    0% { opacity: 0; transform: translateX(0) rotate(-15deg); }
+    5% { opacity: 0.6; }
+    15% { opacity: 0; transform: translateX(120px) rotate(-15deg); }
+    100% { opacity: 0; }
+  }
+
+  /* === BOTTOM BAND: Agent dock === */
+  .bot-band {
+    grid-column: 1 / -1;
+    display: flex; gap: 10px;
+    padding: 10px 16px;
+    background: rgba(14,21,37,0.9);
+    backdrop-filter: blur(16px);
+    border-top: 1px solid rgba(36,51,82,0.4);
+    overflow-x: auto;
+    z-index: 50;
+  }
+
+  .agent-card {
+    flex: 1; min-width: 240px; max-width: 360px;
+    border: 1px solid var(--bg-border-dim); border-radius: var(--radius-sm);
+    background: rgba(20,29,48,0.6); display: flex; flex-direction: column; overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .agent-card:hover { border-color: var(--bg-border); }
+  .ac-head { display: flex; align-items: center; gap: 7px; padding: 8px 12px 8px 0; }
+  .ac-lane { width: 3px; align-self: stretch; border-radius: 0 2px 2px 0; }
+  .ac-lane.glow { animation: lg 2s ease-in-out infinite; }
+  @keyframes lg { 0%,100% { opacity: 1; box-shadow: 0 0 10px var(--lc); } 50% { opacity: 0.3; box-shadow: none; } }
+  .ac-task { flex: 1; font-size: 11px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ac-badge { font-family: var(--font-mono); font-size: 8px; padding: 2px 6px; border-radius: 10px; font-weight: 600; color: var(--accent-amber); background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.15); }
+  .ac-body { padding: 0 12px 8px 15px; }
+  .ac-tool { display: flex; align-items: center; gap: 4px; padding: 3px 6px; margin: 2px 0; border: 1px solid rgba(36,51,82,0.3); border-radius: 3px; background: rgba(4,6,11,0.5); font-family: var(--font-mono); font-size: 10px; }
+  .ac-tn { color: var(--accent-purple); font-weight: 600; }
+  .ac-tp { flex: 1; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ac-stream { font-family: var(--font-mono); font-size: 10px; line-height: 1.5; color: var(--text-secondary); padding: 4px 0; }
+  .cur { display: inline-block; width: 5px; height: 11px; background: var(--accent-magenta); border-radius: 1px; animation: blink 1s step-end infinite; vertical-align: text-bottom; }
+  @keyframes blink { 0%,100% { opacity: 0.8; } 50% { opacity: 0; } }
+
+  /* Lane glow at bottom edge of each card */
+  .agent-card::after {
+    content: ''; display: block; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--lane-glow), transparent);
+    opacity: 0.3;
+  }
+
+  /* Entrance */
+  .top-band { animation: bandIn 0.4s ease-out; }
+  .bot-band { animation: bandUp 0.4s ease-out 0.2s both; }
+  .agent-card:nth-child(1) { animation: slideUp 0.4s ease-out 0.3s both; }
+  .agent-card:nth-child(2) { animation: slideUp 0.4s ease-out 0.4s both; }
+  .agent-card:nth-child(3) { animation: slideUp 0.4s ease-out 0.5s both; }
+  @keyframes bandIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes bandUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .star { animation: starIn 0.3s ease-out both; }
+  @keyframes starIn { from { opacity: 0; transform: translate(-50%,-50%) scale(0); } to { opacity: 1; transform: translate(-50%,-50%) scale(1); } }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- TOP BAND -->
+  <div class="top-band">
+    <div class="tb-brand">
+      <div class="tb-logo">C</div>
+      <div style="display:flex;flex-direction:column;gap:1px">
+        <span class="tb-name">Claude Agent Manager</span>
+        <span class="tb-tag">orchestration</span>
+      </div>
+    </div>
+    <div class="tb-ring">
+      <svg viewBox="0 0 48 48">
+        <circle class="tbr-bg" cx="24" cy="24" r="22"/>
+        <circle class="tbr-done" cx="24" cy="24" r="22"/>
+        <circle class="tbr-active" cx="24" cy="24" r="22"/>
+      </svg>
+      <div class="tbr-center">
+        <span class="tbr-pct">26%</span>
+        <span class="tbr-lbl">complete</span>
+      </div>
+    </div>
+    <div class="tb-info">
+      <div class="tb-stats">
+        <span class="tbs"><span class="tbs-dot d"></span><span class="tbs-v">12</span><span class="tbs-l"> done</span></span>
+        <span class="tbs"><span class="tbs-dot a"></span><span class="tbs-v">3</span><span class="tbs-l"> active</span></span>
+        <span class="tbs"><span class="tbs-dot q"></span><span class="tbs-v">10</span><span class="tbs-l"> queued</span></span>
+      </div>
+      <div class="seg-bar"><div class="seg d"></div><div class="seg a"></div><div class="seg q"></div></div>
+      <div class="tb-work">
+        <span class="tw-pill"><span class="tw-dot" style="background:#67e8f9"></span>Unit tests (auth, cart)</span>
+        <span class="tw-pill"><span class="tw-dot" style="background:#c084fc"></span>Component tests (RTL)</span>
+        <span class="tw-pill"><span class="tw-dot" style="background:#4ade80"></span>E2E Playwright</span>
+      </div>
+    </div>
+    <div class="tb-right">
+      <button class="tb-btn on">Projects</button>
+      <button class="tb-btn">Settings</button>
+      <span class="tb-cdot"></span>
+    </div>
+  </div>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sl">Projects</div>
+    <div class="si on"><span class="sd w"></span>work simulator</div>
+    <div class="si"><span class="sd i"></span>api-gateway</div>
+    <div class="si"><span class="sd w"></span>ml-pipeline</div>
+    <div class="si"><span class="sd o"></span>docs-site</div>
+    <div class="stabs">
+      <button class="stab on">Overview</button>
+      <button class="stab">Tasks</button>
+      <button class="stab">Milestones</button>
+      <button class="stab">Workflow</button>
+      <button class="stab">Artifacts</button>
+    </div>
+  </aside>
+
+  <!-- MIDDLE: Constellation -->
+  <div class="mid-band" id="midBand">
+    <div class="nebula-fog"></div>
+    <div class="rl" style="left:8%;top:6%;color:var(--accent-green)">Completed</div>
+    <div class="rl" style="left:40%;top:6%;color:var(--accent-amber)">Active</div>
+    <div class="rl" style="left:72%;top:6%;color:var(--text-muted)">Queued</div>
+    <div class="constellation" id="constellation">
+      <svg class="lines" id="svg"></svg>
+    </div>
+  </div>
+
+  <!-- BOTTOM: Agent dock -->
+  <div class="bot-band">
+    <div class="agent-card" style="--lane-glow:#67e8f9">
+      <div class="ac-head">
+        <div class="ac-lane glow" style="background:#67e8f9;--lc:#67e8f9"></div>
+        <div class="ac-task">Write unit tests for backend endpoints (auth, cart, orders)</div>
+        <span class="ac-badge">using tool</span>
+      </div>
+      <div class="ac-body">
+        <div class="ac-tool"><span class="ac-tn">Bash</span><span class="ac-tp">npx jest --coverage auth.test.ts</span></div>
+        <div class="ac-stream">Running auth endpoint tests... 14/18 passing<span class="cur"></span></div>
+      </div>
+    </div>
+    <div class="agent-card" style="--lane-glow:#c084fc">
+      <div class="ac-head">
+        <div class="ac-lane glow" style="background:#c084fc;--lc:#c084fc"></div>
+        <div class="ac-task">Frontend component tests for ProductCard, CartItem, CheckoutForm</div>
+        <span class="ac-badge">thinking</span>
+      </div>
+      <div class="ac-body">
+        <div class="ac-tool"><span class="ac-tn">Read</span><span class="ac-tp">src/components/CartItem.tsx</span></div>
+        <div class="ac-stream">Analyzing CartItem props and state...<span class="cur"></span></div>
+      </div>
+    </div>
+    <div class="agent-card" style="--lane-glow:#4ade80">
+      <div class="ac-head">
+        <div class="ac-lane glow" style="background:#4ade80;--lc:#4ade80"></div>
+        <div class="ac-task">Integration testing with Playwright for checkout flow E2E</div>
+        <span class="ac-badge">using tool</span>
+      </div>
+      <div class="ac-body">
+        <div class="ac-tool"><span class="ac-tn">Bash</span><span class="ac-tp">npx playwright test checkout.spec.ts</span></div>
+        <div class="ac-stream">Browser launched, navigating to /checkout...<span class="cur"></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const TASKS = [
+  { id:0,  text:'Set up project scaffolding with Express + React + PostgreSQL', status:'done', agent:'eng-a4f2' },
+  { id:1,  text:'Implement user authentication with JWT + refresh tokens', status:'done', agent:'eng-b7c3' },
+  { id:2,  text:'Design product catalog data model with search indexing', status:'done', agent:'eng-c1e9' },
+  { id:3,  text:'Configure TypeScript, ESLint, and Prettier', status:'done', agent:'eng-a4f2' },
+  { id:4,  text:'Set up database schema migrations with Prisma', status:'done', agent:'eng-b7c3' },
+  { id:5,  text:'Implement product CRUD API endpoints', status:'done', agent:'eng-d3a8' },
+  { id:6,  text:'Build responsive product listing page', status:'done', agent:'eng-e5f1' },
+  { id:7,  text:'Add image upload and CDN integration', status:'done', agent:'eng-c1e9' },
+  { id:8,  text:'Implement user profile management', status:'done', agent:'eng-a4f2' },
+  { id:9,  text:'Set up Redis caching layer', status:'done', agent:'eng-d3a8' },
+  { id:10, text:'Build product detail page with reviews', status:'done', agent:'eng-e5f1' },
+  { id:11, text:'Order history and tracking page', status:'done', agent:'eng-b7c3' },
+  { id:12, text:'Write unit tests for backend endpoints (auth, cart, orders)', status:'active', agent:'eng-d3a8' },
+  { id:13, text:'Frontend component tests — ProductCard, CartItem, CheckoutForm', status:'active', agent:'eng-e5f1' },
+  { id:14, text:'Integration testing with Playwright for checkout E2E', status:'active', agent:'eng-f8b2' },
+  { id:15, text:'Implement shopping cart with session persistence', status:'queued', agent:null },
+  { id:16, text:'Build checkout flow with Stripe payment integration', status:'queued', agent:null },
+  { id:17, text:'Admin dashboard with inventory management', status:'queued', agent:null },
+  { id:18, text:'Email notification system for orders and shipping', status:'queued', agent:null },
+  { id:19, text:'Product search with fuzzy matching and filters', status:'queued', agent:null },
+  { id:20, text:'Wishlist and saved items feature', status:'queued', agent:null },
+  { id:21, text:'Product comparison page', status:'queued', agent:null },
+  { id:22, text:'Internationalization (i18n) support', status:'queued', agent:null },
+  { id:23, text:'Performance optimization and lazy loading', status:'queued', agent:null },
+  { id:24, text:'Accessibility audit and WCAG compliance', status:'queued', agent:null },
+];
+
+let seed = 42;
+function rand() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+
+const cEl = document.getElementById('constellation');
+const svg = document.getElementById('svg');
+const svgNS = 'http://www.w3.org/2000/svg';
+const nodes = [];
+const midBand = document.getElementById('midBand');
+
+// Shooting stars
+for (let i = 0; i < 3; i++) {
+  const ss = document.createElement('div');
+  ss.className = 'shooting-star';
+  ss.style.cssText = `left:${5 + Math.random() * 25}%;top:${10 + Math.random() * 80}%;animation-delay:${i * 5 + Math.random() * 3}s;animation-duration:${3 + Math.random() * 3}s;transform:rotate(${-25 + Math.random() * 20}deg)`;
+  midBand.appendChild(ss);
+}
+
+TASKS.forEach((task, i) => {
+  let x, y;
+  if (task.status === 'done') {
+    x = 3 + rand() * 30; y = 10 + rand() * 80;
+  } else if (task.status === 'active') {
+    x = 35 + rand() * 22; y = 15 + rand() * 70;
+  } else {
+    x = 58 + rand() * 38; y = 8 + rand() * 84;
+  }
+  nodes.push({ x, y, task });
+
+  const star = document.createElement('div');
+  star.className = `star ${task.status}`;
+  star.style.left = x + '%';
+  star.style.top = y + '%';
+  star.style.animationDelay = (i * 0.04) + 's';
+  star.dataset.taskId = task.id;
+
+  if (task.status === 'active') {
+    star.innerHTML = '<span class="rp"></span><span class="rp"></span>';
+  }
+
+  const tip = document.createElement('div');
+  tip.className = 'star-tip';
+  const icon = task.status === 'done' ? '&#10003;' : task.status === 'active' ? '&#9679;' : '&#9675;';
+  tip.innerHTML = `<span class="s ${task.status}">${icon}</span> ${task.text}${task.agent ? `<span class="ag">${task.agent}</span>` : ''}`;
+  star.appendChild(tip);
+
+  star.addEventListener('click', () => {
+    document.querySelectorAll('.star.selected').forEach(s => s.classList.remove('selected'));
+    star.classList.add('selected');
+  });
+
+  cEl.appendChild(star);
+});
+
+for (let i = 0; i < nodes.length; i++) {
+  let conns = 0;
+  for (let j = i + 1; j < nodes.length && conns < 2; j++) {
+    const dx = nodes[i].x - nodes[j].x, dy = nodes[i].y - nodes[j].y;
+    if (Math.sqrt(dx*dx + dy*dy) < 14 && rand() > 0.3) {
+      const line = document.createElementNS(svgNS, 'line');
+      line.setAttribute('x1', nodes[i].x+'%'); line.setAttribute('y1', nodes[i].y+'%');
+      line.setAttribute('x2', nodes[j].x+'%'); line.setAttribute('y2', nodes[j].y+'%');
+      const s = nodes[i].task.status;
+      line.setAttribute('class', s === 'done' ? 'dl' : s === 'active' ? 'al' : 'ql');
+      svg.appendChild(line);
+      conns++;
+    }
+  }
+}
+</script>
+</body>
+</html>

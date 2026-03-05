@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Manager — Unified Full Page Mockup</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-base: #080c14; --bg-surface: #0e1525; --bg-elevated: #141d30;
+    --bg-hover: #1a2640; --bg-border: #243352; --bg-border-dim: #1a2640;
+    --accent-green: #4ade80; --accent-amber: #fbbf24; --accent-red: #f87171;
+    --accent-purple: #a78bfa; --accent-cyan: #67e8f9; --accent-magenta: #c084fc;
+    --accent-teal: #5eead4; --accent-pink: #f9a8d4;
+    --text-primary: #e2e8f0; --text-secondary: #94a3b8; --text-muted: #475569;
+    --font-mono: 'IBM Plex Mono', monospace;
+    --font-ui: 'DM Sans', sans-serif;
+    --font-title: 'Plus Jakarta Sans', sans-serif;
+    --radius-sm: 6px; --radius-md: 10px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: var(--bg-base); color: var(--text-primary); font-family: var(--font-ui); font-size: 13px; -webkit-font-smoothing: antialiased; }
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--bg-border); border-radius: 3px; }
+
+  /* ═══ App Shell ═══ */
+  #app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+  /* Header */
+  .app-header {
+    height: 52px; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--bg-base) 0%, var(--bg-elevated) 40%, var(--bg-surface) 100%);
+    border-bottom: 1px solid var(--bg-border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 20px; z-index: 10;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.5);
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .app-logo {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, var(--accent-magenta), var(--accent-cyan));
+    border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center;
+    color: white; box-shadow: 0 0 20px rgba(103,232,249,0.2);
+    font-weight: 700; font-size: 14px;
+  }
+  .app-title { display: flex; flex-direction: column; gap: 1px; }
+  .title-main { font-family: var(--font-title); font-size: 15px; font-weight: 800; letter-spacing: -0.02em; }
+  .title-sub { font-family: var(--font-mono); font-size: 9px; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 0.14em; opacity: 0.7; }
+  .header-stats { display: flex; align-items: center; gap: 16px; font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+  .header-stats .hs-val { color: var(--text-secondary); font-weight: 600; }
+  .header-right { display: flex; align-items: center; gap: 8px; }
+  .nav-tab {
+    display: flex; align-items: center; gap: 5px; padding: 6px 12px;
+    border: 1px solid transparent; border-radius: var(--radius-sm);
+    background: transparent; color: var(--text-muted); cursor: pointer;
+    font-family: var(--font-ui); font-size: 12px; font-weight: 500;
+    transition: all 0.15s;
+  }
+  .nav-tab.active { color: var(--text-primary); background: var(--bg-elevated); border-color: var(--bg-border); }
+  .conn-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-green); box-shadow: 0 0 6px var(--accent-green); margin-left: 12px; }
+
+  /* Main layout */
+  .main-layout { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+
+  /* Sidebar */
+  .sidebar {
+    width: 240px; flex-shrink: 0; border-right: 1px solid var(--bg-border-dim);
+    background: var(--bg-surface); overflow-y: auto; padding: 12px 0;
+  }
+  .sidebar-title { font-family: var(--font-mono); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); padding: 8px 16px 6px; }
+  .sidebar-item {
+    display: flex; align-items: center; gap: 8px; padding: 8px 16px;
+    cursor: pointer; transition: background 0.12s; font-size: 13px; color: var(--text-secondary);
+  }
+  .sidebar-item:hover { background: var(--bg-hover); }
+  .sidebar-item.active { background: var(--bg-elevated); color: var(--text-primary); border-right: 2px solid var(--accent-cyan); }
+  .sidebar-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .sidebar-dot.working { background: var(--accent-amber); box-shadow: 0 0 6px var(--accent-amber); animation: breathe 2s ease-in-out infinite; }
+  .sidebar-dot.idle { background: var(--accent-green); }
+  .sidebar-dot.empty { background: var(--text-muted); opacity: 0.3; }
+  @keyframes breathe { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  /* Feed container */
+  .feed-container { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Feed header */
+  .feed-header {
+    padding: 12px 20px; border-bottom: 1px solid var(--bg-border);
+    background: linear-gradient(180deg, var(--bg-elevated), var(--bg-surface));
+    position: sticky; top: 0; z-index: 5;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }
+  .feed-title-row { display: flex; align-items: baseline; gap: 12px; margin-bottom: 6px; }
+  .feed-title { font-family: 'Instrument Serif', Georgia, serif; font-size: 20px; font-weight: 400; letter-spacing: -0.03em; }
+  .feed-chip { padding: 2px 8px; background: var(--bg-elevated); border: 1px solid var(--bg-border); border-radius: 20px; font-size: 11px; color: var(--text-secondary); font-family: var(--font-mono); }
+
+  .feed-tabs { display: flex; gap: 0; margin-top: 6px; }
+  .feed-tab {
+    padding: 6px 14px; border: none; background: transparent;
+    color: var(--text-muted); font-family: var(--font-ui); font-size: 12px; font-weight: 500;
+    cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s;
+  }
+  .feed-tab:hover { color: var(--text-secondary); }
+  .feed-tab.active { color: var(--text-primary); border-bottom-color: var(--accent-cyan); }
+
+  /* ═══ Tree Container (Overview tab content) ═══ */
+  .tree-container {
+    display: grid;
+    grid-template-rows: auto auto 1fr;
+    flex: 1; min-height: 0; overflow-y: auto;
+    padding: 16px 20px 0; gap: 0;
+  }
+
+  /* ═══ Controller Node — Orbital + Constellation ═══ */
+  .orch-node {
+    border: 1px solid var(--bg-border); border-radius: var(--radius-md);
+    background: linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-surface) 100%);
+    display: flex; flex-direction: column; max-height: clamp(260px, 45vh, 55vh);
+  }
+
+  .orch-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 20px; border-bottom: 1px solid var(--bg-border-dim);
+    flex-shrink: 0;
+  }
+  .orch-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-green); animation: breathe 2s ease-in-out infinite; }
+  .orch-label { font-family: var(--font-mono); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent-amber); }
+  .orch-phase { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); margin-left: auto; }
+
+  /* Orbital header: ring + stats + active work */
+  .orch-orbital {
+    display: grid; grid-template-columns: auto 1fr; gap: 16px;
+    padding: 12px 20px; align-items: center; flex-shrink: 0;
+    border-bottom: 1px solid var(--bg-border-dim);
+  }
+
+  .big-ring { width: 64px; height: 64px; position: relative; }
+  .big-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring-track { fill: none; stroke: var(--bg-base); stroke-width: 5; }
+  .ring-done { fill: none; stroke: var(--accent-green); stroke-width: 5; stroke-linecap: round; stroke-dasharray: 176; stroke-dashoffset: 130; filter: drop-shadow(0 0 4px rgba(74,222,128,0.4)); }
+  .ring-active { fill: none; stroke: var(--accent-amber); stroke-width: 5; stroke-linecap: round; stroke-dasharray: 176; stroke-dashoffset: 118; filter: drop-shadow(0 0 4px rgba(251,191,36,0.3)); animation: ring-pulse 3s ease-in-out infinite; }
+  @keyframes ring-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+  .ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .ring-pct { font-family: var(--font-mono); font-size: 16px; font-weight: 700; text-shadow: 0 0 8px rgba(103,232,249,0.3); }
+  .ring-sub { font-family: var(--font-mono); font-size: 7px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); }
+
+  .orbital-right { display: flex; flex-direction: column; gap: 6px; }
+  .orbital-stats { display: flex; gap: 8px; font-family: var(--font-mono); font-size: 11px; }
+  .os-pill { display: flex; align-items: center; gap: 4px; }
+  .os-dot { width: 4px; height: 4px; border-radius: 50%; }
+  .os-dot.done { background: var(--accent-green); box-shadow: 0 0 3px var(--accent-green); }
+  .os-dot.active { background: var(--accent-amber); box-shadow: 0 0 3px var(--accent-amber); }
+  .os-dot.pending { background: var(--text-muted); }
+  .os-val { color: var(--text-primary); font-weight: 600; }
+  .os-lbl { color: var(--text-muted); }
+
+  .segment-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--bg-base); gap: 2px; }
+  .segment { border-radius: 3px; }
+  .segment.done { flex: 12; background: linear-gradient(90deg, var(--accent-green), var(--accent-teal)); box-shadow: 0 0 6px rgba(74,222,128,0.2); }
+  .segment.active { flex: 3; background: linear-gradient(90deg, var(--accent-amber), var(--accent-pink)); }
+  .segment.pending { flex: 31; background: var(--bg-border-dim); }
+
+  /* Active work pills */
+  .active-work { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+  .work-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--font-mono); font-size: 10px; color: var(--text-secondary);
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 4px; padding: 2px 7px;
+  }
+  .work-pill-dot { width: 4px; height: 4px; border-radius: 50%; animation: breathe 2s ease-in-out infinite; }
+
+  /* ═══ Constellation Map ═══ */
+  .constellation-wrap {
+    flex: 1; min-height: 0; overflow: hidden;
+    position: relative;
+  }
+  .constellation {
+    width: 100%; height: 100%; position: relative;
+    background:
+      radial-gradient(ellipse at 25% 40%, rgba(74,222,128,0.025) 0%, transparent 55%),
+      radial-gradient(ellipse at 60% 35%, rgba(251,191,36,0.025) 0%, transparent 45%),
+      radial-gradient(ellipse at 85% 60%, rgba(71,85,105,0.03) 0%, transparent 50%);
+  }
+  .constellation svg.lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .constellation svg.lines line { stroke: var(--bg-border); stroke-width: 0.5; opacity: 0.4; }
+
+  /* Stars */
+  .star {
+    position: absolute; border-radius: 50%; transform: translate(-50%, -50%);
+    cursor: pointer; z-index: 1; padding: 7px; margin: -7px; background: transparent;
+  }
+  .star::after { content: ''; display: block; border-radius: 50%; transition: transform 0.15s, filter 0.15s; }
+  .star.done::after { width: 4px; height: 4px; background: var(--accent-green); box-shadow: 0 0 3px rgba(74,222,128,0.5), 0 0 8px rgba(74,222,128,0.15); }
+  .star.active::after { width: 6px; height: 6px; background: var(--accent-amber); box-shadow: 0 0 5px rgba(251,191,36,0.6), 0 0 14px rgba(251,191,36,0.2); animation: star-glow 2s ease-in-out infinite; }
+  .star.queued::after { width: 2px; height: 2px; background: var(--text-muted); opacity: 0.35; }
+  .star:hover::after { transform: scale(2); filter: brightness(1.5); }
+
+  /* Active star ripple */
+  .star.active .rp {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    border-radius: 50%; border: 1px solid var(--accent-amber); pointer-events: none;
+  }
+  .star.active .rp:nth-child(1) { width: 16px; height: 16px; animation: rp 2.5s ease-out infinite; }
+  .star.active .rp:nth-child(2) { width: 26px; height: 26px; animation: rp 2.5s ease-out 0.6s infinite; }
+  @keyframes rp { 0% { opacity: 0.5; transform: translate(-50%,-50%) scale(0.4); } 100% { opacity: 0; transform: translate(-50%,-50%) scale(1.3); } }
+  @keyframes star-glow { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+  /* Selected star */
+  .star.selected::before {
+    content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    width: 20px; height: 20px; border-radius: 50%;
+    border: 1.5px solid var(--accent-cyan); box-shadow: 0 0 10px rgba(103,232,249,0.35);
+    animation: sel-ring 0.35s ease-out;
+  }
+  @keyframes sel-ring { from { width: 6px; height: 6px; opacity: 0; } to { width: 20px; height: 20px; opacity: 1; } }
+
+  /* Tooltip */
+  .star-tip {
+    position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+    background: var(--bg-elevated); border: 1px solid var(--bg-border);
+    border-radius: var(--radius-sm); padding: 8px 12px;
+    font-family: var(--font-mono); font-size: 10px; color: var(--text-primary);
+    white-space: nowrap; pointer-events: none;
+    opacity: 0; transition: opacity 0.12s; z-index: 20;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    max-width: 320px; white-space: normal; line-height: 1.5;
+  }
+  .star-tip .tip-status { font-weight: 600; margin-right: 4px; }
+  .star-tip .tip-status.done { color: var(--accent-green); }
+  .star-tip .tip-status.active { color: var(--accent-amber); }
+  .star-tip .tip-status.queued { color: var(--text-muted); }
+  .star-tip .tip-agent { display: block; margin-top: 3px; color: var(--accent-purple); font-size: 9px; }
+  .star:hover .star-tip { opacity: 1; }
+
+  /* Prevent tooltips from overflowing panel edges */
+  .star[style*="left: 8"] .star-tip,
+  .star[style*="left: 9"] .star-tip { transform: translateX(-80%); }
+  .star[style*="left: 1%"] .star-tip,
+  .star[style*="left: 2%"] .star-tip,
+  .star[style*="left: 3%"] .star-tip { transform: translateX(-20%); }
+
+  /* ═══ Tree connector + children ═══ */
+  .tree-connector { width: 2px; height: 20px; background: var(--bg-border); margin: 0 auto; flex-shrink: 0; }
+  .tree-children {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+    gap: 12px; width: 100%; padding-bottom: 16px;
+    overflow-y: auto; min-height: 0;
+  }
+
+  /* Agent cards */
+  .agent-col { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+  .agent-col::before { content: ''; width: 2px; height: 16px; background: var(--bg-border); flex-shrink: 0; }
+
+  .agent-card {
+    width: 100%; border: 1px solid var(--bg-border-dim); border-radius: var(--radius-sm);
+    background: var(--bg-elevated); overflow: hidden; display: flex; flex-direction: column;
+  }
+  .agent-card:hover { border-color: var(--bg-border); }
+
+  .agent-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px 10px 0; cursor: pointer;
+  }
+  .agent-lane { width: 3px; min-width: 3px; align-self: stretch; border-radius: 0 2px 2px 0; }
+  .agent-lane.pulsing { animation: lane-pulse 2s ease-in-out infinite; box-shadow: 0 0 12px var(--lane-color); }
+  @keyframes lane-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .agent-task { flex: 1; font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .agent-badge { font-family: var(--font-mono); font-size: 9px; padding: 2px 7px; border-radius: 12px; font-weight: 600; }
+  .agent-badge.working { color: var(--accent-amber); background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.2); animation: breathe 2s ease-in-out infinite; }
+  .agent-turn { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); }
+
+  .agent-body {
+    padding: 0 14px 10px 17px;
+    max-height: clamp(100px, 25vh, 250px); overflow-y: auto;
+  }
+
+  /* Tool block (simplified) */
+  .tool-row {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 8px; margin: 2px 0;
+    border: 1px solid var(--bg-border-dim); border-radius: 4px;
+    background: var(--bg-base); font-family: var(--font-mono); font-size: 10.5px;
+  }
+  .tool-icon { color: var(--accent-purple); opacity: 0.6; }
+  .tool-name { color: var(--accent-purple); font-weight: 600; }
+  .tool-preview { flex: 1; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tool-dur { color: var(--text-muted); }
+
+  .agent-stream {
+    font-family: var(--font-mono); font-size: 11px; line-height: 1.6;
+    color: var(--text-secondary); padding: 6px 0;
+  }
+  .stream-cursor { display: inline-block; width: 5px; height: 12px; background: var(--accent-magenta); border-radius: 1px; animation: blink 1s step-end infinite; vertical-align: text-bottom; box-shadow: 0 0 6px rgba(192,132,252,0.3); }
+  @keyframes blink { 0%,100% { opacity: 0.7; } 50% { opacity: 0; } }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- ═══ Header ═══ -->
+  <div class="app-header">
+    <div class="header-left">
+      <div class="app-logo">◇</div>
+      <div class="app-title">
+        <span class="title-main">Claude Agent Manager</span>
+        <span class="title-sub">orchestration</span>
+      </div>
+    </div>
+    <div class="header-stats">
+      <span><span class="hs-val">4</span> projects</span>
+      <span><span class="hs-val">2</span> working</span>
+      <span><span class="hs-val">5</span> agents</span>
+    </div>
+    <div class="header-right">
+      <button class="nav-tab active">Projects</button>
+      <button class="nav-tab">Settings</button>
+      <span class="conn-dot"></span>
+    </div>
+  </div>
+
+  <!-- ═══ Main ═══ -->
+  <div class="main-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-title">Projects</div>
+      <div class="sidebar-item active">
+        <span class="sidebar-dot working"></span>
+        work simulator
+      </div>
+      <div class="sidebar-item">
+        <span class="sidebar-dot idle"></span>
+        api-gateway
+      </div>
+      <div class="sidebar-item">
+        <span class="sidebar-dot working"></span>
+        ml-pipeline
+      </div>
+      <div class="sidebar-item">
+        <span class="sidebar-dot empty"></span>
+        docs-site
+      </div>
+    </aside>
+
+    <!-- Feed -->
+    <div class="feed-container">
+      <div class="feed-header">
+        <div class="feed-title-row">
+          <span class="feed-title">work simulator</span>
+          <span class="feed-chip">3 agents</span>
+          <span class="feed-chip">×1 parallelism</span>
+        </div>
+        <div class="feed-tabs">
+          <button class="feed-tab active">Overview</button>
+          <button class="feed-tab">Tasks</button>
+          <button class="feed-tab">Milestones</button>
+          <button class="feed-tab">Workflow</button>
+          <button class="feed-tab">Artifacts</button>
+        </div>
+      </div>
+
+      <!-- Tree container (overview content) -->
+      <div class="tree-container">
+
+        <!-- ═══ Controller Node ═══ -->
+        <div class="orch-node">
+          <div class="orch-header">
+            <span class="orch-dot"></span>
+            <span class="orch-label">Controller</span>
+            <span class="orch-phase">working</span>
+          </div>
+
+          <!-- Orbital progress strip -->
+          <div class="orch-orbital">
+            <div class="big-ring">
+              <svg viewBox="0 0 60 60">
+                <circle class="ring-track" cx="30" cy="30" r="28"/>
+                <circle class="ring-done" cx="30" cy="30" r="28"/>
+                <circle class="ring-active" cx="30" cy="30" r="28"/>
+              </svg>
+              <div class="ring-center">
+                <span class="ring-pct">26%</span>
+                <span class="ring-sub">complete</span>
+              </div>
+            </div>
+            <div class="orbital-right">
+              <div class="orbital-stats">
+                <span class="os-pill"><span class="os-dot done"></span><span class="os-val">12</span><span class="os-lbl">done</span></span>
+                <span class="os-pill"><span class="os-dot active"></span><span class="os-val">3</span><span class="os-lbl">active</span></span>
+                <span class="os-pill"><span class="os-dot pending"></span><span class="os-val">31</span><span class="os-lbl">queued</span></span>
+              </div>
+              <div class="segment-bar">
+                <div class="segment done"></div><div class="segment active"></div><div class="segment pending"></div>
+              </div>
+              <div class="active-work">
+                <span class="work-pill"><span class="work-pill-dot" style="background: #67e8f9"></span>Unit tests (auth, cart)</span>
+                <span class="work-pill"><span class="work-pill-dot" style="background: #c084fc"></span>Component tests (RTL)</span>
+                <span class="work-pill"><span class="work-pill-dot" style="background: #4ade80"></span>E2E Playwright</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Constellation fills remaining space -->
+          <div class="constellation-wrap">
+            <div class="constellation" id="constellation">
+              <svg class="lines" id="constellationSvg"></svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tree connector -->
+        <div class="tree-connector"></div>
+
+        <!-- ═══ Agent Cards ═══ -->
+        <div class="tree-children">
+          <!-- Agent 1 — cyan -->
+          <div class="agent-col">
+            <div class="agent-card">
+              <div class="agent-header">
+                <div class="agent-lane pulsing" style="background: #67e8f9; --lane-color: #67e8f9"></div>
+                <div class="agent-task">Write unit tests for backend endpoints (auth, cart, orders)</div>
+                <span class="agent-badge working">using tool</span>
+                <span class="agent-turn">7t</span>
+              </div>
+              <div class="agent-body">
+                <div class="tool-row">
+                  <span class="tool-icon">+</span>
+                  <span class="tool-name">Bash</span>
+                  <span class="tool-preview">npx jest --coverage auth.test.ts</span>
+                  <span class="tool-dur">3s</span>
+                </div>
+                <div class="tool-row">
+                  <span class="tool-icon">+</span>
+                  <span class="tool-name">Write</span>
+                  <span class="tool-preview">tests/cart.test.ts</span>
+                  <span class="tool-dur">1s</span>
+                </div>
+                <div class="agent-stream">Running auth endpoint tests... 14/18 passing<span class="stream-cursor"></span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Agent 2 — purple -->
+          <div class="agent-col">
+            <div class="agent-card">
+              <div class="agent-header">
+                <div class="agent-lane pulsing" style="background: #c084fc; --lane-color: #c084fc"></div>
+                <div class="agent-task">Frontend component tests for ProductCard, CartItem, CheckoutForm</div>
+                <span class="agent-badge working">thinking</span>
+                <span class="agent-turn">4t</span>
+              </div>
+              <div class="agent-body">
+                <div class="tool-row">
+                  <span class="tool-icon">+</span>
+                  <span class="tool-name">Read</span>
+                  <span class="tool-preview">src/components/CartItem.tsx</span>
+                  <span class="tool-dur">0s</span>
+                </div>
+                <div class="agent-stream">Analyzing CartItem props and state management...<span class="stream-cursor"></span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Agent 3 — green -->
+          <div class="agent-col">
+            <div class="agent-card">
+              <div class="agent-header">
+                <div class="agent-lane pulsing" style="background: #4ade80; --lane-color: #4ade80"></div>
+                <div class="agent-task">Integration testing with Playwright for checkout flow E2E</div>
+                <span class="agent-badge working">using tool</span>
+                <span class="agent-turn">2t</span>
+              </div>
+              <div class="agent-body">
+                <div class="tool-row">
+                  <span class="tool-icon">+</span>
+                  <span class="tool-name">Bash</span>
+                  <span class="tool-preview">npx playwright test checkout.spec.ts</span>
+                  <span class="tool-dur">8s</span>
+                </div>
+                <div class="agent-stream">Browser launched, navigating to /checkout...<span class="stream-cursor"></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ═══ Generate constellation ═══
+  const TASKS = [
+    { id:0,  text:'Set up project scaffolding with Express + React + PostgreSQL', status:'done', agent:'eng-a4f2' },
+    { id:1,  text:'Implement user authentication with JWT + refresh tokens', status:'done', agent:'eng-b7c3' },
+    { id:2,  text:'Design product catalog data model with search indexing', status:'done', agent:'eng-c1e9' },
+    { id:3,  text:'Configure TypeScript, ESLint, and Prettier', status:'done', agent:'eng-a4f2' },
+    { id:4,  text:'Set up database schema migrations with Prisma', status:'done', agent:'eng-b7c3' },
+    { id:5,  text:'Implement product CRUD API endpoints', status:'done', agent:'eng-d3a8' },
+    { id:6,  text:'Build responsive product listing page', status:'done', agent:'eng-e5f1' },
+    { id:7,  text:'Add image upload and CDN integration', status:'done', agent:'eng-c1e9' },
+    { id:8,  text:'Implement user profile management', status:'done', agent:'eng-a4f2' },
+    { id:9,  text:'Set up Redis caching layer', status:'done', agent:'eng-d3a8' },
+    { id:10, text:'Build product detail page with reviews', status:'done', agent:'eng-e5f1' },
+    { id:11, text:'Order history and tracking page', status:'done', agent:'eng-b7c3' },
+    { id:12, text:'Write unit tests for backend endpoints (auth, cart, orders)', status:'active', agent:'eng-d3a8' },
+    { id:13, text:'Frontend component tests — ProductCard, CartItem, CheckoutForm', status:'active', agent:'eng-e5f1' },
+    { id:14, text:'Integration testing with Playwright for checkout E2E', status:'active', agent:'eng-f8b2' },
+    { id:15, text:'Implement shopping cart with session persistence', status:'queued', agent:null },
+    { id:16, text:'Build checkout flow with Stripe payment integration', status:'queued', agent:null },
+    { id:17, text:'Admin dashboard with inventory management', status:'queued', agent:null },
+    { id:18, text:'Email notification system for orders and shipping', status:'queued', agent:null },
+    { id:19, text:'Product search with fuzzy matching and filters', status:'queued', agent:null },
+    { id:20, text:'Wishlist and saved items feature', status:'queued', agent:null },
+    { id:21, text:'Product comparison page', status:'queued', agent:null },
+    { id:22, text:'Internationalization (i18n) support', status:'queued', agent:null },
+    { id:23, text:'Performance optimization and lazy loading', status:'queued', agent:null },
+    { id:24, text:'Accessibility audit and WCAG compliance', status:'queued', agent:null },
+  ];
+
+  let seed = 42;
+  function rand() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+
+  const cEl = document.getElementById('constellation');
+  const svg = document.getElementById('constellationSvg');
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const nodes = [];
+
+  TASKS.forEach(task => {
+    let x, y;
+    if (task.status === 'done') {
+      x = 3 + rand() * 28; y = 8 + rand() * 84;
+    } else if (task.status === 'active') {
+      x = 30 + rand() * 22; y = 12 + rand() * 76;
+    } else {
+      x = 50 + rand() * 46; y = 5 + rand() * 90;
+    }
+    nodes.push({ x, y, task });
+
+    const star = document.createElement('div');
+    star.className = `star ${task.status}`;
+    star.style.left = x + '%';
+    star.style.top = y + '%';
+    star.dataset.taskId = task.id;
+
+    if (task.status === 'active') {
+      star.innerHTML = '<span class="rp"></span><span class="rp"></span>';
+    }
+
+    // Tooltip
+    const tip = document.createElement('div');
+    tip.className = 'star-tip';
+    const icon = task.status === 'done' ? '✓' : task.status === 'active' ? '●' : '○';
+    tip.innerHTML = `<span class="tip-status ${task.status}">${icon}</span> ${task.text}${task.agent ? `<span class="tip-agent">${task.agent}</span>` : ''}`;
+    star.appendChild(tip);
+
+    star.addEventListener('click', () => selectStar(task.id));
+    cEl.appendChild(star);
+  });
+
+  // Draw constellation lines
+  for (let i = 0; i < nodes.length; i++) {
+    let conns = 0;
+    for (let j = i + 1; j < nodes.length && conns < 2; j++) {
+      const dx = nodes[i].x - nodes[j].x, dy = nodes[i].y - nodes[j].y;
+      if (Math.sqrt(dx*dx + dy*dy) < 15 && rand() > 0.3) {
+        const line = document.createElementNS(svgNS, 'line');
+        line.setAttribute('x1', nodes[i].x+'%'); line.setAttribute('y1', nodes[i].y+'%');
+        line.setAttribute('x2', nodes[j].x+'%'); line.setAttribute('y2', nodes[j].y+'%');
+        svg.appendChild(line);
+        conns++;
+      }
+    }
+  }
+
+  let selectedStar = null;
+  function selectStar(id) {
+    if (selectedStar) selectedStar.classList.remove('selected');
+    const el = document.querySelector(`.star[data-task-id="${id}"]`);
+    if (el) { el.classList.add('selected'); selectedStar = el; }
+  }
+</script>
+</body>
+</html>

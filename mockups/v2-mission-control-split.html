@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>V2 — Mission Control Split</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-void: #04060b;
+    --bg-base: #080c14;
+    --bg-surface: #0e1525;
+    --bg-elevated: #141d30;
+    --bg-hover: #1a2640;
+    --bg-border: #243352;
+    --bg-border-dim: #1a2640;
+    --accent-green: #4ade80;
+    --accent-amber: #fbbf24;
+    --accent-red: #f87171;
+    --accent-purple: #a78bfa;
+    --accent-cyan: #67e8f9;
+    --accent-magenta: #c084fc;
+    --accent-teal: #5eead4;
+    --accent-pink: #f9a8d4;
+    --text-primary: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --text-muted: #475569;
+    --font-mono: 'IBM Plex Mono', monospace;
+    --font-ui: 'DM Sans', sans-serif;
+    --font-title: 'Plus Jakarta Sans', sans-serif;
+    --font-display: 'Instrument Serif', Georgia, serif;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: var(--bg-void); color: var(--text-primary); font-family: var(--font-ui); font-size: 13px; -webkit-font-smoothing: antialiased; }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--bg-border); border-radius: 2px; }
+
+  #app { display: grid; grid-template-rows: 44px 1fr; grid-template-columns: 180px 1fr; height: 100vh; }
+
+  /* Header */
+  .app-header {
+    grid-column: 1 / -1;
+    background: rgba(8,12,20,0.9); backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(36,51,82,0.4);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px; z-index: 100;
+  }
+  .hl { display: flex; align-items: center; gap: 8px; }
+  .logo { width: 24px; height: 24px; background: linear-gradient(135deg, var(--accent-cyan), var(--accent-magenta)); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: white; }
+  .brand { font-family: var(--font-title); font-size: 13px; font-weight: 700; letter-spacing: -0.02em; }
+  .brand-sub { font-family: var(--font-mono); font-size: 7px; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 0.15em; opacity: 0.5; }
+  .hstats { display: flex; gap: 16px; font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); }
+  .hstats b { color: var(--text-secondary); font-weight: 600; }
+  .hr { display: flex; align-items: center; gap: 6px; }
+  .hbtn { padding: 4px 10px; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--text-muted); font-family: var(--font-ui); font-size: 11px; cursor: pointer; }
+  .hbtn.on { color: var(--text-primary); background: var(--bg-elevated); border-color: var(--bg-border); }
+  .cdot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent-green); box-shadow: 0 0 6px var(--accent-green); margin-left: 8px; }
+
+  /* Sidebar */
+  .sidebar {
+    background: rgba(14,21,37,0.5); backdrop-filter: blur(8px);
+    border-right: 1px solid rgba(36,51,82,0.25);
+    overflow-y: auto; padding: 8px 0;
+  }
+  .slabel { font-family: var(--font-mono); font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); padding: 8px 12px 4px; }
+  .sitem { display: flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 11px; color: var(--text-secondary); cursor: pointer; }
+  .sitem:hover { background: rgba(26,38,64,0.4); }
+  .sitem.on { background: rgba(20,29,48,0.7); color: var(--text-primary); border-right: 2px solid var(--accent-cyan); }
+  .sdot { width: 4px; height: 4px; border-radius: 50%; }
+  .sdot.w { background: var(--accent-amber); box-shadow: 0 0 4px var(--accent-amber); animation: p 2s ease-in-out infinite; }
+  .sdot.i { background: var(--accent-green); }
+  .sdot.o { background: var(--text-muted); opacity: 0.3; }
+  @keyframes p { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* === MAIN: Split layout === */
+  .main-split {
+    display: grid;
+    grid-template-columns: 42% 1px 1fr;
+    overflow: hidden;
+  }
+
+  /* LEFT: Constellation */
+  .map-side {
+    position: relative;
+    background:
+      radial-gradient(ellipse at 30% 30%, rgba(74,222,128,0.02) 0%, transparent 50%),
+      radial-gradient(ellipse at 60% 60%, rgba(251,191,36,0.015) 0%, transparent 40%),
+      var(--bg-void);
+    overflow: hidden;
+  }
+
+  /* Region labels along left edge */
+  .region {
+    position: absolute; z-index: 5;
+    font-family: var(--font-mono); font-size: 7px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.2em;
+    writing-mode: vertical-rl; text-orientation: mixed;
+    opacity: 0.12; pointer-events: none;
+  }
+
+  .constellation { position: absolute; inset: 0; }
+  .constellation svg.lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .constellation svg.lines line { stroke-width: 0.5; opacity: 0.3; }
+  .constellation svg.lines line.d { stroke: rgba(74,222,128,0.3); }
+  .constellation svg.lines line.a { stroke: rgba(251,191,36,0.35); }
+  .constellation svg.lines line.q { stroke: rgba(71,85,105,0.2); }
+
+  .star {
+    position: absolute; border-radius: 50%; transform: translate(-50%, -50%);
+    cursor: pointer; z-index: 2; padding: 8px; margin: -8px; background: transparent;
+  }
+  .star::after { content: ''; display: block; border-radius: 50%; transition: transform 0.2s, filter 0.2s; }
+  .star.done::after { width: 5px; height: 5px; background: var(--accent-green); box-shadow: 0 0 4px rgba(74,222,128,0.5), 0 0 10px rgba(74,222,128,0.15); }
+  .star.active::after { width: 7px; height: 7px; background: var(--accent-amber); box-shadow: 0 0 6px rgba(251,191,36,0.6), 0 0 16px rgba(251,191,36,0.2); animation: sg 2s ease-in-out infinite; }
+  .star.queued::after { width: 3px; height: 3px; background: var(--text-muted); opacity: 0.3; }
+  @keyframes sg { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .star:hover::after { transform: scale(2); filter: brightness(1.5); }
+  .star:hover { z-index: 20; }
+
+  .star .rp {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    border-radius: 50%; pointer-events: none;
+  }
+  .star.active .rp:nth-child(1) { width: 18px; height: 18px; border: 1px solid rgba(251,191,36,0.4); animation: ripple 2.5s ease-out infinite; }
+  .star.active .rp:nth-child(2) { width: 30px; height: 30px; border: 1px solid rgba(251,191,36,0.2); animation: ripple 2.5s ease-out 0.6s infinite; }
+  @keyframes ripple { 0% { opacity: 0.5; transform: translate(-50%,-50%) scale(0.3); } 100% { opacity: 0; transform: translate(-50%,-50%) scale(1.4); } }
+
+  .star.selected::before {
+    content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--accent-cyan);
+    box-shadow: 0 0 12px rgba(103,232,249,0.4); animation: sel 0.3s ease-out;
+  }
+  @keyframes sel { from { width: 6px; height: 6px; opacity: 0; } to { width: 22px; height: 22px; opacity: 1; } }
+
+  .star-tip {
+    position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+    background: rgba(14,21,37,0.95); border: 1px solid var(--bg-border);
+    border-radius: var(--radius-sm); padding: 7px 10px;
+    font-family: var(--font-mono); font-size: 10px; color: var(--text-primary);
+    pointer-events: none; opacity: 0; transition: opacity 0.12s;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+    max-width: 240px; line-height: 1.4; white-space: normal; z-index: 30;
+  }
+  .star-tip .s { font-weight: 600; margin-right: 3px; }
+  .star-tip .s.done { color: var(--accent-green); }
+  .star-tip .s.active { color: var(--accent-amber); }
+  .star-tip .s.queued { color: var(--text-muted); }
+  .star-tip .ag { display: block; margin-top: 2px; color: var(--accent-purple); font-size: 9px; }
+  .star:hover .star-tip { opacity: 1; }
+
+  /* Glowing divider */
+  .divider {
+    background: linear-gradient(180deg,
+      transparent 0%,
+      rgba(103,232,249,0.05) 10%,
+      rgba(103,232,249,0.15) 50%,
+      rgba(103,232,249,0.05) 90%,
+      transparent 100%
+    );
+    position: relative;
+  }
+  .divider::after {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(180deg, transparent 0%, var(--accent-cyan) 50%, transparent 100%);
+    opacity: 0.08;
+  }
+
+  /* RIGHT: Agent detail */
+  .detail-side {
+    display: flex; flex-direction: column;
+    background: var(--bg-base);
+    overflow: hidden;
+  }
+
+  /* Tabs + progress header */
+  .detail-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--bg-border-dim);
+    background: var(--bg-surface);
+    flex-shrink: 0;
+  }
+  .dh-top { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+  .dh-title { font-family: var(--font-display); font-size: 20px; letter-spacing: -0.03em; }
+  .dh-chip { padding: 2px 7px; background: var(--bg-elevated); border: 1px solid var(--bg-border); border-radius: 16px; font-family: var(--font-mono); font-size: 10px; color: var(--text-secondary); }
+
+  /* Progress strip */
+  .progress-strip {
+    display: grid; grid-template-columns: auto 1fr; gap: 12px;
+    align-items: center; margin: 10px 0 4px;
+  }
+  .ps-ring { width: 40px; height: 40px; position: relative; }
+  .ps-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ps-bg { fill: none; stroke: rgba(36,51,82,0.5); stroke-width: 4; }
+  .ps-done { fill: none; stroke: var(--accent-green); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 113.1; stroke-dashoffset: 83.7; filter: drop-shadow(0 0 3px rgba(74,222,128,0.3)); }
+  .ps-active { fill: none; stroke: var(--accent-amber); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 113.1; stroke-dashoffset: 76.8; filter: drop-shadow(0 0 2px rgba(251,191,36,0.2)); animation: rbr 3s ease-in-out infinite; }
+  @keyframes rbr { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .ps-center { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 11px; font-weight: 700; }
+  .ps-right { display: flex; flex-direction: column; gap: 4px; }
+  .ps-stats { display: flex; gap: 10px; font-family: var(--font-mono); font-size: 10px; }
+  .ps-stat { display: flex; align-items: center; gap: 3px; }
+  .ps-dot { width: 4px; height: 4px; border-radius: 50%; }
+  .ps-dot.d { background: var(--accent-green); box-shadow: 0 0 3px var(--accent-green); }
+  .ps-dot.a { background: var(--accent-amber); box-shadow: 0 0 3px var(--accent-amber); }
+  .ps-dot.q { background: var(--text-muted); }
+  .ps-v { color: var(--text-primary); font-weight: 600; }
+  .ps-l { color: var(--text-muted); }
+  .seg-bar { display: flex; height: 4px; border-radius: 2px; overflow: hidden; background: rgba(36,51,82,0.3); gap: 1px; }
+  .seg { border-radius: 2px; }
+  .seg.d { flex: 12; background: linear-gradient(90deg, var(--accent-green), var(--accent-teal)); }
+  .seg.a { flex: 3; background: var(--accent-amber); }
+  .seg.q { flex: 10; background: rgba(36,51,82,0.4); }
+
+  /* Active work */
+  .aw { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .aw-pill {
+    display: flex; align-items: center; gap: 4px;
+    font-family: var(--font-mono); font-size: 9px; color: var(--text-secondary);
+    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04);
+    border-radius: 3px; padding: 2px 6px;
+  }
+  .aw-dot { width: 3px; height: 3px; border-radius: 50%; animation: p 2s ease-in-out infinite; }
+
+  /* Tabs */
+  .dtabs { display: flex; gap: 0; margin-top: 8px; }
+  .dtab {
+    padding: 5px 12px; border: none; background: transparent;
+    color: var(--text-muted); font-family: var(--font-ui); font-size: 11px; font-weight: 500;
+    cursor: pointer; border-bottom: 2px solid transparent;
+  }
+  .dtab.on { color: var(--text-primary); border-bottom-color: var(--accent-cyan); }
+
+  /* Agent cards stacked */
+  .agents-list {
+    flex: 1; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .agent-card {
+    border: 1px solid var(--bg-border-dim); border-radius: var(--radius-sm);
+    background: var(--bg-elevated); overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .agent-card:hover { border-color: var(--bg-border); }
+  .agent-card.linked { border-color: rgba(103,232,249,0.3); box-shadow: 0 0 12px rgba(103,232,249,0.05); }
+
+  .ac-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px 10px 0; }
+  .ac-lane { width: 3px; align-self: stretch; border-radius: 0 2px 2px 0; }
+  .ac-lane.glow { animation: lp 2s ease-in-out infinite; }
+  @keyframes lp { 0%,100% { opacity: 1; box-shadow: 0 0 10px var(--lc); } 50% { opacity: 0.3; box-shadow: none; } }
+  .ac-task { flex: 1; font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ac-badge { font-family: var(--font-mono); font-size: 8px; padding: 2px 6px; border-radius: 10px; font-weight: 600; color: var(--accent-amber); background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.15); }
+  .ac-turn { font-family: var(--font-mono); font-size: 9px; color: var(--text-muted); }
+
+  .ac-body { padding: 0 14px 10px 17px; }
+  .tool-row {
+    display: flex; align-items: center; gap: 5px;
+    padding: 3px 7px; margin: 2px 0;
+    border: 1px solid rgba(36,51,82,0.4); border-radius: 3px;
+    background: rgba(4,6,11,0.5); font-family: var(--font-mono); font-size: 10px;
+  }
+  .tn { color: var(--accent-purple); font-weight: 600; }
+  .tp { flex: 1; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .td { color: var(--text-muted); font-size: 9px; }
+  .ac-stream { font-family: var(--font-mono); font-size: 10px; line-height: 1.6; color: var(--text-secondary); padding: 4px 0; }
+  .cur { display: inline-block; width: 5px; height: 11px; background: var(--accent-magenta); border-radius: 1px; animation: blink 1s step-end infinite; vertical-align: text-bottom; }
+  @keyframes blink { 0%,100% { opacity: 0.8; } 50% { opacity: 0; } }
+
+  /* Connection lines from active stars to agent cards */
+  .link-svg {
+    position: absolute; top: 0; right: -1px; width: 40px; height: 100%;
+    pointer-events: none; z-index: 5; overflow: visible;
+  }
+  .link-svg path { fill: none; stroke-width: 1; stroke-dasharray: 4 4; opacity: 0.4; animation: dash 20s linear infinite; }
+  @keyframes dash { to { stroke-dashoffset: -200; } }
+
+  /* Entrance */
+  .detail-header { animation: fadeIn 0.5s ease-out; }
+  .agent-card:nth-child(1) { animation: slideIn 0.4s ease-out 0.2s both; }
+  .agent-card:nth-child(2) { animation: slideIn 0.4s ease-out 0.35s both; }
+  .agent-card:nth-child(3) { animation: slideIn 0.4s ease-out 0.5s both; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes slideIn { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: none; } }
+  .star { animation: starIn 0.3s ease-out both; }
+  @keyframes starIn { from { opacity: 0; transform: translate(-50%,-50%) scale(0); } to { opacity: 1; transform: translate(-50%,-50%) scale(1); } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="app-header">
+    <div class="hl">
+      <div class="logo">C</div>
+      <div style="display:flex;flex-direction:column;gap:1px">
+        <span class="brand">Claude Agent Manager</span>
+        <span class="brand-sub">orchestration</span>
+      </div>
+    </div>
+    <div class="hstats">
+      <span><b>4</b> projects</span>
+      <span><b>2</b> working</span>
+      <span><b>5</b> agents</span>
+    </div>
+    <div class="hr">
+      <button class="hbtn on">Projects</button>
+      <button class="hbtn">Settings</button>
+      <span class="cdot"></span>
+    </div>
+  </div>
+
+  <aside class="sidebar">
+    <div class="slabel">Projects</div>
+    <div class="sitem on"><span class="sdot w"></span>work simulator</div>
+    <div class="sitem"><span class="sdot i"></span>api-gateway</div>
+    <div class="sitem"><span class="sdot w"></span>ml-pipeline</div>
+    <div class="sitem"><span class="sdot o"></span>docs-site</div>
+  </aside>
+
+  <div class="main-split">
+    <!-- LEFT: Constellation -->
+    <div class="map-side" id="mapSide">
+      <div class="region" style="left:8%;top:20%;color:var(--accent-green)">Completed</div>
+      <div class="region" style="left:45%;top:15%;color:var(--accent-amber)">Active</div>
+      <div class="region" style="left:78%;top:25%;color:var(--text-muted)">Queued</div>
+      <div class="constellation" id="constellation">
+        <svg class="lines" id="svg"></svg>
+      </div>
+      <!-- Connection lines to right panel -->
+      <svg class="link-svg" id="linkSvg" viewBox="0 0 40 600" preserveAspectRatio="none"></svg>
+    </div>
+
+    <!-- Divider -->
+    <div class="divider"></div>
+
+    <!-- RIGHT: Details -->
+    <div class="detail-side">
+      <div class="detail-header">
+        <div class="dh-top">
+          <span class="dh-title">work simulator</span>
+          <span class="dh-chip">3 agents</span>
+        </div>
+        <div class="progress-strip">
+          <div class="ps-ring">
+            <svg viewBox="0 0 40 40">
+              <circle class="ps-bg" cx="20" cy="20" r="18"/>
+              <circle class="ps-done" cx="20" cy="20" r="18"/>
+              <circle class="ps-active" cx="20" cy="20" r="18"/>
+            </svg>
+            <div class="ps-center">26%</div>
+          </div>
+          <div class="ps-right">
+            <div class="ps-stats">
+              <span class="ps-stat"><span class="ps-dot d"></span><span class="ps-v">12</span><span class="ps-l"> done</span></span>
+              <span class="ps-stat"><span class="ps-dot a"></span><span class="ps-v">3</span><span class="ps-l"> active</span></span>
+              <span class="ps-stat"><span class="ps-dot q"></span><span class="ps-v">10</span><span class="ps-l"> queued</span></span>
+            </div>
+            <div class="seg-bar"><div class="seg d"></div><div class="seg a"></div><div class="seg q"></div></div>
+          </div>
+        </div>
+        <div class="aw">
+          <span class="aw-pill"><span class="aw-dot" style="background:#67e8f9"></span>Unit tests (auth, cart)</span>
+          <span class="aw-pill"><span class="aw-dot" style="background:#c084fc"></span>Component tests (RTL)</span>
+          <span class="aw-pill"><span class="aw-dot" style="background:#4ade80"></span>E2E Playwright</span>
+        </div>
+        <div class="dtabs">
+          <button class="dtab on">Overview</button>
+          <button class="dtab">Tasks</button>
+          <button class="dtab">Milestones</button>
+          <button class="dtab">Workflow</button>
+          <button class="dtab">Artifacts</button>
+        </div>
+      </div>
+
+      <div class="agents-list">
+        <div class="agent-card linked" id="ac-12">
+          <div class="ac-head">
+            <div class="ac-lane glow" style="background:#67e8f9;--lc:#67e8f9"></div>
+            <div class="ac-task">Write unit tests for backend endpoints (auth, cart, orders)</div>
+            <span class="ac-badge">using tool</span>
+            <span class="ac-turn">7t</span>
+          </div>
+          <div class="ac-body">
+            <div class="tool-row"><span class="tn">Bash</span><span class="tp">npx jest --coverage auth.test.ts</span><span class="td">3s</span></div>
+            <div class="tool-row"><span class="tn">Write</span><span class="tp">tests/cart.test.ts</span><span class="td">1s</span></div>
+            <div class="ac-stream">Running auth endpoint tests... 14/18 passing<span class="cur"></span></div>
+          </div>
+        </div>
+        <div class="agent-card linked" id="ac-13">
+          <div class="ac-head">
+            <div class="ac-lane glow" style="background:#c084fc;--lc:#c084fc"></div>
+            <div class="ac-task">Frontend component tests for ProductCard, CartItem, CheckoutForm</div>
+            <span class="ac-badge">thinking</span>
+            <span class="ac-turn">4t</span>
+          </div>
+          <div class="ac-body">
+            <div class="tool-row"><span class="tn">Read</span><span class="tp">src/components/CartItem.tsx</span><span class="td">0s</span></div>
+            <div class="ac-stream">Analyzing CartItem props and state management patterns...<span class="cur"></span></div>
+          </div>
+        </div>
+        <div class="agent-card linked" id="ac-14">
+          <div class="ac-head">
+            <div class="ac-lane glow" style="background:#4ade80;--lc:#4ade80"></div>
+            <div class="ac-task">Integration testing with Playwright for checkout flow E2E</div>
+            <span class="ac-badge">using tool</span>
+            <span class="ac-turn">2t</span>
+          </div>
+          <div class="ac-body">
+            <div class="tool-row"><span class="tn">Bash</span><span class="tp">npx playwright test checkout.spec.ts</span><span class="td">8s</span></div>
+            <div class="ac-stream">Browser launched, navigating to /checkout...<span class="cur"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const TASKS = [
+  { id:0,  text:'Set up project scaffolding with Express + React + PostgreSQL', status:'done', agent:'eng-a4f2' },
+  { id:1,  text:'Implement user authentication with JWT + refresh tokens', status:'done', agent:'eng-b7c3' },
+  { id:2,  text:'Design product catalog data model with search indexing', status:'done', agent:'eng-c1e9' },
+  { id:3,  text:'Configure TypeScript, ESLint, and Prettier', status:'done', agent:'eng-a4f2' },
+  { id:4,  text:'Set up database schema migrations with Prisma', status:'done', agent:'eng-b7c3' },
+  { id:5,  text:'Implement product CRUD API endpoints', status:'done', agent:'eng-d3a8' },
+  { id:6,  text:'Build responsive product listing page', status:'done', agent:'eng-e5f1' },
+  { id:7,  text:'Add image upload and CDN integration', status:'done', agent:'eng-c1e9' },
+  { id:8,  text:'Implement user profile management', status:'done', agent:'eng-a4f2' },
+  { id:9,  text:'Set up Redis caching layer', status:'done', agent:'eng-d3a8' },
+  { id:10, text:'Build product detail page with reviews', status:'done', agent:'eng-e5f1' },
+  { id:11, text:'Order history and tracking page', status:'done', agent:'eng-b7c3' },
+  { id:12, text:'Write unit tests for backend endpoints (auth, cart, orders)', status:'active', agent:'eng-d3a8' },
+  { id:13, text:'Frontend component tests — ProductCard, CartItem, CheckoutForm', status:'active', agent:'eng-e5f1' },
+  { id:14, text:'Integration testing with Playwright for checkout E2E', status:'active', agent:'eng-f8b2' },
+  { id:15, text:'Implement shopping cart with session persistence', status:'queued', agent:null },
+  { id:16, text:'Build checkout flow with Stripe payment integration', status:'queued', agent:null },
+  { id:17, text:'Admin dashboard with inventory management', status:'queued', agent:null },
+  { id:18, text:'Email notification system for orders and shipping', status:'queued', agent:null },
+  { id:19, text:'Product search with fuzzy matching and filters', status:'queued', agent:null },
+  { id:20, text:'Wishlist and saved items feature', status:'queued', agent:null },
+  { id:21, text:'Product comparison page', status:'queued', agent:null },
+  { id:22, text:'Internationalization (i18n) support', status:'queued', agent:null },
+  { id:23, text:'Performance optimization and lazy loading', status:'queued', agent:null },
+  { id:24, text:'Accessibility audit and WCAG compliance', status:'queued', agent:null },
+];
+
+let seed = 42;
+function rand() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+
+const cEl = document.getElementById('constellation');
+const svg = document.getElementById('svg');
+const svgNS = 'http://www.w3.org/2000/svg';
+const nodes = [];
+
+TASKS.forEach((task, i) => {
+  let x, y;
+  if (task.status === 'done') {
+    x = 5 + rand() * 30; y = 10 + rand() * 80;
+  } else if (task.status === 'active') {
+    x = 35 + rand() * 22; y = 15 + rand() * 70;
+  } else {
+    x = 58 + rand() * 38; y = 8 + rand() * 84;
+  }
+  nodes.push({ x, y, task });
+
+  const star = document.createElement('div');
+  star.className = `star ${task.status}`;
+  star.style.left = x + '%';
+  star.style.top = y + '%';
+  star.style.animationDelay = (i * 0.04) + 's';
+  star.dataset.taskId = task.id;
+
+  if (task.status === 'active') {
+    star.innerHTML = '<span class="rp"></span><span class="rp"></span>';
+  }
+
+  const tip = document.createElement('div');
+  tip.className = 'star-tip';
+  const icon = task.status === 'done' ? '&#10003;' : task.status === 'active' ? '&#9679;' : '&#9675;';
+  tip.innerHTML = `<span class="s ${task.status}">${icon}</span> ${task.text}${task.agent ? `<span class="ag">${task.agent}</span>` : ''}`;
+  star.appendChild(tip);
+
+  star.addEventListener('click', () => {
+    document.querySelectorAll('.star.selected').forEach(s => s.classList.remove('selected'));
+    star.classList.add('selected');
+  });
+
+  cEl.appendChild(star);
+});
+
+// Lines
+for (let i = 0; i < nodes.length; i++) {
+  let conns = 0;
+  for (let j = i + 1; j < nodes.length && conns < 2; j++) {
+    const dx = nodes[i].x - nodes[j].x, dy = nodes[i].y - nodes[j].y;
+    if (Math.sqrt(dx*dx + dy*dy) < 14 && rand() > 0.3) {
+      const line = document.createElementNS(svgNS, 'line');
+      line.setAttribute('x1', nodes[i].x+'%'); line.setAttribute('y1', nodes[i].y+'%');
+      line.setAttribute('x2', nodes[j].x+'%'); line.setAttribute('y2', nodes[j].y+'%');
+      const s = nodes[i].task.status;
+      line.setAttribute('class', s === 'done' ? 'd' : s === 'active' ? 'a' : 'q');
+      svg.appendChild(line);
+      conns++;
+    }
+  }
+}
+
+// Draw connection curves from active stars to divider edge
+const linkSvg = document.getElementById('linkSvg');
+const activeNodes = nodes.filter(n => n.task.status === 'active');
+const colors = ['#67e8f9', '#c084fc', '#4ade80'];
+activeNodes.forEach((n, i) => {
+  const yPct = n.y;
+  const path = document.createElementNS(svgNS, 'path');
+  const startY = (yPct / 100) * 600;
+  const endY = 100 + i * 180;
+  path.setAttribute('d', `M0,${startY} C20,${startY} 20,${endY} 40,${endY}`);
+  path.setAttribute('stroke', colors[i]);
+  linkSvg.appendChild(path);
+});
+</script>
+</body>
+</html>

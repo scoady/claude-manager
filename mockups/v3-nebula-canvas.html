@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>V3 — Nebula Canvas</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-void: #030509;
+    --bg-base: #080c14;
+    --bg-surface: #0e1525;
+    --bg-elevated: #141d30;
+    --bg-hover: #1a2640;
+    --bg-border: #243352;
+    --bg-border-dim: #1a2640;
+    --accent-green: #4ade80;
+    --accent-amber: #fbbf24;
+    --accent-red: #f87171;
+    --accent-purple: #a78bfa;
+    --accent-cyan: #67e8f9;
+    --accent-magenta: #c084fc;
+    --accent-teal: #5eead4;
+    --accent-pink: #f9a8d4;
+    --text-primary: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --text-muted: #475569;
+    --font-mono: 'IBM Plex Mono', monospace;
+    --font-ui: 'DM Sans', sans-serif;
+    --font-title: 'Plus Jakarta Sans', sans-serif;
+    --font-display: 'Instrument Serif', Georgia, serif;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --glass: rgba(14,21,37,0.65);
+    --glass-border: rgba(36,51,82,0.35);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: var(--bg-void); color: var(--text-primary); font-family: var(--font-ui); font-size: 13px; -webkit-font-smoothing: antialiased; }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(36,51,82,0.6); border-radius: 2px; }
+
+  /* === FULL VIEWPORT CONSTELLATION BACKGROUND === */
+  .cosmos {
+    position: fixed; inset: 0; z-index: 0;
+    background:
+      radial-gradient(ellipse at 15% 25%, rgba(74,222,128,0.025) 0%, transparent 45%),
+      radial-gradient(ellipse at 45% 40%, rgba(251,191,36,0.02) 0%, transparent 35%),
+      radial-gradient(ellipse at 75% 55%, rgba(103,232,249,0.015) 0%, transparent 40%),
+      radial-gradient(ellipse at 50% 80%, rgba(192,132,252,0.01) 0%, transparent 50%),
+      var(--bg-void);
+  }
+  .cosmos svg.lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .cosmos svg.lines line { stroke-width: 0.5; opacity: 0.2; }
+  .cosmos svg.lines line.dl { stroke: rgba(74,222,128,0.25); }
+  .cosmos svg.lines line.al { stroke: rgba(251,191,36,0.3); }
+  .cosmos svg.lines line.ql { stroke: rgba(71,85,105,0.15); }
+
+  .star {
+    position: absolute; border-radius: 50%; transform: translate(-50%, -50%);
+    cursor: pointer; z-index: 1; padding: 8px; margin: -8px; background: transparent;
+  }
+  .star::after { content: ''; display: block; border-radius: 50%; transition: transform 0.2s, filter 0.2s; }
+  .star.done::after { width: 4px; height: 4px; background: var(--accent-green); box-shadow: 0 0 4px rgba(74,222,128,0.5), 0 0 10px rgba(74,222,128,0.12); }
+  .star.active::after { width: 7px; height: 7px; background: var(--accent-amber); box-shadow: 0 0 6px rgba(251,191,36,0.6), 0 0 18px rgba(251,191,36,0.2); animation: sg 2s ease-in-out infinite; }
+  .star.queued::after { width: 2px; height: 2px; background: var(--text-muted); opacity: 0.25; }
+  @keyframes sg { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .star:hover::after { transform: scale(2.5); filter: brightness(1.6); }
+  .star:hover { z-index: 200; }
+
+  .star .rp { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); border-radius: 50%; pointer-events: none; }
+  .star.active .rp:nth-child(1) { width: 18px; height: 18px; border: 1px solid rgba(251,191,36,0.35); animation: rp 2.5s ease-out infinite; }
+  .star.active .rp:nth-child(2) { width: 30px; height: 30px; border: 1px solid rgba(251,191,36,0.15); animation: rp 2.5s ease-out 0.6s infinite; }
+  @keyframes rp { 0% { opacity: 0.5; transform: translate(-50%,-50%) scale(0.3); } 100% { opacity: 0; transform: translate(-50%,-50%) scale(1.4); } }
+
+  .star.selected::before {
+    content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--accent-cyan);
+    box-shadow: 0 0 12px rgba(103,232,249,0.4); animation: sel 0.3s ease-out;
+  }
+  @keyframes sel { from { width: 6px; height: 6px; opacity: 0; } to { width: 22px; height: 22px; opacity: 1; } }
+
+  .star-tip {
+    position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+    background: var(--glass); backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border); border-radius: var(--radius-sm); padding: 7px 10px;
+    font-family: var(--font-mono); font-size: 10px; color: var(--text-primary);
+    pointer-events: none; opacity: 0; transition: opacity 0.12s;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+    max-width: 260px; line-height: 1.4; white-space: normal; z-index: 300;
+  }
+  .star-tip .s { font-weight: 600; margin-right: 3px; }
+  .star-tip .s.done { color: var(--accent-green); }
+  .star-tip .s.active { color: var(--accent-amber); }
+  .star-tip .s.queued { color: var(--text-muted); }
+  .star-tip .ag { display: block; margin-top: 2px; color: var(--accent-purple); font-size: 9px; }
+  .star:hover .star-tip { opacity: 1; }
+
+  /* Ambient dust particles */
+  .dust { position: absolute; border-radius: 50%; background: white; pointer-events: none; }
+
+  /* === GLASS UI OVERLAYS === */
+
+  /* Progress bar at very top */
+  .top-bar {
+    position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 100;
+    background: rgba(36,51,82,0.3);
+  }
+  .top-bar-fill {
+    height: 100%; width: 26%;
+    background: linear-gradient(90deg, var(--accent-green), var(--accent-teal), var(--accent-cyan));
+    box-shadow: 0 0 10px rgba(74,222,128,0.3), 0 0 20px rgba(103,232,249,0.15);
+    border-radius: 0 2px 2px 0;
+    position: relative;
+  }
+  .top-bar-fill::after {
+    content: ''; position: absolute; right: -1px; top: -2px; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--accent-cyan);
+    box-shadow: 0 0 8px var(--accent-cyan);
+    animation: tpulse 2s ease-in-out infinite;
+  }
+  @keyframes tpulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  /* Header */
+  .glass-header {
+    position: fixed; top: 3px; left: 0; right: 0; height: 42px; z-index: 90;
+    background: var(--glass); backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--glass-border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px;
+  }
+  .gh-left { display: flex; align-items: center; gap: 8px; }
+  .gh-logo { width: 24px; height: 24px; background: linear-gradient(135deg, var(--accent-cyan), var(--accent-magenta)); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: white; }
+  .gh-name { font-family: var(--font-title); font-size: 13px; font-weight: 700; }
+  .gh-tag { font-family: var(--font-mono); font-size: 7px; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 0.15em; opacity: 0.5; }
+  .gh-center { display: flex; gap: 14px; font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); }
+  .gh-center b { color: var(--text-secondary); font-weight: 600; }
+  .gh-right { display: flex; align-items: center; gap: 6px; }
+  .gh-btn { padding: 4px 10px; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--text-muted); font-family: var(--font-ui); font-size: 11px; cursor: pointer; }
+  .gh-btn.on { color: var(--text-primary); background: rgba(20,29,48,0.6); border-color: var(--glass-border); }
+  .gh-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent-green); box-shadow: 0 0 6px var(--accent-green); margin-left: 8px; }
+
+  /* Sidebar — semi-transparent */
+  .glass-sidebar {
+    position: fixed; top: 45px; left: 0; bottom: 0; width: 180px; z-index: 80;
+    background: rgba(8,12,20,0.5); backdrop-filter: blur(12px);
+    border-right: 1px solid rgba(36,51,82,0.2);
+    padding: 8px 0; overflow-y: auto;
+  }
+  .gs-label { font-family: var(--font-mono); font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); padding: 8px 12px 4px; }
+  .gs-item { display: flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 11px; color: var(--text-secondary); cursor: pointer; }
+  .gs-item:hover { background: rgba(26,38,64,0.3); }
+  .gs-item.on { background: rgba(20,29,48,0.5); color: var(--text-primary); border-right: 2px solid var(--accent-cyan); }
+  .gs-dot { width: 4px; height: 4px; border-radius: 50%; }
+  .gs-dot.w { background: var(--accent-amber); box-shadow: 0 0 4px var(--accent-amber); animation: pb 2s ease-in-out infinite; }
+  .gs-dot.i { background: var(--accent-green); }
+  .gs-dot.o { background: var(--text-muted); opacity: 0.3; }
+  @keyframes pb { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* Feed tabs at bottom of sidebar */
+  .gs-tabs { margin-top: auto; padding: 10px 0; border-top: 1px solid rgba(36,51,82,0.2); }
+  .gs-tab {
+    display: block; width: 100%; padding: 5px 12px; border: none; background: transparent;
+    color: var(--text-muted); font-family: var(--font-ui); font-size: 11px; text-align: left;
+    cursor: pointer;
+  }
+  .gs-tab:hover { color: var(--text-secondary); }
+  .gs-tab.on { color: var(--accent-cyan); }
+
+  /* === FLOATING AGENT CARDS === */
+  .float-card {
+    position: fixed; z-index: 50;
+    background: var(--glass); backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.4), 0 0 1px rgba(103,232,249,0.1);
+    transition: border-color 0.3s, box-shadow 0.3s;
+    max-width: 320px;
+  }
+  .float-card:hover { border-color: rgba(103,232,249,0.2); box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 20px rgba(103,232,249,0.05); }
+
+  /* Position cards near their constellation clusters */
+  .float-card:nth-child(1) { top: 40%; left: 220px; }
+  .float-card:nth-child(2) { top: 25%; left: 50%; transform: translateX(-50%); }
+  .float-card:nth-child(3) { top: 55%; right: 40px; }
+
+  .fc-head { display: flex; align-items: center; gap: 7px; padding: 9px 12px 9px 0; }
+  .fc-lane { width: 3px; align-self: stretch; border-radius: 0 2px 2px 0; }
+  .fc-lane.glow { animation: lg 2s ease-in-out infinite; }
+  @keyframes lg { 0%,100% { opacity: 1; box-shadow: 0 0 10px var(--lc); } 50% { opacity: 0.3; box-shadow: none; } }
+  .fc-task { flex: 1; font-size: 11px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fc-badge { font-family: var(--font-mono); font-size: 8px; padding: 2px 6px; border-radius: 10px; font-weight: 600; color: var(--accent-amber); background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.15); }
+
+  .fc-body { padding: 0 12px 8px 15px; }
+  .fc-tool {
+    display: flex; align-items: center; gap: 4px;
+    padding: 3px 6px; margin: 2px 0;
+    border: 1px solid rgba(36,51,82,0.3); border-radius: 3px;
+    background: rgba(4,6,11,0.4); font-family: var(--font-mono); font-size: 10px;
+  }
+  .fc-tn { color: var(--accent-purple); font-weight: 600; }
+  .fc-tp { flex: 1; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fc-stream { font-family: var(--font-mono); font-size: 10px; line-height: 1.5; color: var(--text-secondary); padding: 4px 0; }
+  .cur { display: inline-block; width: 5px; height: 11px; background: var(--accent-magenta); border-radius: 1px; animation: blink 1s step-end infinite; vertical-align: text-bottom; }
+  @keyframes blink { 0%,100% { opacity: 0.8; } 50% { opacity: 0; } }
+
+  /* === FLOATING HUD ELEMENTS === */
+  .hud-progress {
+    position: fixed; top: 55px; right: 16px; z-index: 60;
+    background: var(--glass); backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    padding: 10px 14px; display: flex; align-items: center; gap: 10px;
+  }
+  .hp-ring { width: 44px; height: 44px; position: relative; }
+  .hp-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .hp-bg { fill: none; stroke: rgba(36,51,82,0.4); stroke-width: 4; }
+  .hp-done { fill: none; stroke: var(--accent-green); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 119.4; stroke-dashoffset: 88.3; filter: drop-shadow(0 0 3px rgba(74,222,128,0.3)); }
+  .hp-active { fill: none; stroke: var(--accent-amber); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 119.4; stroke-dashoffset: 81.5; }
+  .hp-center { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 12px; font-weight: 700; }
+  .hp-stats { display: flex; flex-direction: column; gap: 2px; font-family: var(--font-mono); font-size: 10px; }
+  .hp-stat { display: flex; align-items: center; gap: 3px; }
+  .hp-dot { width: 3px; height: 3px; border-radius: 50%; }
+  .hp-dot.d { background: var(--accent-green); }
+  .hp-dot.a { background: var(--accent-amber); }
+  .hp-dot.q { background: var(--text-muted); }
+  .hp-v { color: var(--text-primary); font-weight: 600; }
+  .hp-l { color: var(--text-muted); }
+
+  /* Active work floating */
+  .hud-work {
+    position: fixed; bottom: 16px; left: 196px; z-index: 60;
+    background: var(--glass); backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    padding: 8px 12px; display: flex; gap: 8px;
+  }
+  .hw-pill { display: flex; align-items: center; gap: 4px; font-family: var(--font-mono); font-size: 9px; color: var(--text-secondary); }
+  .hw-dot { width: 4px; height: 4px; border-radius: 50%; animation: pb 2s ease-in-out infinite; }
+
+  /* Entrance animations */
+  .glass-header { animation: fadeDown 0.4s ease-out; }
+  .glass-sidebar { animation: fadeRight 0.5s ease-out; }
+  .float-card:nth-child(1) { animation: cardIn 0.5s ease-out 0.3s both; }
+  .float-card:nth-child(2) { animation: cardIn 0.5s ease-out 0.45s both; }
+  .float-card:nth-child(3) { animation: cardIn 0.5s ease-out 0.6s both; }
+  .hud-progress { animation: fadeDown 0.4s ease-out 0.2s both; }
+  .hud-work { animation: fadeUp 0.4s ease-out 0.3s both; }
+  @keyframes fadeDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+  @keyframes fadeRight { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @keyframes cardIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+  .star { animation: starIn 0.3s ease-out both; }
+  @keyframes starIn { from { opacity: 0; transform: translate(-50%,-50%) scale(0); } to { opacity: 1; transform: translate(-50%,-50%) scale(1); } }
+</style>
+</head>
+<body>
+
+<!-- Progress bar at top edge -->
+<div class="top-bar"><div class="top-bar-fill"></div></div>
+
+<!-- Full-viewport constellation background -->
+<div class="cosmos" id="cosmos">
+  <svg class="lines" id="svg"></svg>
+</div>
+
+<!-- Glass header -->
+<div class="glass-header">
+  <div class="gh-left">
+    <div class="gh-logo">C</div>
+    <div style="display:flex;flex-direction:column;gap:1px">
+      <span class="gh-name">Claude Agent Manager</span>
+      <span class="gh-tag">orchestration</span>
+    </div>
+  </div>
+  <div class="gh-center">
+    <span><b>4</b> projects</span>
+    <span><b>2</b> working</span>
+    <span><b>5</b> agents</span>
+  </div>
+  <div class="gh-right">
+    <button class="gh-btn on">Projects</button>
+    <button class="gh-btn">Settings</button>
+    <span class="gh-dot"></span>
+  </div>
+</div>
+
+<!-- Glass sidebar -->
+<div class="glass-sidebar">
+  <div class="gs-label">Projects</div>
+  <div class="gs-item on"><span class="gs-dot w"></span>work simulator</div>
+  <div class="gs-item"><span class="gs-dot i"></span>api-gateway</div>
+  <div class="gs-item"><span class="gs-dot w"></span>ml-pipeline</div>
+  <div class="gs-item"><span class="gs-dot o"></span>docs-site</div>
+  <div class="gs-tabs">
+    <button class="gs-tab on">Overview</button>
+    <button class="gs-tab">Tasks</button>
+    <button class="gs-tab">Milestones</button>
+    <button class="gs-tab">Workflow</button>
+    <button class="gs-tab">Artifacts</button>
+  </div>
+</div>
+
+<!-- Floating progress HUD -->
+<div class="hud-progress">
+  <div class="hp-ring">
+    <svg viewBox="0 0 42 42">
+      <circle class="hp-bg" cx="21" cy="21" r="19"/>
+      <circle class="hp-done" cx="21" cy="21" r="19"/>
+      <circle class="hp-active" cx="21" cy="21" r="19"/>
+    </svg>
+    <div class="hp-center">26%</div>
+  </div>
+  <div class="hp-stats">
+    <span class="hp-stat"><span class="hp-dot d"></span><span class="hp-v">12</span><span class="hp-l"> done</span></span>
+    <span class="hp-stat"><span class="hp-dot a"></span><span class="hp-v">3</span><span class="hp-l"> active</span></span>
+    <span class="hp-stat"><span class="hp-dot q"></span><span class="hp-v">10</span><span class="hp-l"> queued</span></span>
+  </div>
+</div>
+
+<!-- Floating agent cards -->
+<div class="float-card" style="top:42%;left:220px;width:300px">
+  <div class="fc-head">
+    <div class="fc-lane glow" style="background:#67e8f9;--lc:#67e8f9"></div>
+    <div class="fc-task">Write unit tests for backend endpoints (auth, cart)</div>
+    <span class="fc-badge">using tool</span>
+  </div>
+  <div class="fc-body">
+    <div class="fc-tool"><span class="fc-tn">Bash</span><span class="fc-tp">npx jest --coverage auth.test.ts</span></div>
+    <div class="fc-stream">Running auth tests... 14/18 passing<span class="cur"></span></div>
+  </div>
+</div>
+
+<div class="float-card" style="top:22%;left:50%;transform:translateX(-50%);width:310px">
+  <div class="fc-head">
+    <div class="fc-lane glow" style="background:#c084fc;--lc:#c084fc"></div>
+    <div class="fc-task">Frontend component tests — CartItem, CheckoutForm</div>
+    <span class="fc-badge">thinking</span>
+  </div>
+  <div class="fc-body">
+    <div class="fc-tool"><span class="fc-tn">Read</span><span class="fc-tp">src/components/CartItem.tsx</span></div>
+    <div class="fc-stream">Analyzing CartItem props...<span class="cur"></span></div>
+  </div>
+</div>
+
+<div class="float-card" style="top:58%;right:40px;width:290px">
+  <div class="fc-head">
+    <div class="fc-lane glow" style="background:#4ade80;--lc:#4ade80"></div>
+    <div class="fc-task">Playwright E2E tests for checkout flow</div>
+    <span class="fc-badge">using tool</span>
+  </div>
+  <div class="fc-body">
+    <div class="fc-tool"><span class="fc-tn">Bash</span><span class="fc-tp">npx playwright test checkout.spec.ts</span></div>
+    <div class="fc-stream">Browser launched, navigating to /checkout...<span class="cur"></span></div>
+  </div>
+</div>
+
+<!-- Active work pills -->
+<div class="hud-work">
+  <div class="hw-pill"><span class="hw-dot" style="background:#67e8f9"></span>Unit tests (auth, cart)</div>
+  <div class="hw-pill"><span class="hw-dot" style="background:#c084fc"></span>Component tests (RTL)</div>
+  <div class="hw-pill"><span class="hw-dot" style="background:#4ade80"></span>E2E Playwright</div>
+</div>
+
+<script>
+const TASKS = [
+  { id:0,  text:'Set up project scaffolding with Express + React + PostgreSQL', status:'done', agent:'eng-a4f2' },
+  { id:1,  text:'Implement user authentication with JWT + refresh tokens', status:'done', agent:'eng-b7c3' },
+  { id:2,  text:'Design product catalog data model with search indexing', status:'done', agent:'eng-c1e9' },
+  { id:3,  text:'Configure TypeScript, ESLint, and Prettier', status:'done', agent:'eng-a4f2' },
+  { id:4,  text:'Set up database schema migrations with Prisma', status:'done', agent:'eng-b7c3' },
+  { id:5,  text:'Implement product CRUD API endpoints', status:'done', agent:'eng-d3a8' },
+  { id:6,  text:'Build responsive product listing page', status:'done', agent:'eng-e5f1' },
+  { id:7,  text:'Add image upload and CDN integration', status:'done', agent:'eng-c1e9' },
+  { id:8,  text:'Implement user profile management', status:'done', agent:'eng-a4f2' },
+  { id:9,  text:'Set up Redis caching layer', status:'done', agent:'eng-d3a8' },
+  { id:10, text:'Build product detail page with reviews', status:'done', agent:'eng-e5f1' },
+  { id:11, text:'Order history and tracking page', status:'done', agent:'eng-b7c3' },
+  { id:12, text:'Write unit tests for backend endpoints (auth, cart, orders)', status:'active', agent:'eng-d3a8' },
+  { id:13, text:'Frontend component tests — ProductCard, CartItem, CheckoutForm', status:'active', agent:'eng-e5f1' },
+  { id:14, text:'Integration testing with Playwright for checkout E2E', status:'active', agent:'eng-f8b2' },
+  { id:15, text:'Implement shopping cart with session persistence', status:'queued', agent:null },
+  { id:16, text:'Build checkout flow with Stripe payment integration', status:'queued', agent:null },
+  { id:17, text:'Admin dashboard with inventory management', status:'queued', agent:null },
+  { id:18, text:'Email notification system for orders and shipping', status:'queued', agent:null },
+  { id:19, text:'Product search with fuzzy matching and filters', status:'queued', agent:null },
+  { id:20, text:'Wishlist and saved items feature', status:'queued', agent:null },
+  { id:21, text:'Product comparison page', status:'queued', agent:null },
+  { id:22, text:'Internationalization (i18n) support', status:'queued', agent:null },
+  { id:23, text:'Performance optimization and lazy loading', status:'queued', agent:null },
+  { id:24, text:'Accessibility audit and WCAG compliance', status:'queued', agent:null },
+];
+
+let seed = 42;
+function rand() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+
+const cosmos = document.getElementById('cosmos');
+const svg = document.getElementById('svg');
+const svgNS = 'http://www.w3.org/2000/svg';
+const nodes = [];
+
+// Dust particles
+for (let i = 0; i < 100; i++) {
+  const d = document.createElement('div');
+  d.className = 'dust';
+  const size = 0.3 + Math.random() * 1.2;
+  d.style.cssText = `width:${size}px;height:${size}px;left:${Math.random()*100}%;top:${Math.random()*100}%;opacity:${0.03 + Math.random()*0.1}`;
+  cosmos.appendChild(d);
+}
+
+// Stars scattered across full viewport
+TASKS.forEach((task, i) => {
+  let x, y;
+  // Spread across entire viewport but cluster by status
+  if (task.status === 'done') {
+    x = 3 + rand() * 32; y = 8 + rand() * 84;
+  } else if (task.status === 'active') {
+    x = 33 + rand() * 26; y = 12 + rand() * 76;
+  } else {
+    x = 56 + rand() * 40; y = 6 + rand() * 88;
+  }
+  nodes.push({ x, y, task });
+
+  const star = document.createElement('div');
+  star.className = `star ${task.status}`;
+  star.style.left = x + '%';
+  star.style.top = y + '%';
+  star.style.animationDelay = (i * 0.04) + 's';
+  star.dataset.taskId = task.id;
+
+  if (task.status === 'active') {
+    star.innerHTML = '<span class="rp"></span><span class="rp"></span>';
+  }
+
+  const tip = document.createElement('div');
+  tip.className = 'star-tip';
+  const icon = task.status === 'done' ? '&#10003;' : task.status === 'active' ? '&#9679;' : '&#9675;';
+  tip.innerHTML = `<span class="s ${task.status}">${icon}</span> ${task.text}${task.agent ? `<span class="ag">${task.agent}</span>` : ''}`;
+  star.appendChild(tip);
+
+  star.addEventListener('click', () => {
+    document.querySelectorAll('.star.selected').forEach(s => s.classList.remove('selected'));
+    star.classList.add('selected');
+  });
+
+  cosmos.appendChild(star);
+});
+
+// Lines
+for (let i = 0; i < nodes.length; i++) {
+  let conns = 0;
+  for (let j = i + 1; j < nodes.length && conns < 2; j++) {
+    const dx = nodes[i].x - nodes[j].x, dy = nodes[i].y - nodes[j].y;
+    if (Math.sqrt(dx*dx + dy*dy) < 14 && rand() > 0.25) {
+      const line = document.createElementNS(svgNS, 'line');
+      line.setAttribute('x1', nodes[i].x+'%'); line.setAttribute('y1', nodes[i].y+'%');
+      line.setAttribute('x2', nodes[j].x+'%'); line.setAttribute('y2', nodes[j].y+'%');
+      const s = nodes[i].task.status;
+      line.setAttribute('class', s === 'done' ? 'dl' : s === 'active' ? 'al' : 'ql');
+      svg.appendChild(line);
+      conns++;
+    }
+  }
+}
+</script>
+</body>
+</html>
