@@ -79,7 +79,9 @@ export class FeedController {
     this._dashboardWidgetGrid = document.createElement('div');
     this._dashboardWidgetGrid.className = 'dashboard-widget-grid';
     this._overviewContainer.appendChild(this._dashboardWidgetGrid);
-    this._dashboardCanvas = new CanvasEngine();
+    this._dashboardCanvas = new CanvasEngine(null, {
+      onRemove: (widgetId) => this._deleteWidget(project.name, widgetId),
+    });
     this._dashboardCanvas.setProject(project.name);
     this._dashboardCanvas.mount(this._dashboardWidgetGrid);
 
@@ -284,6 +286,30 @@ export class FeedController {
     }
   }
 
+  async _deleteWidget(projectName, widgetId) {
+    try {
+      await fetch(`/api/canvas/${encodeURIComponent(projectName)}/widgets/${encodeURIComponent(widgetId)}`, {
+        method: 'DELETE',
+      });
+    } catch (e) {
+      console.warn('[FeedController] Failed to delete widget:', e);
+    }
+  }
+
+  async _clearAllWidgets(projectName) {
+    if (!confirm('Clear all dashboard widgets?')) return;
+    try {
+      await fetch(`/api/canvas/${encodeURIComponent(projectName)}`, {
+        method: 'DELETE',
+      });
+      this._dashboardCanvas?.clear();
+      this._addTemplatePlaceholder(projectName);
+      toast('Dashboard cleared', 'success', 2000);
+    } catch (e) {
+      toast(`Failed: ${e.message}`, 'error');
+    }
+  }
+
   async _seedDashboard(projectName) {
     try {
       const resp = await fetch(`/api/canvas/${encodeURIComponent(projectName)}/seed`, {
@@ -362,6 +388,12 @@ export class FeedController {
             <path d="M4.5 1.5v3h4v-3M4.5 8h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
           </svg>
           Save Layout
+        </button>
+        <button class="feed-clear-widgets-btn" title="Clear all widgets">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <path d="M3.5 3V2.5a1 1 0 011-1h4a1 1 0 011 1V3M2 3h9M4.5 5.5v4M6.5 5.5v4M8.5 5.5v4M3 3h7l-.5 7.5a1 1 0 01-1 .5h-4a1 1 0 01-1-.5L3 3z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Clear All
         </button>
       </div>
       <div class="feed-dispatch-composer">
@@ -443,6 +475,11 @@ export class FeedController {
     el.querySelector('.feed-save-layout-btn')?.addEventListener('click', async () => {
       await this._dashboardCanvas.saveLayout();
       toast('Layout saved', 'success', 2000);
+    });
+
+    // Clear all widgets
+    el.querySelector('.feed-clear-widgets-btn')?.addEventListener('click', () => {
+      this._clearAllWidgets(project.name);
     });
 
     // Delete project
@@ -819,6 +856,7 @@ export class FeedController {
         this._headerEl.querySelector('.feed-dispatch-composer')?.classList.toggle('hidden', !showOverviewUI);
         this._headerEl.querySelector('.skill-toggle-panel')?.classList.toggle('hidden', !showOverviewUI);
         this._headerEl.querySelector('.feed-save-layout-btn')?.classList.toggle('hidden', !showOverviewUI);
+        this._headerEl.querySelector('.feed-clear-widgets-btn')?.classList.toggle('hidden', !showOverviewUI);
 
         // Stop panel refreshes
         this._milestonesPanel?.stopAutoRefresh();

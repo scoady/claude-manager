@@ -24,6 +24,7 @@ export class CanvasEngine {
     this._registry = new WidgetRegistry();
     this._static   = opts.static ?? false;
     this._projectName = null;
+    this._onWidgetRemove = opts.onRemove ?? null;  // callback(widgetId)
 
     // Entrance stagger state
     this._pendingBatch = [];
@@ -140,7 +141,11 @@ export class CanvasEngine {
     }
   }
 
-  remove(widgetId) {
+  /**
+   * Remove a widget. If `fromUser` is true (default), calls the onRemove
+   * callback to persist the deletion to the backend.
+   */
+  remove(widgetId, { fromUser = true } = {}) {
     const frame = this._registry.get(widgetId);
     if (!frame) return;
 
@@ -153,12 +158,16 @@ export class CanvasEngine {
         this._grid.removeWidget(gridEl, false);
       }
     } else {
-      // Static mode — just remove from DOM
       frame.element.remove();
     }
 
     if (this._registry.size === 0) {
       this._showEmptyState();
+    }
+
+    // Notify parent to persist deletion (only for user-initiated removes)
+    if (fromUser && this._onWidgetRemove) {
+      this._onWidgetRemove(widgetId);
     }
   }
 

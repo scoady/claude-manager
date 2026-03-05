@@ -78,7 +78,10 @@ export class WidgetFrame {
     removeBtn.className = 'widget-remove';
     removeBtn.title = 'Remove widget';
     removeBtn.innerHTML = '&times;';
-    removeBtn.addEventListener('click', () => {
+    // Stop propagation to prevent GridStack from intercepting the click
+    removeBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+    removeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
       if (typeof this._def.onRemove === 'function') {
         this._def.onRemove(this._def.widget_id);
       }
