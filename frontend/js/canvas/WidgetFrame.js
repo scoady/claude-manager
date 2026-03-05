@@ -109,6 +109,30 @@ const SHADOW_BASE_STYLES = `
     min-height: 120px;
     overflow: auto;
     padding: 12px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  .widget-content * {
+    max-width: 100%;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  .widget-content table {
+    table-layout: fixed;
+    width: 100%;
+  }
+
+  .widget-content td, .widget-content th {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .widget-content pre {
+    white-space: pre-wrap;
+    overflow-x: auto;
   }
 
   .widget-error {

@@ -46,6 +46,15 @@ def canvas_put(
     - Transparent backgrounds (the widget frame provides the card bg)
     - Status badges: green=done, amber=in-progress, cyan=planned, red=blocked
 
+    TEXT FITTING (CRITICAL):
+    - ALL text MUST fit within the widget bounds — never overflow horizontally
+    - Use word-wrap:break-word and overflow-wrap:break-word on all text containers
+    - Long strings (paths, URLs, hashes): use text-overflow:ellipsis with overflow:hidden
+    - Tables: use table-layout:fixed with percentage widths; td cells need overflow:hidden
+    - Pre/code blocks: use white-space:pre-wrap to wrap long lines
+    - Test assumption: widgets are ~300-400px wide. Design content to fit that width.
+    - Prefer concise labels and values; truncate with "…" rather than let text overflow
+
     widget_id: stable ID — use the same ID on repeated calls to update in-place.
     grid_col/grid_row: 1-indexed position in the dashboard grid.
     col_span/row_span: how many grid cells the widget occupies (default 1).

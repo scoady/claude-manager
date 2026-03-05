@@ -1184,11 +1184,11 @@ async def seed_canvas(project: str) -> dict[str, Any]:
     if milestones:
         ms = milestones[-1]
         ms_text = (ms.get("summary") or ms.get("task") or "")[:100]
-        latest_ms = f'<div style="margin-top:8px;padding:8px;background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.15);border-radius:6px;font-size:11px;color:#94a3b8"><span style="color:#4ade80;font-weight:600">Latest:</span> {ms_text}</div>'
+        latest_ms = f'<div style="margin-top:8px;padding:8px;background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.15);border-radius:6px;font-size:11px;color:#94a3b8;word-wrap:break-word;overflow-wrap:break-word"><span style="color:#4ade80;font-weight:600">Latest:</span> {ms_text}</div>'
 
     info_html = f"""
 <div style="font-family:'IBM Plex Mono',monospace;color:#e2e8f0">
-  <div style="font-size:12px;color:#94a3b8;line-height:1.5;margin-bottom:12px">{desc_escaped}</div>
+  <div style="font-size:12px;color:#94a3b8;line-height:1.5;margin-bottom:12px;word-wrap:break-word;overflow-wrap:break-word">{desc_escaped}</div>
   <div style="display:flex;gap:16px;font-size:11px;color:#475569">
     <span><span style="color:#67e8f9;font-weight:600">{total}</span> tasks</span>
     <span><span style="color:#a78bfa;font-weight:600">{agent_count}</span> agents</span>
