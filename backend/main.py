@@ -78,19 +78,27 @@ async def _create_agent_widget(
     # Escape HTML in task text
     short_task = short_task.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-    html = f"""<div style="font-family:'IBM Plex Mono',monospace;color:#e2e8f0">
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-    <span style="width:8px;height:8px;border-radius:50%;background:#fbbf24;animation:pulse 1.5s ease infinite"></span>
-    <span style="font-size:11px;color:#fbbf24;font-weight:600">STARTING</span>
-    <span style="font-size:10px;color:#475569;margin-left:auto">{role}</span>
+    accent = "#fbbf24" if is_controller else "#a78bfa"
+    html = f"""<div style="font-family:'DM Sans',system-ui,sans-serif;color:#e2e8f0">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+    <span style="width:8px;height:8px;border-radius:50%;background:{accent};box-shadow:0 0 12px {accent}40;animation:pulse 2s ease infinite"></span>
+    <span style="font-family:'Plus Jakarta Sans',system-ui;font-size:12px;color:{accent};font-weight:600;letter-spacing:0.03em">INITIALIZING</span>
+    <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#475569;margin-left:auto;padding:2px 8px;border:1px solid #243352;border-radius:10px">{role}</span>
   </div>
-  <div style="font-size:12px;color:#94a3b8;line-height:1.5;word-wrap:break-word;overflow-wrap:break-word">{short_task}</div>
+  <div style="font-size:12px;color:#94a3b8;line-height:1.6;word-wrap:break-word;overflow-wrap:break-word">{short_task}</div>
+  <div style="margin-top:12px;height:2px;background:#1a2640;border-radius:1px;overflow:hidden">
+    <div style="height:100%;width:30%;background:linear-gradient(90deg,{accent},transparent);border-radius:1px;animation:shimmer 1.5s ease infinite"></div>
+  </div>
 </div>"""
 
-    css = """@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}"""
+    css = f"""@keyframes pulse {{
+  0%, 100% {{ opacity: 1; }}
+  50% {{ opacity: 0.35; }}
+}}
+@keyframes shimmer {{
+  0% {{ transform: translateX(-100%); }}
+  100% {{ transform: translateX(400%); }}
+}}"""
 
     widget = WidgetCreate(
         id=widget_id,
@@ -124,7 +132,14 @@ def _dashboard_instructions(project_name: str, widget_id: str) -> str:
         f"Update it when you: start working, make significant progress, encounter errors, "
         f"or finish. Include a status badge, summary, and <details> with full output. "
         f"You may also create ADDITIONAL widgets for charts, diagrams, or detailed views — "
-        f"use a unique widget_id for each."
+        f"use a unique widget_id for each.\n\n"
+        f"DESIGN: Use the design tokens from canvas_put's docstring. Key rules:\n"
+        f"- Titles: font-family:'Plus Jakarta Sans',system-ui; font-weight:600; color:#e2e8f0\n"
+        f"- Body: font-family:'DM Sans',system-ui; color:#94a3b8\n"
+        f"- Data/stats: font-family:'IBM Plex Mono',monospace; color:#67e8f9\n"
+        f"- Status badges: small pill with border-radius:10px, colored bg at 15% opacity\n"
+        f"- Inner panels: background:linear-gradient(135deg,#141d30,#0e1525); border:1px solid #243352; border-radius:10px\n"
+        f"- Add subtle glow (box-shadow) on accent elements. Aim for polished, modern, premium."
     )
 
 
@@ -1170,48 +1185,66 @@ async def seed_canvas(project: str) -> dict[str, Any]:
     # Colors: done=green, active=cyan glow, pending=dim
     task_nodes_svg = ""
     task_list_html = ""
-    # Layout tasks in a grid pattern within the SVG
     cols = 6
-    for i, t in enumerate(tasks[:18]):  # cap at 18 for visual space
+    for i, t in enumerate(tasks[:18]):
         st = t.get("status", "pending")
         cx = 30 + (i % cols) * 52
         cy = 24 + (i // cols) * 40
-        fill = "#4ade80" if st == "done" else "#67e8f9" if st == "in_progress" else "#243352"
-        glow = f'<circle cx="{cx}" cy="{cy}" r="10" fill="none" stroke="{fill}" stroke-opacity="0.3"><animate attributeName="r" values="8;14;8" dur="2.5s" repeatCount="indefinite"/></circle>' if st == "in_progress" else ""
-        stroke = "#4ade80" if st == "done" else "#67e8f9" if st == "in_progress" else "#1a2640"
-        r = 5 if st != "in_progress" else 6
-        task_nodes_svg += f'{glow}<circle cx="{cx}" cy="{cy}" r="{r}" fill="{fill}" stroke="{stroke}" stroke-width="1"/>'
+        if st == "done":
+            fill, stroke, filt = "#4ade80", "#4ade80", ' filter="url(#glow-done)"'
+            r = 5
+        elif st == "in_progress":
+            fill, stroke, filt = "#67e8f9", "#67e8f9", ' filter="url(#glow-active)"'
+            r = 6
+        else:
+            fill, stroke, filt = "#1a2640", "#243352", ""
+            r = 4
+        glow_ring = f'<circle cx="{cx}" cy="{cy}" r="11" fill="none" stroke="{fill}" stroke-opacity="0.15"><animate attributeName="r" values="9;15;9" dur="3s" repeatCount="indefinite"/><animate attributeName="stroke-opacity" values="0.15;0.05;0.15" dur="3s" repeatCount="indefinite"/></circle>' if st == "in_progress" else ""
+        task_nodes_svg += f'{glow_ring}<circle cx="{cx}" cy="{cy}" r="{r}" fill="{fill}" stroke="{stroke}" stroke-width="1"{filt}/>'
         # Edge to next node
         if i < len(tasks) - 1 and i % cols < cols - 1:
             nx = cx + 52
-            ny = cy
-            task_nodes_svg += f'<line x1="{cx+7}" y1="{cy}" x2="{nx-7}" y2="{ny}" stroke="#1a2640" stroke-width="1" stroke-dasharray="2,3"/>'
+            edge_color = "#243352" if st == "pending" else "#1a2640"
+            task_nodes_svg += f'<line x1="{cx+r+2}" y1="{cy}" x2="{nx-r-2}" y2="{cy}" stroke="{edge_color}" stroke-width="1" stroke-dasharray="2,4" stroke-opacity="0.5"/>'
 
-        # Build compact task list
-        text = _escape_html((t.get("text", "") or "")[:60])
+        text = _escape_html((t.get("text", "") or "")[:55])
         color = "#4ade80" if st == "done" else "#fbbf24" if st == "in_progress" else "#475569"
         badge = "done" if st == "done" else "active" if st == "in_progress" else "pending"
+        badge_bg = "rgba(74,222,128,0.12)" if st == "done" else "rgba(251,191,36,0.12)" if st == "in_progress" else "rgba(71,85,105,0.1)"
         task_list_html += (
-            f'<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:10px">'
-            f'<span style="width:5px;height:5px;border-radius:50%;background:{color};flex-shrink:0"></span>'
-            f'<span style="color:#94a3b8;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{text}</span>'
-            f'<span style="color:{color};font-size:9px;flex-shrink:0">{badge}</span>'
+            f'<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-family:\'DM Sans\',system-ui,sans-serif">'
+            f'<span style="width:5px;height:5px;border-radius:50%;background:{color};flex-shrink:0;box-shadow:0 0 6px {color}30"></span>'
+            f'<span style="color:#94a3b8;font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{text}</span>'
+            f'<span style="color:{color};font-size:9px;font-family:\'IBM Plex Mono\',monospace;padding:1px 6px;background:{badge_bg};border-radius:8px;flex-shrink:0">{badge}</span>'
             f'</div>'
         )
 
     svg_height = 24 + ((min(len(tasks), 18) - 1) // cols + 1) * 40 + 10
-    constellation_html = f"""<div style="font-family:'IBM Plex Mono',monospace;color:#e2e8f0">
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-    <span style="font-size:20px;font-weight:700;color:#67e8f9">{pct}<span style="font-size:11px;color:#475569">%</span></span>
-    <div style="flex:1;height:3px;background:#1a2640;border-radius:2px;overflow:hidden">
-      <div style="height:100%;width:{pct}%;background:linear-gradient(90deg,#4ade80,#67e8f9);border-radius:2px;box-shadow:0 0 8px rgba(74,222,128,0.3)"></div>
+    constellation_html = f"""<div style="color:#e2e8f0">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+    <div style="display:flex;align-items:baseline;gap:2px">
+      <span style="font-family:'Plus Jakarta Sans',system-ui;font-size:24px;font-weight:700;color:#67e8f9;letter-spacing:-0.02em">{pct}</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#475569">%</span>
     </div>
-    <span style="font-size:10px;color:#475569">{done}/{total}</span>
+    <div style="flex:1;height:3px;background:#1a2640;border-radius:2px;overflow:hidden">
+      <div style="height:100%;width:{pct}%;background:linear-gradient(90deg,#4ade80,#67e8f9);border-radius:2px;box-shadow:0 0 10px rgba(74,222,128,0.3)"></div>
+    </div>
+    <div style="display:flex;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:10px">
+      <span style="color:#4ade80">{done} done</span>
+      <span style="color:#475569">&middot;</span>
+      <span style="color:#fbbf24">{active} active</span>
+      <span style="color:#475569">&middot;</span>
+      <span style="color:#475569">{pending} pending</span>
+    </div>
   </div>
-  <svg viewBox="0 0 340 {svg_height}" style="width:100%;height:auto;max-height:80px" xmlns="http://www.w3.org/2000/svg">
+  <svg viewBox="0 0 340 {svg_height}" style="width:100%;height:auto;max-height:70px" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <filter id="glow-active"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <filter id="glow-done"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    </defs>
     {task_nodes_svg}
   </svg>
-  <div style="margin-top:6px;max-height:120px;overflow-y:auto">{task_list_html}</div>
+  <div style="margin-top:8px;max-height:120px;overflow-y:auto">{task_list_html}</div>
 </div>"""
 
     w1 = WidgetCreate(
@@ -1230,47 +1263,61 @@ async def seed_canvas(project: str) -> dict[str, Any]:
     agent_nodes_svg = ""
     agent_list_html = ""
     cx_hub, cy_hub = 80, 50
-    agent_nodes_svg += f'<circle cx="{cx_hub}" cy="{cy_hub}" r="12" fill="#0e1525" stroke="#67e8f9" stroke-width="1.5"/>'
-    agent_nodes_svg += f'<text x="{cx_hub}" y="{cy_hub + 3}" text-anchor="middle" fill="#67e8f9" font-size="8" font-family="IBM Plex Mono">HUB</text>'
+
+    # Hub node with glow
+    agent_nodes_svg += (
+        f'<circle cx="{cx_hub}" cy="{cy_hub}" r="14" fill="#0e1525" stroke="#67e8f9" stroke-width="1" stroke-opacity="0.4"/>'
+        f'<circle cx="{cx_hub}" cy="{cy_hub}" r="18" fill="none" stroke="#67e8f9" stroke-width="0.5" stroke-opacity="0.15" stroke-dasharray="3,3"><animateTransform attributeName="transform" type="rotate" from="0 {cx_hub} {cy_hub}" to="360 {cx_hub} {cy_hub}" dur="20s" repeatCount="indefinite"/></circle>'
+        f'<text x="{cx_hub}" y="{cy_hub+3}" text-anchor="middle" fill="#67e8f9" font-size="7" font-family="Plus Jakarta Sans,system-ui" font-weight="600" letter-spacing="0.05em">HUB</text>'
+    )
 
     if agents:
         angle_step = 360 / max(len(agents), 1)
         import math
         for i, a in enumerate(agents[:8]):
             angle = math.radians(i * angle_step - 90)
-            ax = cx_hub + 40 * math.cos(angle)
-            ay = cy_hub + 35 * math.sin(angle)
+            ax = cx_hub + 42 * math.cos(angle)
+            ay = cy_hub + 36 * math.sin(angle)
             phase = a.get("phase", "idle")
             is_ctrl = a.get("is_controller", False)
             node_color = "#fbbf24" if is_ctrl else "#a78bfa" if phase in ("thinking", "tool_use") else "#4ade80" if phase == "idle" else "#67e8f9"
-            pulse = f'<circle cx="{ax:.0f}" cy="{ay:.0f}" r="8" fill="none" stroke="{node_color}" stroke-opacity="0.25"><animate attributeName="r" values="6;12;6" dur="2s" repeatCount="indefinite"/></circle>' if phase not in ("idle", "cancelled", "error") else ""
-            agent_nodes_svg += f'<line x1="{cx_hub}" y1="{cy_hub}" x2="{ax:.0f}" y2="{ay:.0f}" stroke="{node_color}" stroke-width="1" stroke-opacity="0.3" stroke-dasharray="3,4"/>'
+            is_active = phase not in ("idle", "cancelled", "error")
+            pulse = f'<circle cx="{ax:.0f}" cy="{ay:.0f}" r="10" fill="none" stroke="{node_color}" stroke-opacity="0.15"><animate attributeName="r" values="7;13;7" dur="2.5s" repeatCount="indefinite"/><animate attributeName="stroke-opacity" values="0.15;0.04;0.15" dur="2.5s" repeatCount="indefinite"/></circle>' if is_active else ""
+            # Connection line — animated dash for active agents
+            dash = 'stroke-dasharray="4,6"' if is_active else 'stroke-dasharray="2,5"'
+            line_anim = f'<animate attributeName="stroke-dashoffset" values="0;-20" dur="2s" repeatCount="indefinite"/>' if is_active else ""
+            agent_nodes_svg += f'<line x1="{cx_hub}" y1="{cy_hub}" x2="{ax:.0f}" y2="{ay:.0f}" stroke="{node_color}" stroke-width="1" stroke-opacity="0.25" {dash}>{line_anim}</line>'
             agent_nodes_svg += pulse
-            agent_nodes_svg += f'<circle cx="{ax:.0f}" cy="{ay:.0f}" r="5" fill="{node_color}" stroke="{node_color}" stroke-width="1" stroke-opacity="0.5"/>'
+            filt = ' filter="url(#glow-active)"' if is_active else ""
+            agent_nodes_svg += f'<circle cx="{ax:.0f}" cy="{ay:.0f}" r="5" fill="{node_color}"{filt}/>'
 
-            role = "CTRL" if is_ctrl else "W"
+            role = "CTRL" if is_ctrl else "AGENT"
             sid = (a.get("session_id") or "")[:6]
-            ph_color = node_color
+            role_bg = "rgba(251,191,36,0.12)" if is_ctrl else "rgba(167,139,250,0.12)"
             agent_list_html += (
-                f'<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:10px">'
-                f'<span style="width:5px;height:5px;border-radius:50%;background:{ph_color};flex-shrink:0"></span>'
-                f'<span style="color:{ph_color};font-size:9px;font-weight:600;width:28px">{role}</span>'
-                f'<span style="color:#475569;font-size:9px;flex:1">{sid}</span>'
-                f'<span style="color:{ph_color};font-size:9px">{phase}</span>'
+                f'<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-family:\'DM Sans\',system-ui,sans-serif">'
+                f'<span style="width:5px;height:5px;border-radius:50%;background:{node_color};flex-shrink:0;box-shadow:0 0 6px {node_color}30"></span>'
+                f'<span style="color:{node_color};font-size:9px;font-family:\'IBM Plex Mono\',monospace;padding:1px 5px;background:{role_bg};border-radius:6px;font-weight:500">{role}</span>'
+                f'<span style="color:#475569;font-size:9px;font-family:\'IBM Plex Mono\',monospace;flex:1">{sid}</span>'
+                f'<span style="color:{node_color};font-size:9px;font-family:\'IBM Plex Mono\',monospace">{phase}</span>'
                 f'</div>'
             )
     else:
-        agent_list_html = '<div style="color:#475569;font-size:10px;text-align:center;padding:4px 0">No agents</div>'
+        agent_list_html = '<div style="color:#475569;font-size:11px;text-align:center;padding:8px 0;font-family:\'DM Sans\',system-ui,sans-serif">No active agents</div>'
 
-    agent_html = f"""<div style="font-family:'IBM Plex Mono',monospace;color:#e2e8f0">
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-    <span style="font-size:18px;font-weight:700;color:#a78bfa">{agent_count}</span>
-    <span style="font-size:10px;color:#94a3b8">agent{'s' if agent_count != 1 else ''}{' · ' + str(working) + ' active' if working else ''}</span>
+    agent_html = f"""<div style="color:#e2e8f0">
+  <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px">
+    <span style="font-family:'Plus Jakarta Sans',system-ui;font-size:22px;font-weight:700;color:#a78bfa;letter-spacing:-0.02em">{agent_count}</span>
+    <span style="font-family:'DM Sans',system-ui;font-size:11px;color:#94a3b8">agent{'s' if agent_count != 1 else ''}</span>
+    {('<span style="font-family:IBM Plex Mono,monospace;font-size:9px;color:#fbbf24;padding:2px 8px;background:rgba(251,191,36,0.1);border-radius:8px;margin-left:auto">' + str(working) + ' active</span>') if working else ''}
   </div>
-  <svg viewBox="0 0 160 100" style="width:100%;height:auto;max-height:80px" xmlns="http://www.w3.org/2000/svg">
+  <svg viewBox="0 0 160 100" style="width:100%;height:auto;max-height:75px" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <filter id="glow-active"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    </defs>
     {agent_nodes_svg}
   </svg>
-  <div style="margin-top:4px">{agent_list_html}</div>
+  <div style="margin-top:6px">{agent_list_html}</div>
 </div>"""
 
     w2 = WidgetCreate(

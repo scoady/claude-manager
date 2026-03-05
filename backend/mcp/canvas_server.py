@@ -39,12 +39,30 @@ def canvas_put(
     - A <details> element containing the FULL TEXT (detailed explanation,
       code snippets, logs, etc.) that users can expand on click
 
+    DESIGN SYSTEM (use these exact tokens for visual consistency):
+    Backgrounds: #080c14 (base), #0e1525 (surface/card), #141d30 (elevated), #1a2640 (hover)
+    Borders: #243352 (standard), #1a2640 (dim)
+    Accents: #67e8f9 (cyan), #4ade80 (green), #fbbf24 (amber), #f87171 (red),
+             #a78bfa (purple), #c084fc (magenta), #5eead4 (teal), #f9a8d4 (pink), #60a5fa (blue)
+    Text: #e2e8f0 (primary), #94a3b8 (secondary), #475569 (muted), #67e8f9 (code)
+    Fonts: 'Plus Jakarta Sans', system-ui (titles/headings — clean, modern weight 600-700)
+           'DM Sans', system-ui (body text — readable, friendly)
+           'IBM Plex Mono', monospace (data, stats, code)
+    Radii: 6px (sm), 10px (md), 16px (lg), 20px (xl)
+    Glows: 0 0 16px rgba(103,232,249,0.25) (cyan), 0 0 14px rgba(74,222,128,0.25) (green),
+           0 0 14px rgba(251,191,36,0.25) (amber), 0 0 16px rgba(167,139,250,0.25) (purple)
+
     STYLING GUIDELINES:
     - Use self-contained inline HTML + CSS (no external dependencies)
-    - Colors: cyan (#67e8f9), green (#4ade80), amber (#fbbf24), purple (#a78bfa)
-    - Fonts: 'IBM Plex Mono' for data, system-ui for body text
-    - Transparent backgrounds (the widget frame provides the card bg)
+    - Transparent backgrounds (the widget frame provides the dark card bg)
     - Status badges: green=done, amber=in-progress, cyan=planned, red=blocked
+    - Use gradients for depth: linear-gradient(135deg, #141d30, #0e1525) for inner panels
+    - Use backdrop-filter:blur(8px) and semi-transparent bg for glass effects
+    - Use box-shadow glows on key elements for emphasis (see glow tokens above)
+    - Animate important state with CSS: @keyframes pulse, subtle transitions
+    - Typography hierarchy: Plus Jakarta Sans 600 for section titles (14-16px),
+      DM Sans 400 for descriptions (12-13px), IBM Plex Mono for numbers/stats (11-12px)
+    - Aim for a polished, premium feel — not a debug panel. Think modern dashboard.
 
     TEXT FITTING (CRITICAL):
     - ALL text MUST fit within the widget bounds — never overflow horizontally
