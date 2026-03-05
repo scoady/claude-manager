@@ -241,7 +241,8 @@ class AgentSession:
             if self.mcp_config_path and Path(self.mcp_config_path).is_file():
                 cmd += ["--mcp-config", self.mcp_config_path]
 
-        cmd.append(message)
+        # Use -- separator to prevent the prompt being parsed as a flag/config arg
+        cmd += ["--", message]
 
         cwd = self.project_path if Path(self.project_path).is_dir() else None
 
