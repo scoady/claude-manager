@@ -2446,6 +2446,11 @@
 
 /* ─── Controller Task Table ──────────────────────────────────────────────── */
 
+.orch-task-table-wrap {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
 .orch-task-table {
   width: 100%;
   border-collapse: collapse;
@@ -2462,6 +2467,9 @@
   font-family: var(--font-mono);
   border-bottom: 1px solid var(--bg-border);
   background: var(--bg-surface);
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .orch-task-table td {
