@@ -1485,7 +1485,7 @@ OUTPUT FORMAT — respond with ONLY a JSON object:
 
     def _run():
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=60,
+            cmd, capture_output=True, text=True, timeout=120,
             env=_get_spawn_env(),
         )
         return result.stdout.strip()

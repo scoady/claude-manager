@@ -7,6 +7,9 @@ metadata:
   labels:
     {{- include "claude-manager.labels" . | nindent 4 }}
     app.kubernetes.io/component: frontend
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
 spec:
   ingressClassName: {{ .Values.frontend.ingress.className }}
   rules:
