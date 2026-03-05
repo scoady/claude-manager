@@ -278,10 +278,23 @@ def canvas_put(
     rendered_css = css
 
     if template and data:
+        parsed = json.loads(data) if isinstance(data, str) else data
         renderer = _TEMPLATES.get(template)
         if renderer:
-            parsed = json.loads(data) if isinstance(data, str) else data
             rendered_html, rendered_css = renderer(parsed)
+        else:
+            # Try custom template from catalog
+            preview_url = f"{CANVAS_API}/api/widget-catalog/{template}/preview"
+            try:
+                with httpx.Client(timeout=10) as preview_client:
+                    preview_resp = preview_client.post(preview_url, json={"data": parsed})
+                    if preview_resp.status_code == 200:
+                        result = preview_resp.json()
+                        rendered_html = result.get("html", html)
+                        rendered_css = result.get("css", css)
+                        js = result.get("js", js) or js
+            except Exception:
+                pass  # Fall through to raw html
 
     payload = {
         "id": widget_id,

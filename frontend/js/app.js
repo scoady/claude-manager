@@ -463,6 +463,215 @@ function initCanvasPrompt() {
   }
 }
 
+// ─── Template Catalog ───────────────────────────────────────────────────────────
+
+let _pendingTemplate = null; // holds generated template before save
+
+async function loadTemplateCatalog() {
+  const grid = $('template-grid');
+  const count = $('template-catalog-count');
+  if (!grid) return;
+
+  try {
+    const resp = await fetch('/api/widget-catalog');
+    const templates = await resp.json();
+    if (count) count.textContent = templates.length;
+
+    if (templates.length === 0) {
+      grid.innerHTML = '<div class="template-grid-empty">No templates yet — create one above</div>';
+      return;
+    }
+
+    grid.innerHTML = templates.map(t => `
+      <div class="template-card" data-template-id="${t.id}">
+        <div class="template-card-name">${t.name || t.id}</div>
+        <div class="template-card-desc">${t.description || ''}</div>
+        <span class="template-card-category">${t.category || 'custom'}</span>
+        <button class="template-card-delete" data-id="${t.id}" title="Delete template">&times;</button>
+      </div>
+    `).join('');
+
+    // Delete buttons
+    grid.querySelectorAll('.template-card-delete').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.id;
+        try {
+          await fetch(`/api/widget-catalog/${encodeURIComponent(id)}`, { method: 'DELETE' });
+          toast('Template deleted', 'success', 2000);
+          loadTemplateCatalog();
+        } catch (err) {
+          toast(`Delete failed: ${err.message}`, 'error');
+        }
+      });
+    });
+
+    // Card click — insert template name into canvas prompt
+    grid.querySelectorAll('.template-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const id = card.dataset.templateId;
+        const input = $('canvas-prompt-input');
+        if (input) {
+          input.value = `Use template "${id}" to show current project data`;
+          input.focus();
+        }
+      });
+    });
+  } catch (e) {
+    console.warn('[catalog] Failed to load templates:', e);
+  }
+}
+
+function initTemplateCatalog() {
+  const toggle = $('template-catalog-toggle');
+  const body = $('template-catalog-body');
+  const createBtn = $('template-create-btn');
+  const builder = $('template-builder');
+  const closeBtn = $('template-builder-close');
+  const promptEl = $('template-builder-prompt');
+  const generateBtn = $('template-builder-generate');
+  const statusEl = $('template-builder-status');
+  const previewEl = $('template-builder-preview');
+  const saveBtn = $('template-builder-save');
+  const discardBtn = $('template-builder-discard');
+
+  // Toggle catalog collapse
+  toggle?.addEventListener('click', (e) => {
+    if (e.target.closest('.template-create-btn')) return; // don't toggle when clicking New
+    body?.classList.toggle('collapsed');
+  });
+
+  // New button — show builder
+  createBtn?.addEventListener('click', () => {
+    builder?.classList.remove('hidden');
+    promptEl?.focus();
+  });
+
+  // Close builder
+  closeBtn?.addEventListener('click', () => {
+    builder?.classList.add('hidden');
+    previewEl?.classList.add('hidden');
+    statusEl?.classList.add('hidden');
+    if (promptEl) promptEl.value = '';
+    _pendingTemplate = null;
+  });
+
+  // Enable generate button when prompt has text
+  promptEl?.addEventListener('input', () => {
+    if (generateBtn) generateBtn.disabled = !promptEl.value.trim();
+  });
+
+  // Generate template
+  generateBtn?.addEventListener('click', async () => {
+    const prompt = promptEl?.value.trim();
+    if (!prompt) return;
+
+    generateBtn.disabled = true;
+    generateBtn.textContent = 'Generating...';
+    statusEl?.classList.remove('hidden');
+    if (statusEl) statusEl.textContent = 'Claude is designing your template...';
+    previewEl?.classList.add('hidden');
+    _pendingTemplate = null;
+
+    try {
+      const resp = await fetch('/api/widget-catalog/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: prompt }),
+      });
+      if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
+      const template = await resp.json();
+      _pendingTemplate = template;
+
+      // Show preview
+      $('template-preview-name').textContent = template.name || template.id || 'Untitled';
+      $('template-preview-desc').textContent = template.description || '';
+
+      const previewContent = $('template-preview-content');
+      if (previewContent) {
+        // Render template with preview_data by substituting placeholders client-side
+        let html = template.html || '';
+        let css = template.css || '';
+        const data = template.preview_data || {};
+
+        // Simple {{#each key}}...{{/each}} expansion
+        html = html.replace(/\{\{#each\s+(\w+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (_, key, body) => {
+          const items = data[key];
+          if (!Array.isArray(items)) return '';
+          return items.map((item, i) => {
+            let chunk = body;
+            if (typeof item === 'object') {
+              for (const [k, v] of Object.entries(item)) chunk = chunk.replaceAll(`{{${k}}}`, String(v));
+            } else {
+              chunk = chunk.replaceAll('{{.}}', String(item));
+            }
+            return chunk.replaceAll('{{@index}}', String(i));
+          }).join('');
+        });
+
+        // Simple {{key}} replacement
+        for (const [k, v] of Object.entries(data)) {
+          if (typeof v !== 'object') html = html.replaceAll(`{{${k}}}`, String(v));
+          if (typeof v !== 'object') css = css.replaceAll(`{{${k}}}`, String(v));
+        }
+
+        previewContent.innerHTML = `<style>${css}</style>${html}`;
+      }
+
+      previewEl?.classList.remove('hidden');
+      statusEl?.classList.add('hidden');
+    } catch (e) {
+      if (statusEl) {
+        statusEl.textContent = `Generation failed: ${e.message}`;
+        statusEl.classList.remove('hidden');
+      }
+      toast(`Generate failed: ${e.message}`, 'error');
+    } finally {
+      generateBtn.disabled = false;
+      generateBtn.textContent = 'Generate Template';
+    }
+  });
+
+  // Save template
+  saveBtn?.addEventListener('click', async () => {
+    if (!_pendingTemplate) return;
+    try {
+      const resp = await fetch('/api/widget-catalog', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(_pendingTemplate),
+      });
+      if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
+      toast('Template saved to catalog', 'success', 3000);
+      _pendingTemplate = null;
+      builder?.classList.add('hidden');
+      previewEl?.classList.add('hidden');
+      if (promptEl) promptEl.value = '';
+      loadTemplateCatalog();
+    } catch (e) {
+      toast(`Save failed: ${e.message}`, 'error');
+    }
+  });
+
+  // Discard
+  discardBtn?.addEventListener('click', () => {
+    _pendingTemplate = null;
+    previewEl?.classList.add('hidden');
+    statusEl?.classList.add('hidden');
+  });
+
+  // Enter key in prompt → generate
+  promptEl?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      generateBtn?.click();
+    }
+  });
+
+  // Initial load
+  loadTemplateCatalog();
+}
+
 // ─── Initialization ────────────────────────────────────────────────────────────
 
 async function init() {
@@ -499,6 +708,7 @@ async function init() {
   }
 
   initCanvasPrompt();
+  initTemplateCatalog();
 
   // WebSocket
   new WSClient({
@@ -542,6 +752,7 @@ async function init() {
       } else if (view === 'canvas') {
         canvasView?.classList.remove('hidden');
         loadCanvasWidgets();
+        loadTemplateCatalog();
       } else {
         // 'projects' (default)
         mainLayout?.classList.remove('hidden');

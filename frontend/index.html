@@ -165,6 +165,56 @@
         </div>
         <div id="canvas-prompt-status" class="canvas-prompt-status hidden"></div>
       </div>
+
+      <!-- Template Catalog -->
+      <div id="template-catalog" class="template-catalog">
+        <div class="template-catalog-header" id="template-catalog-toggle">
+          <svg class="template-catalog-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 3l5 5-5 5"/>
+          </svg>
+          <span class="template-catalog-title">Widget Templates</span>
+          <span class="template-catalog-count" id="template-catalog-count">0</span>
+          <button class="template-create-btn" id="template-create-btn" title="Create new template">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            New
+          </button>
+        </div>
+        <div class="template-catalog-body collapsed" id="template-catalog-body">
+          <div class="template-grid" id="template-grid"></div>
+        </div>
+
+        <!-- Template Builder (hidden by default) -->
+        <div class="template-builder hidden" id="template-builder">
+          <div class="template-builder-header">
+            <span class="template-builder-title">Create Widget Template</span>
+            <button class="template-builder-close" id="template-builder-close">&times;</button>
+          </div>
+          <div class="template-builder-body">
+            <textarea class="template-builder-prompt" id="template-builder-prompt" rows="3"
+              placeholder="Describe the widget you want to create as a reusable template...&#10;e.g. 'A heatmap grid showing file change frequency with color intensity'"></textarea>
+            <div class="template-builder-actions">
+              <button class="template-builder-generate" id="template-builder-generate" disabled>Generate Template</button>
+            </div>
+            <div class="template-builder-status hidden" id="template-builder-status"></div>
+            <div class="template-builder-preview hidden" id="template-builder-preview">
+              <div class="template-preview-frame">
+                <div class="template-preview-header">
+                  <span class="template-preview-name" id="template-preview-name"></span>
+                  <span class="template-preview-desc" id="template-preview-desc"></span>
+                </div>
+                <div class="template-preview-content" id="template-preview-content"></div>
+              </div>
+              <div class="template-builder-save-row">
+                <button class="template-builder-save" id="template-builder-save">Save to Catalog</button>
+                <button class="template-builder-discard" id="template-builder-discard">Discard</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div id="canvas-root" class="canvas-root">
         <!-- Empty state: constellation background -->
         <div class="canvas-empty-state">

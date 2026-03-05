@@ -50,6 +50,7 @@ from .services import tasks as tasks_svc
 from .services import roles as roles_svc
 from .services import artifacts as artifacts_svc
 from .services import templates as templates_svc
+from .services import widget_catalog as widget_catalog_svc
 from .services.canvas import canvas_service
 from .ws_manager import WSManager
 
@@ -1403,6 +1404,140 @@ async def clear_canvas(project: str) -> dict[str, bool]:
     await loop.run_in_executor(None, canvas_service.clear, project)
     await ws_manager.broadcast(WSMessageType.CANVAS_CLEARED, {"project": project})
     return {"ok": True}
+
+
+# ─── Widget Catalog API ───────────────────────────────────────────────────────
+
+
+@app.get("/api/widget-catalog")
+async def list_widget_templates() -> list[dict[str, Any]]:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, widget_catalog_svc.list_templates)
+
+
+@app.get("/api/widget-catalog/{template_id}")
+async def get_widget_template(template_id: str) -> dict[str, Any]:
+    loop = asyncio.get_event_loop()
+    tmpl = await loop.run_in_executor(None, widget_catalog_svc.get_template, template_id)
+    if not tmpl:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return tmpl
+
+
+@app.post("/api/widget-catalog", status_code=201)
+async def save_widget_template(body: dict[str, Any]) -> dict[str, Any]:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, widget_catalog_svc.save_template, body)
+
+
+@app.delete("/api/widget-catalog/{template_id}")
+async def delete_widget_template(template_id: str) -> dict[str, bool]:
+    loop = asyncio.get_event_loop()
+    ok = await loop.run_in_executor(None, widget_catalog_svc.delete_template, template_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return {"ok": True}
+
+
+@app.post("/api/widget-catalog/generate")
+async def generate_widget_template(body: dict[str, Any]) -> dict[str, Any]:
+    """Generate a parameterized widget template from a natural language description.
+
+    Body: { description: "...", preview_data?: {...} }
+    Returns a full template with {{placeholder}} variables ready to save.
+    """
+    description = body.get("description", "")
+    preview_data = body.get("preview_data", {})
+
+    prompt = (
+        f"Create a PARAMETERIZED widget template.\n\n"
+        f"DESCRIPTION: {description}\n\n"
+        f"SAMPLE DATA: {json.dumps(preview_data, indent=2)}\n\n"
+        f"Create a reusable template where data values use {{{{key}}}} placeholders.\n"
+        f"For lists, use {{{{#each items}}}}...{{{{/each}}}} with {{{{property}}}} inside.\n"
+        f"Also use {{{{@index}}}} for the iteration index.\n\n"
+        f"Example placeholders: {{{{value}}}}, {{{{label}}}}, {{{{title}}}}\n"
+        f"Example each: {{{{#each entries}}}}<div>{{{{name}}}}: {{{{score}}}}</div>{{{{/each}}}}\n\n"
+        f"IMPORTANT: The template must work when placeholders are replaced with real data.\n"
+        f"Include realistic preview data that demonstrates the widget's capability."
+    )
+
+    import subprocess
+    from .broker.agent_session import CLAUDE_BIN, _get_spawn_env
+
+    _TEMPLATE_GEN_PROMPT = _DESIGN_SYSTEM_PROMPT + """
+
+ADDITIONAL FOR TEMPLATES:
+- Use {{placeholder}} syntax for all dynamic data values
+- For repeating lists, use {{#each listName}}...{{/each}} blocks
+- Inside each blocks, use {{property}} for item fields and {{@index}} for index
+- The template will be rendered server-side before sending to the browser
+- Include a data_schema describing expected fields and their types
+- Include preview_data with realistic sample values
+
+OUTPUT FORMAT — respond with ONLY a JSON object:
+{
+  "name": "Short Template Name",
+  "description": "What this template visualizes",
+  "category": "metrics|chart|status|log|custom",
+  "data_schema": {"field": {"type": "string|number|array", "description": "..."}},
+  "preview_data": {"field": "sample value"},
+  "html": "... {{placeholders}} ...",
+  "css": "...",
+  "js": "...",
+  "col_span": 1,
+  "row_span": 1
+}
+"""
+
+    cmd = [
+        CLAUDE_BIN, "--print",
+        "--model", "claude-sonnet-4-6",
+        "--system-prompt", _TEMPLATE_GEN_PROMPT,
+        "--output-format", "text",
+        "--max-turns", "1",
+        "--", prompt,
+    ]
+
+    loop = asyncio.get_event_loop()
+
+    def _run():
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=60,
+            env=_get_spawn_env(),
+        )
+        return result.stdout.strip()
+
+    try:
+        raw = await loop.run_in_executor(None, _run)
+
+        if "```" in raw:
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+
+        template_def = json.loads(raw)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Template generation failed: {exc}")
+
+    # Merge preview_data from request if provided
+    if preview_data and not template_def.get("preview_data"):
+        template_def["preview_data"] = preview_data
+
+    return template_def
+
+
+@app.post("/api/widget-catalog/{template_id}/preview")
+async def preview_widget_template(template_id: str, body: dict[str, Any]) -> dict[str, Any]:
+    """Render a template with data and return the output html/css/js."""
+    data = body.get("data", {})
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, widget_catalog_svc.render_template, template_id, data)
+    if not result:
+        raise HTTPException(status_code=404, detail="Template not found")
+    html, css, js = result
+    return {"html": html, "css": css, "js": js}
 
 
 @app.get("/api/stats", response_model=GlobalStats)
