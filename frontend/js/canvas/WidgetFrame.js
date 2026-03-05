@@ -16,6 +16,7 @@ const FRAME_HOST_STYLES = `
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    min-height: 0;
     transition:
       border-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
       box-shadow   220ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -106,9 +107,9 @@ const SHADOW_BASE_STYLES = `
 
   .widget-content {
     flex: 1;
-    min-height: 120px;
+    min-height: 0;
     overflow: auto;
-    padding: 12px;
+    padding: 10px;
     word-wrap: break-word;
     overflow-wrap: break-word;
     word-break: break-word;

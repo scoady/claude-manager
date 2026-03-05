@@ -2606,7 +2606,7 @@
   grid-template-columns: repeat(3, 1fr);
   grid-auto-flow: dense;
   grid-auto-rows: 1fr;
-  gap: 12px;
+  gap: 10px;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -2636,6 +2636,9 @@
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  flex-shrink: 0;
+  max-height: 120px;
+  overflow-y: auto;
 }
 
 .agent-strip-container:empty {
