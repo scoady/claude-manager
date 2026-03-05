@@ -1511,7 +1511,7 @@ async def generate_widget_template(body: dict[str, Any]) -> dict[str, Any]:
 
     cmd = [
         CLAUDE_BIN, "--print",
-        "--model", "claude-sonnet-4-6",
+        "--model", "claude-opus-4-6",
         "--system-prompt", _TEMPLATE_GEN_PROMPT,
         "--output-format", "text",
         "--max-turns", "3",
