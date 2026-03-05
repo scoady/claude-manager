@@ -268,7 +268,10 @@ function onWSMessage(msg) {
 
     // ── Canvas widget events ────────────────────────────────────────────────
     case 'canvas_widget_created': {
-      canvasEngine.create(msg.widget ?? msg.data?.widget ?? msg.data);
+      const w = msg.widget ?? msg.data?.widget ?? msg.data;
+      // Normalize: API uses "id" but CanvasEngine expects "widget_id"
+      if (w && !w.widget_id && w.id) w.widget_id = w.id;
+      canvasEngine.create(w);
       break;
     }
 
@@ -339,6 +342,120 @@ async function createProject() {
   }
 }
 
+// ─── Canvas ────────────────────────────────────────────────────────────────────
+
+async function loadCanvasWidgets() {
+  // Populate project selector
+  const select = document.getElementById('canvas-project-select');
+  if (select && select.options.length <= 1) {
+    for (const p of state.projects) {
+      const opt = document.createElement('option');
+      opt.value = p.name;
+      opt.textContent = p.name;
+      select.appendChild(opt);
+    }
+  }
+
+  // Load widgets for the selected project (or first project)
+  const project = select?.value || state.projects[0]?.name;
+  if (!project) return;
+
+  try {
+    const resp = await fetch(`/api/canvas/${encodeURIComponent(project)}`);
+    const widgets = await resp.json();
+    // Clear existing and load fresh
+    canvasEngine.clear();
+    for (const w of widgets) {
+      if (!w.widget_id) w.widget_id = w.id;
+      canvasEngine.create(w);
+    }
+  } catch (e) {
+    console.warn('[canvas] Failed to load widgets:', e);
+  }
+}
+
+function initCanvasPrompt() {
+  const input = document.getElementById('canvas-prompt-input');
+  const btn = document.getElementById('canvas-prompt-btn');
+  const clearBtn = document.getElementById('canvas-clear-btn');
+  const select = document.getElementById('canvas-project-select');
+  const status = document.getElementById('canvas-prompt-status');
+  if (!input || !btn) return;
+
+  input.addEventListener('input', () => {
+    btn.disabled = !input.value.trim() || !select?.value;
+  });
+
+  select?.addEventListener('change', () => {
+    btn.disabled = !input.value.trim() || !select.value;
+    // Reload widgets for selected project
+    if (select.value) loadCanvasWidgets();
+  });
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      dispatchCanvasPrompt();
+    }
+  });
+
+  btn.addEventListener('click', () => dispatchCanvasPrompt());
+
+  clearBtn?.addEventListener('click', async () => {
+    const project = select?.value;
+    if (!project) return;
+    try {
+      await fetch(`/api/canvas/${encodeURIComponent(project)}`, { method: 'DELETE' });
+      canvasEngine.clear();
+      toast('Canvas cleared', 'success', 2000);
+    } catch (e) {
+      toast(`Clear failed: ${e.message}`, 'error');
+    }
+  });
+
+  async function dispatchCanvasPrompt() {
+    const prompt = input.value.trim();
+    const project = select?.value;
+    if (!prompt || !project) return;
+
+    btn.disabled = true;
+    if (status) {
+      status.textContent = 'Generating widgets...';
+      status.className = 'canvas-prompt-status generating';
+    }
+
+    const canvasPrompt =
+      `You have canvas MCP tools. Use canvas_put() to create widgets on the "${project}" canvas.\n\n` +
+      `User request: "${prompt}"\n\n` +
+      `Create visually rich HTML/CSS widgets using canvas_put(). Each widget should:\n` +
+      `- Use self-contained inline HTML + CSS (no external deps)\n` +
+      `- Use colors: cyan (#67e8f9), green (#4ade80), amber (#fbbf24), purple (#a78bfa)\n` +
+      `- Use fonts: 'IBM Plex Mono' for data, 'Instrument Serif' for headings\n` +
+      `- Use transparent backgrounds (the widget frame provides the card bg)\n` +
+      `- Include subtle animations (glow, pulse, transitions)\n` +
+      `Place widgets in a grid layout using grid_col/grid_row (1-indexed).`;
+
+    try {
+      const resp = await fetch(`/api/projects/${encodeURIComponent(project)}/dispatch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task: canvasPrompt }),
+      });
+      if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
+      input.value = '';
+      if (status) status.textContent = 'Agent dispatched — widgets will appear as they are created';
+    } catch (e) {
+      toast(`Failed: ${e.message}`, 'error');
+      if (status) {
+        status.textContent = `Error: ${e.message}`;
+        status.className = 'canvas-prompt-status';
+      }
+    } finally {
+      btn.disabled = !input.value.trim();
+    }
+  }
+}
+
 // ─── Initialization ────────────────────────────────────────────────────────────
 
 async function init() {
@@ -373,6 +490,8 @@ async function init() {
   if (dom.canvasRoot) {
     canvasEngine.mount(dom.canvasRoot);
   }
+
+  initCanvasPrompt();
 
   // WebSocket
   new WSClient({
@@ -415,6 +534,7 @@ async function init() {
         loadGlobalSettings();
       } else if (view === 'canvas') {
         canvasView?.classList.remove('hidden');
+        loadCanvasWidgets();
       } else {
         // 'projects' (default)
         mainLayout?.classList.remove('hidden');

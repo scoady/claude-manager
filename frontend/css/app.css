@@ -3041,6 +3041,118 @@ pre {
   display: none;
 }
 
+/* ── Canvas prompt bar ─────────────────────────────────────────────────────── */
+
+.canvas-prompt-bar {
+  flex-shrink: 0;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+}
+
+.canvas-prompt-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.canvas-project-select {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  min-width: 140px;
+}
+
+.canvas-prompt-input {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  resize: none;
+  line-height: 1.4;
+  transition: border-color 150ms ease;
+}
+
+.canvas-prompt-input:focus {
+  outline: none;
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 2px rgba(103, 232, 249, 0.15);
+}
+
+.canvas-prompt-btn,
+.canvas-clear-btn {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-input);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.canvas-prompt-btn:not(:disabled):hover {
+  background: var(--accent-cyan);
+  color: var(--bg-base);
+  border-color: var(--accent-cyan);
+}
+
+.canvas-prompt-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.canvas-clear-btn:hover {
+  background: rgba(248, 113, 113, 0.15);
+  color: var(--accent-red);
+  border-color: var(--accent-red);
+}
+
+.canvas-prompt-status {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 4px 0;
+}
+
+.canvas-prompt-status.hidden {
+  display: none;
+}
+
+.canvas-prompt-status.generating {
+  color: var(--accent-cyan);
+}
+
+.canvas-prompt-status.generating::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  margin-right: 6px;
+  animation: blink-dot 1s step-end infinite;
+}
+
+@keyframes blink-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
 /* The CSS Grid that holds all widget frames */
 .canvas-root {
   flex: 1;

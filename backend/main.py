@@ -318,8 +318,12 @@ async def dispatch_task(name: str, body: DispatchRequest) -> dict[str, Any]:
         await broker.inject_message(controller.session_id, task_prompt)
         return {"status": "delegated", "session_ids": [controller.session_id]}
 
-    # Fallback: controller busy or missing — spawn standalone agent
+    # Fallback: controller busy or missing — spawn standalone agent with canvas MCP
+    _CANVAS_MCP_CONFIG = str(
+        Path(__file__).resolve().parent / "mcp" / "canvas_mcp_config.json"
+    )
     model = body.model or project.config.model
+    mcp_config = project.config.mcp_config or _CANVAS_MCP_CONFIG
     session_ids = []
     for _ in range(project.config.parallelism):
         session = await broker.create_session(
@@ -327,6 +331,7 @@ async def dispatch_task(name: str, body: DispatchRequest) -> dict[str, Any]:
             project_path=project.path,
             initial_task=body.task,
             model=model,
+            mcp_config_path=mcp_config,
         )
         session_ids.append(session.session_id)
 

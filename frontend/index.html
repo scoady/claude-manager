@@ -146,6 +146,25 @@
 
     <!-- Canvas view (hidden by default) -->
     <div id="canvas-view" class="canvas-view hidden">
+      <div class="canvas-prompt-bar">
+        <div class="canvas-prompt-row">
+          <select id="canvas-project-select" class="canvas-project-select" title="Target project">
+            <option value="">select project</option>
+          </select>
+          <textarea id="canvas-prompt-input" class="canvas-prompt-input" rows="1" placeholder="Describe what to display on the canvas..."></textarea>
+          <button id="canvas-prompt-btn" class="canvas-prompt-btn" disabled title="Generate">
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+              <path d="M2 7.5h11M9 3l5 4.5L9 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button id="canvas-clear-btn" class="canvas-clear-btn" title="Clear canvas">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+              <path d="M3.5 3V2.5a1 1 0 011-1h4a1 1 0 011 1V3M2 3h9M4.5 5.5v4M6.5 5.5v4M8.5 5.5v4M3 3h7l-.5 7.5a1 1 0 01-1 .5h-4a1 1 0 01-1-.5L3 3z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+        <div id="canvas-prompt-status" class="canvas-prompt-status hidden"></div>
+      </div>
       <div id="canvas-root" class="canvas-root">
         <!-- Empty state: constellation background -->
         <div class="canvas-empty-state">
@@ -165,7 +184,7 @@
               <line x1="20" y1="20" x2="22" y2="34" stroke="currentColor" stroke-width="0.5" opacity="0.4"/>
             </svg>
             <p class="canvas-empty-title">Canvas is empty</p>
-            <p class="canvas-empty-sub">Agent-authored widgets will appear here in real time</p>
+            <p class="canvas-empty-sub">Describe what you want to see, or agents will populate this automatically</p>
           </div>
         </div>
       </div>
