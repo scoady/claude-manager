@@ -43,4 +43,17 @@ elif [ -n "${GH_TOKEN:-}" ]; then
 fi
 
 echo "OAuth token loaded from Keychain (${#CLAUDE_CODE_OAUTH_TOKEN} chars)"
+
+# ── Start host build runner (macOS builds for managed projects) ──────────
+BUILD_RUNNER="$SCRIPT_DIR/build-runner.py"
+if [ -f "$BUILD_RUNNER" ]; then
+  # Kill any existing build runner
+  pkill -f "build-runner.py" 2>/dev/null || true
+  python3 "$BUILD_RUNNER" &
+  BUILD_RUNNER_PID=$!
+  echo "Build runner started (PID $BUILD_RUNNER_PID, port 4050)"
+  # Clean up on exit
+  trap "kill $BUILD_RUNNER_PID 2>/dev/null" EXIT
+fi
+
 exec docker compose up --build "$@"
