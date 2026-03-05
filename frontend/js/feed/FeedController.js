@@ -64,17 +64,24 @@ export class FeedController {
     this._headerEl = this._buildHeader(project);
     this._el.appendChild(this._headerEl);
 
-    // 2. Overview container — dashboard widget grid + agent strip
+    // 2. Overview container — system strip + agent widget grid
     this._overviewContainer = document.createElement('div');
     this._overviewContainer.className = 'overview-container';
 
-    // 2a. Dashboard widget grid (fully agent-controlled)
+    // 2a. System strip — reserved top zone for system-generated widgets (tasks, agents)
+    this._systemStrip = document.createElement('div');
+    this._systemStrip.className = 'system-widget-strip';
+    this._systemCanvas = new CanvasEngine();
+    this._overviewContainer.appendChild(this._systemStrip);
+    this._systemCanvas.mount(this._systemStrip);
+
+    // 2b. Agent widget grid (agent-controlled)
     this._dashboardWidgetGrid = document.createElement('div');
     this._dashboardWidgetGrid.className = 'dashboard-widget-grid';
     this._overviewContainer.appendChild(this._dashboardWidgetGrid);
     this._dashboardCanvas.mount(this._dashboardWidgetGrid);
 
-    // 2b. Agent strip (compact live agent cards)
+    // 2c. Agent strip (compact live agent cards)
     this._agentContainer = document.createElement('div');
     this._agentContainer.className = 'agent-strip-container';
     this._overviewContainer.appendChild(this._agentContainer);
@@ -139,16 +146,19 @@ export class FeedController {
       const resp = await fetch(`/api/canvas/${encodeURIComponent(projectName)}`);
       const widgets = await resp.json();
       this._dashboardCanvas.clear();
+      this._systemCanvas.clear();
 
-      if (widgets.length === 0) {
-        // No widgets yet — ask backend to pre-generate from project data
-        await this._seedDashboard(projectName);
-        return;
-      }
+      // Always seed system widgets (they update from live data)
+      await this._seedDashboard(projectName);
 
       for (const w of widgets) {
         if (!w.widget_id) w.widget_id = w.id;
-        this._dashboardCanvas.create(w);
+        // Route sys- widgets to system strip, rest to agent grid
+        if (w.widget_id?.startsWith('sys-')) {
+          this._systemCanvas.create(w);
+        } else {
+          this._dashboardCanvas.create(w);
+        }
       }
     } catch (_) {}
   }
@@ -165,25 +175,29 @@ export class FeedController {
     } catch (_) {}
   }
 
-  /** Route a canvas widget event to the dashboard if it belongs to the current project. */
+  /** Route a canvas widget event to the appropriate zone (system strip vs agent grid). */
   handleCanvasEvent(type, data) {
     if (!this._project) return;
+
+    const _engine = (widgetId) =>
+      widgetId?.startsWith('sys-') ? this._systemCanvas : this._dashboardCanvas;
 
     if (type === 'canvas_widget_created') {
       const w = data.widget ?? data;
       if (w.project && w.project !== this._project.name) return;
       if (w && !w.widget_id && w.id) w.widget_id = w.id;
-      this._dashboardCanvas.create(w);
+      _engine(w.widget_id || w.id).create(w);
     } else if (type === 'canvas_widget_updated') {
       const widgetId = data.widget_id;
       const patch = data.patch ?? data;
-      if (widgetId) this._dashboardCanvas.update(widgetId, patch);
+      if (widgetId) _engine(widgetId).update(widgetId, patch);
     } else if (type === 'canvas_widget_removed') {
       const widgetId = data.widget_id ?? data;
-      if (widgetId) this._dashboardCanvas.remove(widgetId);
+      if (widgetId) _engine(widgetId).remove(widgetId);
     } else if (type === 'canvas_cleared') {
       if (data.project === this._project.name) {
         this._dashboardCanvas.clear();
+        this._systemCanvas.clear();
       }
     }
   }

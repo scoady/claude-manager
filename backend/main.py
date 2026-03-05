@@ -111,6 +111,10 @@ async def _create_agent_widget(
     return widget_id
 
 
+def _escape_html(s: str) -> str:
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+
 def _dashboard_instructions(project_name: str, widget_id: str) -> str:
     """Return prompt text telling an agent about its dashboard widget."""
     return (
@@ -1136,16 +1140,12 @@ async def replace_canvas_scene(
 
 @app.post("/api/canvas/{project}/seed")
 async def seed_canvas(project: str) -> dict[str, Any]:
-    """Pre-generate dashboard widgets from project data (tasks, description, agents).
+    """Generate system dashboard widgets (sys-* prefix) from live project data.
 
-    Only seeds if no widgets exist yet for this project.
+    System widgets go to the reserved top strip. Always re-generates
+    from current data so the dashboard reflects the latest state.
     """
     loop = asyncio.get_event_loop()
-    existing = await loop.run_in_executor(None, canvas_service.get_widgets, project)
-    if existing:
-        return {"seeded": False, "reason": "widgets already exist", "count": len(existing)}
-
-    # Gather project data
     proj = await loop.run_in_executor(None, projects_svc.get_project, project, [])
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -1155,129 +1155,136 @@ async def seed_canvas(project: str) -> dict[str, Any]:
     agents = [s.to_dict() for s in broker.get_sessions_for_project(project)]
     milestones = await loop.run_in_executor(None, milestones_svc.get_milestones, project)
 
-    widgets_created = []
-
-    # ── Widget 1: Task Progress ──
     total = len(tasks)
     done = sum(1 for t in tasks if t.get("status") == "done")
     active = sum(1 for t in tasks if t.get("status") == "in_progress")
+    pending = total - done - active
     pct = round((done / total) * 100) if total > 0 else 0
+    agent_count = len(agents)
+    working = sum(1 for a in agents if a.get("phase") not in ("idle", "cancelled", "error"))
 
-    task_rows = ""
-    for t in tasks[:20]:  # cap at 20 for display
+    widgets_created = []
+
+    # ── System Widget 1: Task Constellation (2-col span) ──
+    # SVG constellation graph — each task is a node, edges connect sequential tasks
+    # Colors: done=green, active=cyan glow, pending=dim
+    task_nodes_svg = ""
+    task_list_html = ""
+    # Layout tasks in a grid pattern within the SVG
+    cols = 6
+    for i, t in enumerate(tasks[:18]):  # cap at 18 for visual space
         st = t.get("status", "pending")
+        cx = 30 + (i % cols) * 52
+        cy = 24 + (i // cols) * 40
+        fill = "#4ade80" if st == "done" else "#67e8f9" if st == "in_progress" else "#243352"
+        glow = f'<circle cx="{cx}" cy="{cy}" r="10" fill="none" stroke="{fill}" stroke-opacity="0.3"><animate attributeName="r" values="8;14;8" dur="2.5s" repeatCount="indefinite"/></circle>' if st == "in_progress" else ""
+        stroke = "#4ade80" if st == "done" else "#67e8f9" if st == "in_progress" else "#1a2640"
+        r = 5 if st != "in_progress" else 6
+        task_nodes_svg += f'{glow}<circle cx="{cx}" cy="{cy}" r="{r}" fill="{fill}" stroke="{stroke}" stroke-width="1"/>'
+        # Edge to next node
+        if i < len(tasks) - 1 and i % cols < cols - 1:
+            nx = cx + 52
+            ny = cy
+            task_nodes_svg += f'<line x1="{cx+7}" y1="{cy}" x2="{nx-7}" y2="{ny}" stroke="#1a2640" stroke-width="1" stroke-dasharray="2,3"/>'
+
+        # Build compact task list
+        text = _escape_html((t.get("text", "") or "")[:60])
         color = "#4ade80" if st == "done" else "#fbbf24" if st == "in_progress" else "#475569"
-        label = "done" if st == "done" else "active" if st == "in_progress" else st
-        text = (t.get("text", "") or "")[:80]
-        task_rows += (
-            f'<tr><td style="padding:4px 8px;border-bottom:1px solid rgba(255,255,255,0.04)">'
-            f'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:{color};margin-right:8px"></span>'
-            f'{text}</td>'
-            f'<td style="padding:4px 8px;border-bottom:1px solid rgba(255,255,255,0.04);color:{color};font-size:11px;text-align:right">{label}</td></tr>'
+        badge = "done" if st == "done" else "active" if st == "in_progress" else "pending"
+        task_list_html += (
+            f'<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:10px">'
+            f'<span style="width:5px;height:5px;border-radius:50%;background:{color};flex-shrink:0"></span>'
+            f'<span style="color:#94a3b8;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{text}</span>'
+            f'<span style="color:{color};font-size:9px;flex-shrink:0">{badge}</span>'
+            f'</div>'
         )
 
-    progress_html = f"""
-<div style="font-family:'IBM Plex Mono',monospace;color:#e2e8f0">
-  <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px">
-    <div style="font-size:28px;font-weight:700;color:#67e8f9">{pct}<span style="font-size:14px;color:#475569">%</span></div>
-    <div style="font-size:11px;color:#94a3b8">{done}/{total} tasks{'&ensp;&bull;&ensp;' + str(active) + ' active' if active else ''}</div>
+    svg_height = 24 + ((min(len(tasks), 18) - 1) // cols + 1) * 40 + 10
+    constellation_html = f"""<div style="font-family:'IBM Plex Mono',monospace;color:#e2e8f0">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+    <span style="font-size:20px;font-weight:700;color:#67e8f9">{pct}<span style="font-size:11px;color:#475569">%</span></span>
+    <div style="flex:1;height:3px;background:#1a2640;border-radius:2px;overflow:hidden">
+      <div style="height:100%;width:{pct}%;background:linear-gradient(90deg,#4ade80,#67e8f9);border-radius:2px;box-shadow:0 0 8px rgba(74,222,128,0.3)"></div>
+    </div>
+    <span style="font-size:10px;color:#475569">{done}/{total}</span>
   </div>
-  <div style="height:4px;background:#1a2640;border-radius:2px;overflow:hidden;margin-bottom:16px">
-    <div style="height:100%;width:{pct}%;background:linear-gradient(90deg,#4ade80,#67e8f9);border-radius:2px;box-shadow:0 0 8px rgba(74,222,128,0.3);transition:width 0.5s ease"></div>
-  </div>
-  <table style="width:100%;border-collapse:collapse;font-size:12px">
-    <thead><tr>
-      <th style="text-align:left;padding:4px 8px;color:#475569;font-weight:500;border-bottom:1px solid #243352">Task</th>
-      <th style="text-align:right;padding:4px 8px;color:#475569;font-weight:500;border-bottom:1px solid #243352">Status</th>
-    </tr></thead>
-    <tbody>{task_rows}</tbody>
-  </table>
+  <svg viewBox="0 0 340 {svg_height}" style="width:100%;height:auto;max-height:80px" xmlns="http://www.w3.org/2000/svg">
+    {task_nodes_svg}
+  </svg>
+  <div style="margin-top:6px;max-height:120px;overflow-y:auto">{task_list_html}</div>
 </div>"""
 
     w1 = WidgetCreate(
-        id="task-progress",
-        title=f"Task Progress — {done}/{total}",
-        html=progress_html,
-        grid_col=1, grid_row=1, col_span=2, row_span=1,
+        id="sys-task-constellation",
+        title=f"Tasks — {done}/{total} complete",
+        html=constellation_html,
+        col_span=2, row_span=1,
     )
     widget1 = await loop.run_in_executor(
-        None, canvas_service.upsert_widget, project, "task-progress", w1
+        None, canvas_service.upsert_widget, project, "sys-task-constellation", w1,
     )
     widgets_created.append(widget1)
 
-    # ── Widget 2: Agent Activity ──
-    agent_count = len(agents)
-    working = sum(1 for a in agents if a.get("phase") not in ("idle", "cancelled", "error"))
-    agent_items = ""
-    for a in agents[:8]:
-        phase = a.get("phase", "idle")
-        ph_color = "#4ade80" if phase == "idle" else "#fbbf24" if phase in ("thinking", "tool_use") else "#67e8f9"
-        role = "Controller" if a.get("is_controller") else "Worker"
-        sid = (a.get("session_id") or "")[:8]
-        agent_items += (
-            f'<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">'
-            f'<span style="width:6px;height:6px;border-radius:50%;background:{ph_color};flex-shrink:0"></span>'
-            f'<span style="color:#94a3b8;font-size:11px;flex:1">{role}</span>'
-            f'<span style="color:#475569;font-size:10px">{sid}</span>'
-            f'<span style="color:{ph_color};font-size:10px">{phase}</span>'
-            f'</div>'
-        )
-    if not agent_items:
-        agent_items = '<div style="color:#475569;font-size:12px;padding:12px 0;text-align:center">No agents running</div>'
+    # ── System Widget 2: Agent Network ──
+    # Shows agents as nodes with connection lines to a central hub
+    agent_nodes_svg = ""
+    agent_list_html = ""
+    cx_hub, cy_hub = 80, 50
+    agent_nodes_svg += f'<circle cx="{cx_hub}" cy="{cy_hub}" r="12" fill="#0e1525" stroke="#67e8f9" stroke-width="1.5"/>'
+    agent_nodes_svg += f'<text x="{cx_hub}" y="{cy_hub + 3}" text-anchor="middle" fill="#67e8f9" font-size="8" font-family="IBM Plex Mono">HUB</text>'
 
-    agent_html = f"""
-<div style="font-family:'IBM Plex Mono',monospace;color:#e2e8f0">
-  <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:12px">
-    <span style="font-size:22px;font-weight:700;color:#a78bfa">{agent_count}</span>
-    <span style="font-size:11px;color:#94a3b8">agent{'s' if agent_count != 1 else ''}{' &bull; ' + str(working) + ' working' if working else ''}</span>
+    if agents:
+        angle_step = 360 / max(len(agents), 1)
+        import math
+        for i, a in enumerate(agents[:8]):
+            angle = math.radians(i * angle_step - 90)
+            ax = cx_hub + 40 * math.cos(angle)
+            ay = cy_hub + 35 * math.sin(angle)
+            phase = a.get("phase", "idle")
+            is_ctrl = a.get("is_controller", False)
+            node_color = "#fbbf24" if is_ctrl else "#a78bfa" if phase in ("thinking", "tool_use") else "#4ade80" if phase == "idle" else "#67e8f9"
+            pulse = f'<circle cx="{ax:.0f}" cy="{ay:.0f}" r="8" fill="none" stroke="{node_color}" stroke-opacity="0.25"><animate attributeName="r" values="6;12;6" dur="2s" repeatCount="indefinite"/></circle>' if phase not in ("idle", "cancelled", "error") else ""
+            agent_nodes_svg += f'<line x1="{cx_hub}" y1="{cy_hub}" x2="{ax:.0f}" y2="{ay:.0f}" stroke="{node_color}" stroke-width="1" stroke-opacity="0.3" stroke-dasharray="3,4"/>'
+            agent_nodes_svg += pulse
+            agent_nodes_svg += f'<circle cx="{ax:.0f}" cy="{ay:.0f}" r="5" fill="{node_color}" stroke="{node_color}" stroke-width="1" stroke-opacity="0.5"/>'
+
+            role = "CTRL" if is_ctrl else "W"
+            sid = (a.get("session_id") or "")[:6]
+            ph_color = node_color
+            agent_list_html += (
+                f'<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:10px">'
+                f'<span style="width:5px;height:5px;border-radius:50%;background:{ph_color};flex-shrink:0"></span>'
+                f'<span style="color:{ph_color};font-size:9px;font-weight:600;width:28px">{role}</span>'
+                f'<span style="color:#475569;font-size:9px;flex:1">{sid}</span>'
+                f'<span style="color:{ph_color};font-size:9px">{phase}</span>'
+                f'</div>'
+            )
+    else:
+        agent_list_html = '<div style="color:#475569;font-size:10px;text-align:center;padding:4px 0">No agents</div>'
+
+    agent_html = f"""<div style="font-family:'IBM Plex Mono',monospace;color:#e2e8f0">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+    <span style="font-size:18px;font-weight:700;color:#a78bfa">{agent_count}</span>
+    <span style="font-size:10px;color:#94a3b8">agent{'s' if agent_count != 1 else ''}{' · ' + str(working) + ' active' if working else ''}</span>
   </div>
-  {agent_items}
+  <svg viewBox="0 0 160 100" style="width:100%;height:auto;max-height:80px" xmlns="http://www.w3.org/2000/svg">
+    {agent_nodes_svg}
+  </svg>
+  <div style="margin-top:4px">{agent_list_html}</div>
 </div>"""
 
     w2 = WidgetCreate(
-        id="agent-activity",
-        title="Agent Activity",
+        id="sys-agent-network",
+        title=f"Agents — {working} active" if working else "Agents",
         html=agent_html,
-        grid_col=3, grid_row=1, col_span=1, row_span=1,
+        col_span=1, row_span=1,
     )
     widget2 = await loop.run_in_executor(
-        None, canvas_service.upsert_widget, project, "agent-activity", w2
+        None, canvas_service.upsert_widget, project, "sys-agent-network", w2,
     )
     widgets_created.append(widget2)
 
-    # ── Widget 3: Project Info ──
-    desc = proj.description or "No description"
-    desc_escaped = desc.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    milestone_count = len(milestones)
-    latest_ms = ""
-    if milestones:
-        ms = milestones[-1]
-        ms_text = (ms.get("summary") or ms.get("task") or "")[:100]
-        latest_ms = f'<div style="margin-top:8px;padding:8px;background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.15);border-radius:6px;font-size:11px;color:#94a3b8;word-wrap:break-word;overflow-wrap:break-word"><span style="color:#4ade80;font-weight:600">Latest:</span> {ms_text}</div>'
-
-    info_html = f"""
-<div style="font-family:'IBM Plex Mono',monospace;color:#e2e8f0">
-  <div style="font-size:12px;color:#94a3b8;line-height:1.5;margin-bottom:12px;word-wrap:break-word;overflow-wrap:break-word">{desc_escaped}</div>
-  <div style="display:flex;gap:16px;font-size:11px;color:#475569">
-    <span><span style="color:#67e8f9;font-weight:600">{total}</span> tasks</span>
-    <span><span style="color:#a78bfa;font-weight:600">{agent_count}</span> agents</span>
-    <span><span style="color:#4ade80;font-weight:600">{milestone_count}</span> milestones</span>
-  </div>
-  {latest_ms}
-</div>"""
-
-    w3 = WidgetCreate(
-        id="project-info",
-        title=proj.name,
-        html=info_html,
-        grid_col=1, grid_row=2, col_span=3, row_span=1,
-    )
-    widget3 = await loop.run_in_executor(
-        None, canvas_service.upsert_widget, project, "project-info", w3
-    )
-    widgets_created.append(widget3)
-
-    # Broadcast all created widgets
+    # Broadcast all system widgets
     for w in widgets_created:
         await ws_manager.broadcast(
             WSMessageType.CANVAS_WIDGET_CREATED,

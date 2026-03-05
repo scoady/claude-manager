@@ -2599,7 +2599,31 @@
   overflow: hidden;
 }
 
-/* ─── Dashboard Widget Grid ─── */
+/* ─── System Widget Strip (reserved top ~25%) ─── */
+
+.system-widget-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-flow: dense;
+  grid-auto-rows: 1fr;
+  gap: 10px;
+  flex: 0 0 28%;
+  min-height: 120px;
+  max-height: 35%;
+  overflow: hidden;
+}
+
+.system-widget-strip:empty {
+  display: none;
+}
+
+.system-widget-strip .widget-frame {
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+/* ─── Dashboard Widget Grid (agent-controlled) ─── */
 
 .dashboard-widget-grid {
   display: grid;
