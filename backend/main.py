@@ -1339,6 +1339,129 @@ async def seed_canvas(project: str) -> dict[str, Any]:
     return {"seeded": True, "count": len(widgets_created)}
 
 
+_DESIGN_SYSTEM_PROMPT = """You are a frontend widget designer. You produce self-contained HTML/CSS/JS
+widgets that render inside a Shadow DOM container (WidgetFrame).
+
+RENDERING CONTEXT:
+- Your output goes into a Shadow DOM with a .widget-content container
+- You receive two JS args: `root` (the .widget-content element) and `shadow` (the shadow root)
+- The widget is ~300-500px wide, 150-400px tall (flexible grid cell)
+- Background is dark (#0e1525) — the card frame is already styled, you fill the interior
+- Fonts available on the host page: 'Plus Jakarta Sans', 'DM Sans', 'IBM Plex Mono'
+
+DESIGN SYSTEM:
+  Backgrounds: #080c14 (base), #0e1525 (surface), #141d30 (elevated), #1a2640 (hover)
+  Borders: #243352 (standard), #1a2640 (dim)
+  Accents: #67e8f9 (cyan), #4ade80 (green), #fbbf24 (amber), #f87171 (red),
+           #a78bfa (purple), #c084fc (magenta), #5eead4 (teal), #f9a8d4 (pink)
+  Text: #e2e8f0 (primary), #94a3b8 (secondary), #475569 (muted)
+  Fonts: 'Plus Jakarta Sans' (titles, 600-700 weight), 'DM Sans' (body), 'IBM Plex Mono' (data/stats)
+  Glows: box-shadow: 0 0 16px rgba(103,232,249,0.25) (cyan glow), similar for green/amber/purple
+  Radii: 6px (sm), 10px (md), 16px (lg)
+
+CAPABILITIES:
+- Inline SVG with animations (SMIL or CSS)
+- <canvas> element with JS (2D context, particles, generative art)
+- CSS @keyframes animations, transitions, transforms
+- CSS gradients, backdrop-filter, mix-blend-mode
+- Any self-contained HTML/CSS/JS — no external dependencies
+
+QUALITY:
+- Premium, polished, modern dashboard aesthetic
+- Smooth animations (60fps), subtle glow effects, clean typography
+- Information hierarchy: big numbers/visuals first, details on click (<details>)
+- All text must fit and wrap — use overflow:hidden, text-overflow:ellipsis
+- Transparent backgrounds (the card provides the dark bg)
+
+OUTPUT FORMAT — respond with ONLY a JSON object, no markdown, no explanation:
+{"html": "...", "css": "...", "js": "...", "title": "...", "col_span": 1, "row_span": 1}
+
+- html: the widget interior HTML
+- css: scoped CSS (will be injected into Shadow DOM <style>)
+- js: code that receives (root, shadow) — runs once after HTML is inserted
+- title: short widget title for the header bar
+- col_span/row_span: grid size (1-3 cols, 1-2 rows)
+"""
+
+
+@app.post("/api/canvas/{project}/design")
+async def design_widget(project: str, body: dict[str, Any]) -> dict[str, Any]:
+    """Spawn a design subagent to create a widget from intent + data.
+
+    Body: { widget_id, intent, data }
+    The subagent generates HTML/CSS/JS and posts the widget.
+    """
+    widget_id = body.get("widget_id", f"designed-{int(time.time())}")
+    intent = body.get("intent", "")
+    data = body.get("data", {})
+
+    prompt = (
+        f"Create a dashboard widget.\n\n"
+        f"INTENT: {intent}\n\n"
+        f"DATA: {json.dumps(data, indent=2)}\n\n"
+        f"Produce the widget as a JSON object. Be creative and visually impressive "
+        f"while keeping the data clear and readable. Use animations, SVG, or canvas "
+        f"if the intent calls for it. Match the design system exactly."
+    )
+
+    broker: AgentBroker = app.state.broker
+
+    # Use a simple --print call to get the design output
+    import subprocess
+    from .broker.agent_session import CLAUDE_BIN, _get_spawn_env
+
+    cmd = [
+        CLAUDE_BIN, "--print",
+        "--model", "claude-haiku-4-5-20251001",
+        "--system-prompt", _DESIGN_SYSTEM_PROMPT,
+        "--output-format", "text",
+        "--max-turns", "1",
+        "--", prompt,
+    ]
+
+    loop = asyncio.get_event_loop()
+
+    def _run_design():
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=30,
+            env=_get_spawn_env(),
+        )
+        return result.stdout.strip()
+
+    try:
+        raw = await loop.run_in_executor(None, _run_design)
+
+        # Parse JSON from output (may have markdown fences)
+        if "```" in raw:
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+
+        widget_def = json.loads(raw)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Design agent failed: {exc}")
+
+    # Create the widget
+    w = WidgetCreate(
+        id=widget_id,
+        title=widget_def.get("title", "Designed Widget"),
+        html=widget_def.get("html", ""),
+        css=widget_def.get("css", ""),
+        js=widget_def.get("js", ""),
+        col_span=widget_def.get("col_span", 1),
+        row_span=widget_def.get("row_span", 1),
+    )
+    widget = await loop.run_in_executor(
+        None, canvas_service.upsert_widget, project, widget_id, w,
+    )
+    await ws_manager.broadcast(
+        WSMessageType.CANVAS_WIDGET_CREATED,
+        {"widget": widget.model_dump(mode="json")},
+    )
+    return {"ok": True, "widget_id": widget_id}
+
+
 @app.delete("/api/canvas/{project}")
 async def clear_canvas(project: str) -> dict[str, bool]:
     loop = asyncio.get_event_loop()

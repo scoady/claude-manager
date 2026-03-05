@@ -298,6 +298,50 @@ def canvas_put(
 
 
 @mcp.tool()
+def canvas_design(
+    project: str,
+    widget_id: str,
+    intent: str,
+    data: str = "{}",
+) -> dict:
+    """
+    Design a custom widget — describe what you want, get a polished result.
+
+    Instead of writing HTML yourself, describe your VISION and pass your DATA.
+    A design agent will create a beautiful, animated widget using the app's
+    full frontend stack (SVG, canvas, CSS animations, particles, etc).
+
+    intent: Describe what you want visually. Be specific and creative.
+        Examples:
+        - "constellation map showing task dependencies with glowing active nodes"
+        - "animated particle field where each particle represents a completed task"
+        - "radial progress ring with orbiting status indicators"
+        - "live activity heatmap grid showing agent work intensity"
+        - "flowing gradient mesh that shifts color based on project health"
+
+    data: JSON string with the structured data to visualize.
+        Example: '{"tasks": [...], "agents": [...], "progress": 0.72}'
+
+    widget_id: stable ID for updates. Reuse to refresh the same widget.
+
+    This is SLOWER than canvas_put templates (~5-10s) but produces unique,
+    creative visualizations. Use canvas_put templates for quick status updates,
+    and canvas_design for impressive custom visuals.
+    """
+    payload = {
+        "widget_id": widget_id,
+        "intent": intent,
+        "data": json.loads(data) if isinstance(data, str) else data,
+    }
+
+    url = f"{CANVAS_API}/api/canvas/{project}/design"
+    with httpx.Client(timeout=60) as client:
+        resp = client.post(url, json=payload)
+        resp.raise_for_status()
+        return resp.json()
+
+
+@mcp.tool()
 def canvas_remove(project: str, widget_id: str) -> dict:
     """Remove a widget from the canvas by ID."""
     url = f"{CANVAS_API}/api/canvas/{project}/widgets/{widget_id}"
