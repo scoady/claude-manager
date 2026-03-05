@@ -2,7 +2,7 @@
 
 An agent orchestration dashboard for running autonomous Claude agents against managed projects. Dispatch tasks, watch agents work in real time, inject follow-up messages mid-session, and run full team workflows — sprint by sprint — with automatic planning, execution, and reporting.
 
-![v1.2.0](https://img.shields.io/badge/version-1.2.0-blue) ![Python 3.11](https://img.shields.io/badge/python-3.11-blue) ![FastAPI](https://img.shields.io/badge/FastAPI-0.133-green)
+![v1.6.0](https://img.shields.io/badge/version-1.6.0-blue) ![Python 3.11](https://img.shields.io/badge/python-3.11-blue) ![FastAPI](https://img.shields.io/badge/FastAPI-0.133-green)
 
 ## Demo
 
@@ -54,6 +54,8 @@ Each **managed project** is a git repo. You dispatch a task → an `AgentSession
 - **Task & milestone tracking** — TASKS.md synced checklist with progress bars; milestones auto-captured from completed work cycles
 - **Message injection** — send follow-up messages to a running or idle session; mid-turn injections are queued and delivered cleanly between tool calls
 - **Multi-agent parallelism** — configure a project to run N concurrent sessions per dispatch
+- **Custom agent roles** — define reusable personas with system prompts, expertise tags, and behavioral traits; roles are injected into agent prompts during workflow execution and shared across all templates
+- **Artifacts browser** — IDE-like file tree + content preview tab; browse project files with syntax highlighting, line numbers, git status badges, and breadcrumb navigation — all without leaving the dashboard
 - **Skills system** — per-project skill toggles, marketplace browser, and skill creator
 - **Operator rules engine** — declarative reconciliation loop: `SessionHealthRule` cancels stuck sessions, `ProjectAutoSpawnRule` keeps N agents alive per project, `DirectoryWatchRule` triggers agents on file changes
 - **Bootstrap** — create a project from the UI; generates `PROJECT.md`, `TASKS.md`, `INSTRUCTIONS.md`, `.claude/settings.local.json`, and an initial git commit, then immediately spawns a controller agent
@@ -83,6 +85,9 @@ backend/
 └── services/
     ├── projects.py          Scan/bootstrap managed projects from disk
     ├── workflows.py         Workflow state machine, worktree lifecycle, phase prompts
+    ├── templates.py         Template discovery, loading, prompt rendering
+    ├── roles.py             Custom role CRUD (personas, expertise), merged role lookup
+    ├── artifacts.py         File browsing, content preview, git status for projects
     ├── skills.py            Skill discovery, per-project toggles, marketplace
     └── settings.py          Read/write ~/.claude/settings.json and plugins
 
@@ -99,7 +104,8 @@ frontend/
 │       ├── FeedController.js  Tab switching, agent sections, stream rendering
 │       ├── TasksPanel.js      TASKS.md CRUD checklist
 │       ├── MilestonesPanel.js Auto-captured work cycle history
-│       └── WorkflowPanel.js   Team setup + sprint phase timeline
+│       ├── WorkflowPanel.js   Team setup + sprint phase timeline
+│       └── ArtifactsPanel.js  File tree + content preview with syntax highlighting
 └── css/
     ├── app.css              Dark theme, design tokens, responsive layout
     └── feed.css             Agent cards, tools, stream, workflow panel
@@ -373,6 +379,17 @@ The Jenkins Helm chart lives at `/path/to/helm-platform/helm/jenkins/values.yaml
 | `GET` | `/api/projects/{name}/skills` | List project skills |
 | `POST` | `/api/projects/{name}/skills/{s}/enable` | Enable a skill |
 | `POST` | `/api/projects/{name}/skills/{s}/disable` | Disable a skill |
+| `GET` | `/api/projects/{name}/files` | List directory contents |
+| `GET` | `/api/projects/{name}/files/content` | Read file content (preview) |
+| `GET` | `/api/projects/{name}/files/status` | Git status overlay |
+| `GET` | `/api/roles` | List custom roles |
+| `GET` | `/api/roles/all` | Merged roles (builtins + custom) |
+| `POST` | `/api/roles` | Create a custom role |
+| `PUT` | `/api/roles/{id}` | Update a custom role |
+| `DELETE` | `/api/roles/{id}` | Delete a custom role |
+| `GET` | `/api/templates` | List workflow templates |
+| `GET` | `/api/templates/{id}` | Get template details |
+| `POST` | `/api/templates` | Create custom template |
 | `GET` | `/api/skills` | List all available skills |
 | `GET` | `/api/skills/marketplace` | Browse marketplace skills |
 | `GET` | `/api/agents` | List all active sessions |
@@ -412,6 +429,9 @@ The Vite dev server proxies API and WebSocket requests to `localhost:4040` — s
 - [x] Autonomous team workflows — sprint-based execution with git worktree isolation
 - [x] Task & milestone tracking — synced checklists and auto-captured work history
 - [x] Skills system — per-project skill management and marketplace
+- [x] Workflow templates — template-driven phases, isolation strategies, config schemas
+- [x] Custom agent roles — reusable personas with system prompts and expertise tags
+- [x] Artifacts browser — file tree + content preview with syntax highlighting and git status
 - [ ] Persistent project memory — summarized context carried across sessions
 - [ ] GitHub integration — agents open PRs, request reviews, respond to comments
 - [ ] Event-driven triggers — cron schedules, webhooks, file watchers as rule conditions

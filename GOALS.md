@@ -63,22 +63,30 @@ The project exists because running `claude` in a single terminal doesn't scale. 
 | 2026-03-03 | Vaporwave aesthetic overhaul (neon gradients, CRT scanlines, mesh backgrounds) |
 | 2026-03-03 | Dynamic agent status cards (markdown rendering, detail toggle) |
 | 2026-03-04 | GitHub CLI added to container, SSH auth for agents |
+| 2026-03-04 | Workflow template system: template-driven phases, isolation strategies, config schemas |
+| 2026-03-04 | Role Manager: custom agent personas with persona/expertise, CRUD API, settings UI, merged role picker in workflow team editor |
+| 2026-03-04 | Artifacts Tab: file browser + content preview with git status, syntax highlighting, lazy loading |
 
 ---
 
 ## Upcoming Goals
 
 ### Short-term
-- [ ] `gh` authentication inside containers (token passthrough from host keychain)
-- [ ] Agent-to-agent coordination (orchestrator + worker pattern)
+- [x] `gh` authentication inside containers (token passthrough from host keychain)
+- [x] Agent-to-agent coordination (orchestrator + worker pattern)
+- [x] Workflow template system — template-driven phases, isolation strategies
+- [x] Role Manager — custom agent personas, merged role picker
+- [x] Artifacts Tab — file browser + content preview
+- [ ] Live file activity highlights — pulse files as agents read/edit them (extends Artifacts tab)
 - [ ] Session replay — step through a past session and fork from any decision point
 - [ ] Persistent project memory — summarized context carried across sessions
 
 ### Medium-term
+- [ ] RC environment — second namespace for testing changes without disrupting production
 - [ ] GitHub integration — agents open PRs, request reviews, respond to comments
 - [ ] Event-driven triggers — cron schedules, webhooks, file watchers as rule conditions
 - [ ] Cost tracking — token usage per agent, per project, per day
-- [ ] Agent templates — pre-built task prompts for common workflows (code review, refactoring, testing)
+- [ ] Self-hosted inference API — local LLM for cost-free agent runs and offline capability
 
 ### Long-term
 - [ ] Multi-user support with role-based access
