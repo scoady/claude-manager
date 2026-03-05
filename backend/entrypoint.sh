@@ -23,6 +23,10 @@ mcp_patterns = [
 for p in mcp_patterns:
     if p not in allows:
         allows.append(p)
+# Deny AskUserQuestion globally — agents must be fully autonomous
+denies = s.setdefault('permissions', {}).setdefault('deny', [])
+if 'AskUserQuestion' not in denies:
+    denies.append('AskUserQuestion')
 # Disable fast mode (npm CLI doesn't support it)
 s['fastMode'] = False
 with open('$SETTINGS_FILE', 'w') as f:

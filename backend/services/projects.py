@@ -132,7 +132,7 @@ return this format, the UI will fall back to raw text which looks bad. Always in
 _SETTINGS_TEMPLATE = {
     "permissions": {
         "allow": ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Agent"],
-        "deny": [],
+        "deny": ["AskUserQuestion"],
     }
 }
 

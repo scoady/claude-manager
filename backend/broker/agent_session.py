@@ -232,7 +232,7 @@ class AgentSession:
         self._subagent_captured_this_cycle = False
 
         cmd = [CLAUDE_BIN, "--print", "--output-format", "stream-json", "--verbose",
-               "--permission-mode", "acceptEdits"]
+               "--permission-mode", "bypassPermissions"]
 
         if resume and self._cli_session_id:
             cmd += ["--resume", self._cli_session_id]
@@ -241,6 +241,15 @@ class AgentSession:
             # Add MCP config for initial spawn (resume inherits from session)
             if self.mcp_config_path and Path(self.mcp_config_path).is_file():
                 cmd += ["--mcp-config", self.mcp_config_path]
+
+        # Prepend autonomy directive on initial spawn (not resume follow-ups)
+        if not resume:
+            message = (
+                "IMPORTANT: You are an autonomous agent. NEVER use AskUserQuestion or ask "
+                "the user for input/clarification. Make your best judgment and proceed. "
+                "If you hit a blocker, document it and move on to the next actionable step.\n\n"
+                + message
+            )
 
         # Use -- separator to prevent the prompt being parsed as a flag/config arg
         cmd += ["--", message]
