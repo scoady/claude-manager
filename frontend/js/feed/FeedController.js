@@ -1,7 +1,6 @@
-/** FeedController — owns the #feed DOM element and manages the task-centric narrative feed. */
+/** FeedController — owns the #feed DOM element and manages the dashboard + agent feed. */
 import { escapeHtml } from '../utils.js';
 import { AgentSection } from './AgentSection.js';
-import { OrchestratorBanner } from './OrchestratorBanner.js';
 import { TasksPanel } from './TasksPanel.js';
 import { MilestonesPanel } from './MilestonesPanel.js';
 import { WorkflowPanel } from './WorkflowPanel.js';
@@ -35,7 +34,6 @@ export class FeedController {
     this._focusedSessionId = null;
     this._activeTab = 'overview';
     this._agentContainer = null;
-    this._orchestratorBanner = null;
     this._tasksContainer = null;
     this._tasksPanel = null;
     this._milestonesContainer = null;
@@ -66,40 +64,24 @@ export class FeedController {
     this._headerEl = this._buildHeader(project);
     this._el.appendChild(this._headerEl);
 
-    // 2. Tree container (org chart layout)
-    this._treeContainer = document.createElement('div');
-    this._treeContainer.className = 'tree-container';
+    // 2. Overview container — dashboard widget grid + agent strip
+    this._overviewContainer = document.createElement('div');
+    this._overviewContainer.className = 'overview-container';
 
-    // 2a. Orchestrator root node
-    this._orchestratorBanner = new OrchestratorBanner();
-    this._orchestratorBanner._taskAgentMap = this._taskAgentMap;
-    this._treeContainer.appendChild(this._orchestratorBanner.el);
-
-    // 2a-ii. Dashboard widget grid (agent-authored content)
+    // 2a. Dashboard widget grid (fully agent-controlled)
     this._dashboardWidgetGrid = document.createElement('div');
     this._dashboardWidgetGrid.className = 'dashboard-widget-grid';
-    this._dashboardWidgetGrid.innerHTML = '<div class="dashboard-empty-state">Agent dashboard widgets will appear here</div>';
-    this._treeContainer.appendChild(this._dashboardWidgetGrid);
+    this._overviewContainer.appendChild(this._dashboardWidgetGrid);
     this._dashboardCanvas.mount(this._dashboardWidgetGrid);
 
-    // 2b. Vertical connector from orchestrator to children
-    this._treeConnector = document.createElement('div');
-    this._treeConnector.className = 'tree-connector-v hidden';
-    this._treeContainer.appendChild(this._treeConnector);
-
-    // 2c. Children row (agents fan out horizontally)
-    this._treeChildren = document.createElement('div');
-    this._treeChildren.className = 'tree-children';
-    this._treeContainer.appendChild(this._treeChildren);
-
-    this._el.appendChild(this._treeContainer);
-
-    // 3. Agent container for overflow (standalone agents without orchestrator)
+    // 2b. Agent strip (compact live agent cards)
     this._agentContainer = document.createElement('div');
-    this._agentContainer.className = 'feed-agent-container';
-    this._el.appendChild(this._agentContainer);
+    this._agentContainer.className = 'agent-strip-container';
+    this._overviewContainer.appendChild(this._agentContainer);
 
-    // 4. Tasks container (hidden by default)
+    this._el.appendChild(this._overviewContainer);
+
+    // 3. Tasks container (hidden by default)
     this._tasksContainer = document.createElement('div');
     this._tasksContainer.className = 'feed-tasks-container hidden';
     this._el.appendChild(this._tasksContainer);
@@ -108,7 +90,7 @@ export class FeedController {
     this._tasksPanel = new TasksPanel(project.name);
     this._tasksContainer.appendChild(this._tasksPanel.el);
 
-    // 6. Milestones container (hidden by default)
+    // 4. Milestones container (hidden by default)
     this._milestonesContainer = document.createElement('div');
     this._milestonesContainer.className = 'feed-milestones-container hidden';
     this._el.appendChild(this._milestonesContainer);
@@ -117,7 +99,7 @@ export class FeedController {
     this._milestonesPanel = new MilestonesPanel(project.name);
     this._milestonesContainer.appendChild(this._milestonesPanel.el);
 
-    // 7. Workflow container (hidden by default)
+    // 5. Workflow container (hidden by default)
     this._workflowContainer = document.createElement('div');
     this._workflowContainer.className = 'feed-workflow-container hidden';
     this._el.appendChild(this._workflowContainer);
@@ -126,7 +108,7 @@ export class FeedController {
     this._workflowPanel = new WorkflowPanel(project.name);
     this._workflowContainer.appendChild(this._workflowPanel.el);
 
-    // 8. Artifacts container (hidden by default)
+    // 6. Artifacts container (hidden by default)
     this._artifactsContainer = document.createElement('div');
     this._artifactsContainer.className = 'feed-artifacts-container hidden';
     this._el.appendChild(this._artifactsContainer);
@@ -137,29 +119,19 @@ export class FeedController {
 
     this._bindTabEvents();
 
-    // 6. Load initial data
+    // 7. Load initial data
     this._loadInitialData(project);
   }
 
   async _loadInitialData(project) {
-    // Fetch tasks (read-only — no side effects)
+    // Fetch tasks (read-only)
     try {
       const tasks = await api.getTasks(project.name);
-      this._orchestratorBanner?.setProject(project, tasks);
       this._tasksPanel?.updateTasks(tasks);
     } catch (_) {}
 
-    // Load existing dashboard widgets for this project
-    this._loadDashboardWidgets(project.name);
-
-    // If a controller session already exists in our state, wire it up
-    // (no auto-spawning — orchestrator is only created via explicit dispatch)
-    for (const [sid, section] of this._sections) {
-      if (section._isController && section.sessionId) {
-        this._orchestratorBanner?.setControllerSession(sid);
-        break;
-      }
-    }
+    // Load dashboard widgets — seed if none exist yet
+    await this._loadDashboardWidgets(project.name);
   }
 
   async _loadDashboardWidgets(projectName) {
@@ -167,10 +139,29 @@ export class FeedController {
       const resp = await fetch(`/api/canvas/${encodeURIComponent(projectName)}`);
       const widgets = await resp.json();
       this._dashboardCanvas.clear();
+
+      if (widgets.length === 0) {
+        // No widgets yet — ask backend to pre-generate from project data
+        await this._seedDashboard(projectName);
+        return;
+      }
+
       for (const w of widgets) {
         if (!w.widget_id) w.widget_id = w.id;
         this._dashboardCanvas.create(w);
       }
+    } catch (_) {}
+  }
+
+  async _seedDashboard(projectName) {
+    try {
+      const resp = await fetch(`/api/canvas/${encodeURIComponent(projectName)}/seed`, {
+        method: 'POST',
+      });
+      if (!resp.ok) return;
+      const result = await resp.json();
+      if (!result.seeded) return;
+      // Widgets will arrive via WS broadcast — no need to manually create here
     } catch (_) {}
   }
 
@@ -417,7 +408,6 @@ export class FeedController {
   appendAgentSection(sessionId, task, { phase, turnCount, isController, taskIndex } = {}) {
     if (this._sections.has(sessionId)) return this._sections.get(sessionId);
 
-    // Controllers always get gold; others rotate through lane colors
     const color = isController ? '#fbbf24' : LANE_COLORS[this._laneIndex % LANE_COLORS.length];
     if (!isController) this._laneIndex++;
 
@@ -436,62 +426,41 @@ export class FeedController {
 
     this._sections.set(sessionId, section);
 
-    // Skip mounting non-controller agents that are already idle/done
-    const isAlreadyDone = !isController && ['idle', 'cancelled', 'error'].includes(phase);
+    // Skip mounting agents that are already idle/done
+    const isAlreadyDone = ['idle', 'cancelled', 'error'].includes(phase);
     if (isAlreadyDone) {
-      return section; // track it but don't show it
+      return section;
     }
 
-    // Determine where to mount this section
-    if (isController) {
-      this._orchestratorBanner?.setControllerSession(sessionId);
-    }
-
-    // Enable compact mode for non-controller agents in the tree
-    if (!isController) {
-      section.setCompactMode(true);
-    }
+    // All agents (including controller) mount in the compact agent strip
+    section.setCompactMode(true);
 
     if (taskIndex != null) {
       this._taskAgentMap.set(taskIndex, sessionId);
     }
 
-    // Mount in tree children row as a column
-    if (this._treeChildren) {
+    // Mount in agent strip
+    if (this._agentContainer) {
       const col = document.createElement('div');
-      col.className = 'tree-agent-col';
+      col.className = 'agent-strip-card';
       col.dataset.session = sessionId;
       col.appendChild(section.el);
       col.style.opacity = '0';
       col.style.transform = 'translateY(8px)';
-      this._treeChildren.appendChild(col);
-
-      // Show connector when we have children
-      this._treeConnector?.classList.remove('hidden');
-      this._updateTreeChildCount();
+      this._agentContainer.appendChild(col);
 
       requestAnimationFrame(() => {
         col.style.transition = 'opacity 280ms ease, transform 280ms ease';
         col.style.opacity = '1';
         col.style.transform = 'translateY(0)';
       });
-    } else {
-      // Fallback: standalone agent container
-      section.el.style.opacity = '0';
-      section.el.style.transform = 'translateY(12px)';
-      (this._agentContainer || this._el).appendChild(section.el);
-      requestAnimationFrame(() => {
-        section.el.style.transition = 'opacity 280ms ease, transform 280ms ease';
-        section.el.style.opacity = '1';
-        section.el.style.transform = 'translateY(0)';
-      });
     }
 
-    // Hydrate existing agent output on reconnect (agent already has turns)
+    // Hydrate existing agent output on reconnect
     if (turnCount > 0 || (phase && phase !== 'starting')) {
       api.getMessages(sessionId).then(messages => {
         section.hydrateMessages(messages);
-      }).catch(() => {}); // silently ignore if session no longer exists
+      }).catch(() => {});
     }
 
     return section;
@@ -510,11 +479,6 @@ export class FeedController {
     this._sections.delete(oldId);
     this._sections.set(newId, section);
 
-    // Update orchestrator banner reference
-    if (this._orchestratorBanner?.controllerSessionId === oldId) {
-      this._orchestratorBanner.setControllerSession(newId);
-    }
-
     // Update task agent map
     for (const [idx, sid] of this._taskAgentMap) {
       if (sid === oldId) {
@@ -528,14 +492,13 @@ export class FeedController {
   handleStateSync(agents) {
     if (!this._project) return;
 
-    // Collect session IDs from the sync that belong to the current project
     const projectAgents = agents.filter(a => a.project_name === this._project.name);
     const syncIds = new Set(projectAgents.map(a => a.session_id));
 
     // Remove sections that no longer exist on the server
     for (const [sid] of this._sections) {
       if (!syncIds.has(sid)) {
-        const col = this._treeChildren?.querySelector(`[data-session="${sid}"]`);
+        const col = this._agentContainer?.querySelector(`[data-session="${sid}"]`);
         if (col) col.remove();
         this._sections.delete(sid);
       }
@@ -545,11 +508,9 @@ export class FeedController {
     for (const a of projectAgents) {
       const existing = this._sections.get(a.session_id);
       if (existing) {
-        // Update phase + turn count for existing sections
         existing.setPhase(a.phase || 'idle');
         if (a.turn_count) existing.setTurnCount(a.turn_count);
       } else {
-        // Create new section
         this.appendAgentSection(a.session_id, a.task, {
           phase: a.phase,
           turnCount: a.turn_count,
@@ -558,8 +519,6 @@ export class FeedController {
         });
       }
     }
-
-    this._updateTreeChildCount();
   }
 
   // ── WS event routing ───────────────────────────────────────────────────────
@@ -582,34 +541,20 @@ export class FeedController {
         if (done) return;
         const section = this._sections.get(session_id);
         section?.appendChunk(chunk);
-
-        // If this is the controller, update orchestrator banner
-        if (this._orchestratorBanner?.controllerSessionId === session_id) {
-          this._orchestratorBanner.appendChunk(chunk);
-        }
         break;
       }
       case 'session_phase': {
         const { session_id, phase } = msg.data;
         const section = this._sections.get(session_id);
         section?.setPhase(phase);
-
-        // Update orchestrator banner phase
-        if (this._orchestratorBanner?.controllerSessionId === session_id) {
-          this._orchestratorBanner.setPhase(phase);
-        }
-
-        // (task agent map maintained for future use)
         break;
       }
       case 'tool_start': {
         const { session_id, tool } = msg.data;
-        // Route to subagent section if this tool belongs to an active subagent
         let startSection = null;
         if (tool.parent_tool_use_id) {
           const subId = this._subagentMap.get(tool.parent_tool_use_id);
           const sub = subId ? this._sections.get(subId) : null;
-          // Only route to subagent if its element is actually in the DOM
           if (sub?.el?.isConnected) startSection = sub;
         }
         if (!startSection) startSection = this._sections.get(session_id);
@@ -637,17 +582,13 @@ export class FeedController {
         const section = this._sections.get(session_id);
         section?.setTurnCount(turn_count);
         section?.updateStatusCard();
-
-        // (task agent map maintained for future use)
         break;
       }
       case 'agent_done': {
         const { session_id, reason } = msg.data;
         const section = this._sections.get(session_id);
         section?.markDone(reason);
-        if (section && !section._isController) {
-          this._fadeOutDoneSection(section);
-        }
+        this._fadeOutDoneSection(section);
         break;
       }
       case 'agent_id_assigned': {
@@ -656,7 +597,6 @@ export class FeedController {
         break;
       }
       case 'agent_milestone': {
-        // milestones are shown via tool blocks — no extra action needed
         break;
       }
 
@@ -665,10 +605,8 @@ export class FeedController {
         const controllerSection = this._sections.get(session_id);
         if (!controllerSection) return;
 
-        // Show controller as delegating
         controllerSection.setPhase('delegating');
 
-        // Create a child section as a tree sibling (not nested inside controller)
         const subId = `subagent-${tool_use_id}`;
         const color = LANE_COLORS[this._laneIndex % LANE_COLORS.length];
         this._laneIndex++;
@@ -689,29 +627,23 @@ export class FeedController {
         this._sections.set(subId, childSection);
         this._subagentMap.set(tool_use_id, subId);
 
-        // Mount as a tree column sibling to the controller
-        if (this._treeChildren) {
+        // Mount in agent strip
+        if (this._agentContainer) {
           const col = document.createElement('div');
-          col.className = 'tree-agent-col';
+          col.className = 'agent-strip-card';
           col.dataset.session = subId;
           col.appendChild(childSection.el);
           col.style.opacity = '0';
           col.style.transform = 'translateY(8px)';
-          this._treeChildren.appendChild(col);
-          this._treeConnector?.classList.remove('hidden');
-          this._updateTreeChildCount();
+          this._agentContainer.appendChild(col);
           requestAnimationFrame(() => {
             col.style.transition = 'opacity 280ms ease, transform 280ms ease';
             col.style.opacity = '1';
             col.style.transform = 'translateY(0)';
           });
-        } else {
-          controllerSection.appendChildSection(childSection);
         }
 
-        // Update controller's monitoring indicator + active work tracker
         this._updateControllerMonitoring();
-        this._orchestratorBanner?.addActiveWork(tool_use_id, description, color);
         break;
       }
 
@@ -722,7 +654,6 @@ export class FeedController {
 
         const section = this._sections.get(subId);
         if (section) {
-          // Render structured checklist if available, else raw markdown
           if (result) section.setSubagentResult(result);
           section.markDone(is_error ? 'error' : 'idle');
           this._fadeOutDoneSection(section);
@@ -730,7 +661,6 @@ export class FeedController {
 
         this._subagentMap.delete(tool_use_id);
         this._updateControllerMonitoring();
-        this._orchestratorBanner?.removeActiveWork(tool_use_id);
         break;
       }
 
@@ -759,8 +689,7 @@ export class FeedController {
         tab.classList.add('active');
 
         // Hide all containers
-        this._treeContainer?.classList.add('hidden');
-        this._agentContainer?.classList.add('hidden');
+        this._overviewContainer?.classList.add('hidden');
         this._tasksContainer?.classList.add('hidden');
         this._milestonesContainer?.classList.add('hidden');
         this._workflowContainer?.classList.add('hidden');
@@ -776,8 +705,7 @@ export class FeedController {
         this._workflowPanel?.stopAutoRefresh();
 
         if (tabName === 'overview') {
-          this._treeContainer?.classList.remove('hidden');
-          this._agentContainer?.classList.remove('hidden');
+          this._overviewContainer?.classList.remove('hidden');
         } else if (tabName === 'tasks') {
           this._tasksContainer?.classList.remove('hidden');
           this._tasksPanel?.load();
@@ -800,7 +728,6 @@ export class FeedController {
   /** Handle tasks_updated WS event. */
   handleTasksUpdated(projectName, tasks) {
     if (this._project && this._project.name === projectName) {
-      this._orchestratorBanner?.updateProgress(tasks);
       this._tasksPanel?.updateTasks(tasks);
     }
   }
@@ -834,14 +761,12 @@ export class FeedController {
 
   // ── Done agent cleanup ───────────────────────────────────────────────────
 
-  /** Fade out and remove a completed non-controller agent from the tree. */
   _fadeOutDoneSection(section, delay = 2000) {
     if (!section?.el?.isConnected) return;
 
     setTimeout(() => {
       if (!section.el.isConnected) return;
-      // Find the tree-agent-col wrapper
-      const col = section.el.closest('.tree-agent-col');
+      const col = section.el.closest('.agent-strip-card');
       const target = col || section.el;
       target.style.transition = 'opacity 0.4s ease, max-width 0.4s ease, padding 0.4s ease, flex 0.4s ease';
       target.style.opacity = '0';
@@ -851,7 +776,6 @@ export class FeedController {
       target.style.overflow = 'hidden';
       setTimeout(() => {
         if (target.isConnected) target.remove();
-        this._updateTreeChildCount();
       }, 500);
     }, delay);
   }
@@ -888,24 +812,14 @@ export class FeedController {
     }
   }
 
-  /** Update CSS variable for horizontal connector line span. */
-  _updateTreeChildCount() {
-    if (this._treeChildren) {
-      const count = this._treeChildren.children.length;
-      this._treeChildren.style.setProperty('--child-count', count);
-    }
-  }
-
   /** Update controller's monitoring indicator with active subagent count and colors. */
   _updateControllerMonitoring() {
-    // Find the controller section
     let controllerSection = null;
     for (const [, section] of this._sections) {
       if (section._isController) { controllerSection = section; break; }
     }
     if (!controllerSection) return;
 
-    // Collect active subagent colors
     const colors = [];
     for (const [, subId] of this._subagentMap) {
       const sub = this._sections.get(subId);

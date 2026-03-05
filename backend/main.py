@@ -1065,6 +1065,159 @@ async def replace_canvas_scene(
     return widgets
 
 
+@app.post("/api/canvas/{project}/seed")
+async def seed_canvas(project: str) -> dict[str, Any]:
+    """Pre-generate dashboard widgets from project data (tasks, description, agents).
+
+    Only seeds if no widgets exist yet for this project.
+    """
+    loop = asyncio.get_event_loop()
+    existing = await loop.run_in_executor(None, canvas_service.get_widgets, project)
+    if existing:
+        return {"seeded": False, "reason": "widgets already exist", "count": len(existing)}
+
+    # Gather project data
+    proj = await loop.run_in_executor(None, projects_svc.get_project, project, [])
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    tasks = await loop.run_in_executor(None, tasks_svc.get_tasks, project)
+    broker: AgentBroker = app.state.broker
+    agents = [s.to_dict() for s in broker.get_sessions_for_project(project)]
+    milestones = await loop.run_in_executor(None, milestones_svc.get_milestones, project)
+
+    widgets_created = []
+
+    # ── Widget 1: Task Progress ──
+    total = len(tasks)
+    done = sum(1 for t in tasks if t.get("status") == "done")
+    active = sum(1 for t in tasks if t.get("status") == "in_progress")
+    pct = round((done / total) * 100) if total > 0 else 0
+
+    task_rows = ""
+    for t in tasks[:20]:  # cap at 20 for display
+        st = t.get("status", "pending")
+        color = "#4ade80" if st == "done" else "#fbbf24" if st == "in_progress" else "#475569"
+        label = "done" if st == "done" else "active" if st == "in_progress" else st
+        text = (t.get("text", "") or "")[:80]
+        task_rows += (
+            f'<tr><td style="padding:4px 8px;border-bottom:1px solid rgba(255,255,255,0.04)">'
+            f'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:{color};margin-right:8px"></span>'
+            f'{text}</td>'
+            f'<td style="padding:4px 8px;border-bottom:1px solid rgba(255,255,255,0.04);color:{color};font-size:11px;text-align:right">{label}</td></tr>'
+        )
+
+    progress_html = f"""
+<div style="font-family:'IBM Plex Mono',monospace;color:#e2e8f0">
+  <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px">
+    <div style="font-size:28px;font-weight:700;color:#67e8f9">{pct}<span style="font-size:14px;color:#475569">%</span></div>
+    <div style="font-size:11px;color:#94a3b8">{done}/{total} tasks{'&ensp;&bull;&ensp;' + str(active) + ' active' if active else ''}</div>
+  </div>
+  <div style="height:4px;background:#1a2640;border-radius:2px;overflow:hidden;margin-bottom:16px">
+    <div style="height:100%;width:{pct}%;background:linear-gradient(90deg,#4ade80,#67e8f9);border-radius:2px;box-shadow:0 0 8px rgba(74,222,128,0.3);transition:width 0.5s ease"></div>
+  </div>
+  <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr>
+      <th style="text-align:left;padding:4px 8px;color:#475569;font-weight:500;border-bottom:1px solid #243352">Task</th>
+      <th style="text-align:right;padding:4px 8px;color:#475569;font-weight:500;border-bottom:1px solid #243352">Status</th>
+    </tr></thead>
+    <tbody>{task_rows}</tbody>
+  </table>
+</div>"""
+
+    w1 = WidgetCreate(
+        id="task-progress",
+        title=f"Task Progress — {done}/{total}",
+        html=progress_html,
+        grid_col=1, grid_row=1, col_span=2, row_span=1,
+    )
+    widget1 = await loop.run_in_executor(
+        None, canvas_service.upsert_widget, project, "task-progress", w1
+    )
+    widgets_created.append(widget1)
+
+    # ── Widget 2: Agent Activity ──
+    agent_count = len(agents)
+    working = sum(1 for a in agents if a.get("phase") not in ("idle", "cancelled", "error"))
+    agent_items = ""
+    for a in agents[:8]:
+        phase = a.get("phase", "idle")
+        ph_color = "#4ade80" if phase == "idle" else "#fbbf24" if phase in ("thinking", "tool_use") else "#67e8f9"
+        role = "Controller" if a.get("is_controller") else "Worker"
+        sid = (a.get("session_id") or "")[:8]
+        agent_items += (
+            f'<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">'
+            f'<span style="width:6px;height:6px;border-radius:50%;background:{ph_color};flex-shrink:0"></span>'
+            f'<span style="color:#94a3b8;font-size:11px;flex:1">{role}</span>'
+            f'<span style="color:#475569;font-size:10px">{sid}</span>'
+            f'<span style="color:{ph_color};font-size:10px">{phase}</span>'
+            f'</div>'
+        )
+    if not agent_items:
+        agent_items = '<div style="color:#475569;font-size:12px;padding:12px 0;text-align:center">No agents running</div>'
+
+    agent_html = f"""
+<div style="font-family:'IBM Plex Mono',monospace;color:#e2e8f0">
+  <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:12px">
+    <span style="font-size:22px;font-weight:700;color:#a78bfa">{agent_count}</span>
+    <span style="font-size:11px;color:#94a3b8">agent{'s' if agent_count != 1 else ''}{' &bull; ' + str(working) + ' working' if working else ''}</span>
+  </div>
+  {agent_items}
+</div>"""
+
+    w2 = WidgetCreate(
+        id="agent-activity",
+        title="Agent Activity",
+        html=agent_html,
+        grid_col=3, grid_row=1, col_span=1, row_span=1,
+    )
+    widget2 = await loop.run_in_executor(
+        None, canvas_service.upsert_widget, project, "agent-activity", w2
+    )
+    widgets_created.append(widget2)
+
+    # ── Widget 3: Project Info ──
+    desc = proj.description or "No description"
+    desc_escaped = desc.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    milestone_count = len(milestones)
+    latest_ms = ""
+    if milestones:
+        ms = milestones[-1]
+        ms_text = (ms.get("summary") or ms.get("task") or "")[:100]
+        latest_ms = f'<div style="margin-top:8px;padding:8px;background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.15);border-radius:6px;font-size:11px;color:#94a3b8"><span style="color:#4ade80;font-weight:600">Latest:</span> {ms_text}</div>'
+
+    info_html = f"""
+<div style="font-family:'IBM Plex Mono',monospace;color:#e2e8f0">
+  <div style="font-size:12px;color:#94a3b8;line-height:1.5;margin-bottom:12px">{desc_escaped}</div>
+  <div style="display:flex;gap:16px;font-size:11px;color:#475569">
+    <span><span style="color:#67e8f9;font-weight:600">{total}</span> tasks</span>
+    <span><span style="color:#a78bfa;font-weight:600">{agent_count}</span> agents</span>
+    <span><span style="color:#4ade80;font-weight:600">{milestone_count}</span> milestones</span>
+  </div>
+  {latest_ms}
+</div>"""
+
+    w3 = WidgetCreate(
+        id="project-info",
+        title=proj.name,
+        html=info_html,
+        grid_col=1, grid_row=2, col_span=3, row_span=1,
+    )
+    widget3 = await loop.run_in_executor(
+        None, canvas_service.upsert_widget, project, "project-info", w3
+    )
+    widgets_created.append(widget3)
+
+    # Broadcast all created widgets
+    for w in widgets_created:
+        await ws_manager.broadcast(
+            WSMessageType.CANVAS_WIDGET_CREATED,
+            {"widget": w.model_dump(mode="json")},
+        )
+
+    return {"seeded": True, "count": len(widgets_created)}
+
+
 @app.delete("/api/canvas/{project}")
 async def clear_canvas(project: str) -> dict[str, bool]:
     loop = asyncio.get_event_loop()
