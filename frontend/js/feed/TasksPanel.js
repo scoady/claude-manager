@@ -105,6 +105,13 @@ export class TasksPanel {
 
     const row = this._el.querySelector(`.task-row[data-index="${taskIndex}"]`);
     if (!row) return;
+
+    // Replace waiting indicator once agent starts working
+    const waiting = row.querySelector('.task-waiting');
+    if (waiting) {
+      waiting.innerHTML = '<span class="task-waiting-dots"><span></span><span></span><span></span></span> Agent working\u2026';
+    }
+
     let badge = row.querySelector('.task-tool-badge');
     if (!badge) {
       badge = document.createElement('span');
@@ -236,9 +243,17 @@ export class TasksPanel {
       indicator = `<span class="task-status-indicator"><span class="status-dot ${groupStatus}"></span></span>`;
     }
 
-    const streamContent = hasStream
-      ? renderMarkdown(this._taskStreams.get(t.index))
-      : '<span class="text-muted">Live agent output will appear here...</span>';
+    const hasMappedAgent = this._taskAgentMap.has(t.index);
+    let streamContent;
+    if (hasStream) {
+      streamContent = renderMarkdown(this._taskStreams.get(t.index));
+    } else if (groupStatus === 'active') {
+      streamContent = hasMappedAgent
+        ? '<div class="task-waiting"><span class="task-waiting-dots"><span></span><span></span><span></span></span> Agent starting\u2026</div>'
+        : '<div class="task-waiting"><span class="task-waiting-dots"><span></span><span></span><span></span></span> Waiting for controller to dispatch\u2026</div>';
+    } else {
+      streamContent = '<span class="text-muted">Live agent output will appear here...</span>';
+    }
 
     return `
       <div class="task-row${expanded ? ' expanded' : ''}" data-index="${t.index}">
