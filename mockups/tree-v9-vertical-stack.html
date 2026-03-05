@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Tree v9 — Vertical Stack</title>
+<style>
+  :root {
+    --bg-base: #080c14; --bg-surface: #0e1525; --bg-elevated: #141d30;
+    --bg-hover: #1a2640; --bg-border: #243352; --bg-border-dim: #1a2640;
+    --accent-green: #4ade80; --accent-amber: #fbbf24; --accent-cyan: #67e8f9;
+    --accent-red: #f87171; --accent-purple: #a78bfa; --accent-magenta: #c084fc;
+    --text-primary: #e2e8f0; --text-secondary: #94a3b8; --text-muted: #475569;
+    --font-mono: 'IBM Plex Mono', 'Fira Code', monospace;
+    --font-ui: 'DM Sans', system-ui, sans-serif;
+    --radius-sm: 6px; --radius-md: 10px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg-base); color: var(--text-primary); font-family: var(--font-ui); padding: 24px; max-width: 860px; margin: 0 auto; }
+
+  h2 { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; font-family: var(--font-mono); margin-bottom: 16px; }
+  .design-note { color: var(--accent-cyan); font-size: 12px; font-family: var(--font-mono); margin-bottom: 24px; padding: 10px 14px; border: 1px solid rgba(103,232,249,0.15); border-radius: var(--radius-sm); background: rgba(103,232,249,0.03); }
+
+  /* ─── Controller Strip (minimal top bar) ─── */
+  .ctrl-strip {
+    border: 1px solid var(--bg-border);
+    border-radius: var(--radius-md);
+    background: linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-surface) 100%);
+    overflow: hidden;
+    margin-bottom: 0;
+  }
+  .ctrl-bar-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 20px;
+  }
+  .ctrl-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent-green);
+    animation: breathe 2s ease-in-out infinite;
+    box-shadow: 0 0 8px rgba(74,222,128,0.4);
+  }
+  @keyframes breathe { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(1.3)} }
+  .ctrl-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--accent-amber); font-family: var(--font-mono); }
+  .ctrl-stat { font-size: 12px; color: var(--text-secondary); font-family: var(--font-mono); margin-left: auto; }
+  .ctrl-phase { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
+
+  /* Progress */
+  .ctrl-prog-row { display: flex; align-items: center; gap: 12px; padding: 0 20px 12px; }
+  .ctrl-prog-bar { flex: 1; height: 3px; background: var(--bg-hover); border-radius: 2px; overflow: hidden; }
+  .ctrl-prog-fill { height: 100%; background: linear-gradient(90deg, var(--accent-green), var(--accent-cyan)); border-radius: 2px; }
+  .ctrl-prog-pct { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
+
+  /* ─── Vertical tree trunk ─── */
+  .tree-trunk {
+    position: relative;
+    margin-left: 32px;
+    padding-left: 24px;
+    border-left: 2px solid var(--bg-border);
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+  /* Trunk terminator dot */
+  .tree-trunk::after {
+    content: '';
+    position: absolute; bottom: 0; left: -5px;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--bg-border);
+  }
+
+  /* ─── Agent Node (full width, stacked vertically) ─── */
+  .agent-node {
+    position: relative;
+    margin: 16px 0;
+    border: 1px solid var(--bg-border-dim);
+    border-radius: var(--radius-sm);
+    background: var(--bg-elevated);
+    overflow: hidden;
+  }
+  /* Horizontal branch from trunk */
+  .agent-node::before {
+    content: '';
+    position: absolute; left: -25px; top: 20px;
+    width: 24px; height: 2px;
+    background: var(--bg-border);
+  }
+  /* Branch node dot */
+  .agent-node::after {
+    content: '';
+    position: absolute; left: -29px; top: 17px;
+    width: 8px; height: 8px; border-radius: 50%;
+    border: 2px solid var(--accent-cyan);
+    background: rgba(103,232,249,0.2);
+  }
+
+  .ahdr {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--bg-border-dim);
+  }
+  .a-lane { width: 3px; height: 20px; border-radius: 2px; flex-shrink: 0; }
+  .a-name { font-size: 14px; font-weight: 600; flex: 1; }
+  .a-meta { font-size: 10px; font-family: var(--font-mono); color: var(--accent-amber); white-space: nowrap; }
+
+  /* Agent body — two columns: tasks + stream */
+  .agent-body { display: flex; min-height: 120px; }
+  .agent-tasks-col { flex: 0 0 55%; border-right: 1px solid var(--bg-border-dim); }
+  .agent-stream-col {
+    flex: 1; padding: 10px 16px;
+    font-size: 12px; color: var(--text-secondary); line-height: 1.6;
+    max-height: 200px; overflow-y: auto;
+  }
+  .agent-stream-col p { margin-bottom: 6px; }
+  .agent-stream-col code { color: var(--accent-cyan); font-family: var(--font-mono); font-size: 11px; }
+
+  /* Task rows */
+  .at {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 14px 9px 20px;
+    border-bottom: 1px solid var(--bg-border-dim);
+    font-size: 12px;
+  }
+  .at:last-child { border-bottom: none; }
+  .at-text { flex: 1; }
+  .at.done .at-text { color: var(--text-muted); text-decoration: line-through; }
+  .at.pending .at-text { color: var(--text-secondary); }
+  .at-st { font-size: 9px; font-family: var(--font-mono); color: var(--text-muted); }
+  .at-st.active { color: var(--accent-green); }
+
+  /* Tool rows */
+  .trow { display: flex; align-items: center; gap: 6px; padding: 4px 14px 4px 32px; font-size: 11px; font-family: var(--font-mono); }
+  .t-nm { color: var(--accent-cyan); font-weight: 600; }
+  .t-p { color: var(--text-secondary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .t-tm { color: var(--text-muted); font-size: 9px; }
+</style>
+</head>
+<body>
+
+<h2>Design v9 — Vertical Stack</h2>
+<div class="design-note">
+  Controller is a compact status bar at top. Agents stack vertically below, each<br>
+  branching off a left-aligned trunk line. Full-width cards with two columns:<br>
+  task checklist on the left, live stream text on the right. Maximizes content area.
+</div>
+
+<!-- Controller Strip -->
+<div class="ctrl-strip">
+  <div class="ctrl-bar-row">
+    <span class="ctrl-dot"></span>
+    <span class="ctrl-lbl">Controller</span>
+    <span class="ctrl-stat">2 active &middot; 5/8 tasks</span>
+    <span class="ctrl-phase">idle &middot; 12t</span>
+  </div>
+  <div class="ctrl-prog-row">
+    <div class="ctrl-prog-bar"><div class="ctrl-prog-fill" style="width:62%"></div></div>
+    <span class="ctrl-prog-pct">62%</span>
+  </div>
+</div>
+
+<!-- Tree trunk with agents -->
+<div class="tree-trunk">
+
+  <!-- Agent 1 — full content -->
+  <div class="agent-node">
+    <div class="ahdr">
+      <div class="a-lane" style="background: var(--accent-cyan)"></div>
+      <span class="a-name">Generate themes &amp; push</span>
+      <span class="a-meta">generating &middot; 5t</span>
+    </div>
+    <div class="agent-body">
+      <div class="agent-tasks-col">
+        <div class="at wip">
+          <span><svg class="sat-spinner" width="12" height="12" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" stroke="#fbbf24" stroke-width="1.2" stroke-dasharray="3 2.5" fill="none"/></svg></span>
+          <span class="at-text">Create gruvbox-extra theme</span>
+          <span class="at-st active">writing</span>
+        </div>
+        <div class="trow">
+          <span>&#9998;</span>
+          <span class="t-nm">Write</span>
+          <span class="t-p">themes/gruvbox-extra.zsh-theme</span>
+          <span class="t-tm">1ms</span>
+        </div>
+        <div class="trow">
+          <span>&#128196;</span>
+          <span class="t-nm">Read</span>
+          <span class="t-p">themes/nord-dark.zsh-theme</span>
+          <span class="t-tm">1ms</span>
+        </div>
+        <div class="at pending">
+          <span><svg width="12" height="12" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" stroke="#475569" stroke-width="1.2" fill="none"/></svg></span>
+          <span class="at-text">Create cyberpunk-extra neon</span>
+          <span class="at-st">pending</span>
+        </div>
+        <div class="at pending">
+          <span><svg width="12" height="12" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" stroke="#475569" stroke-width="1.2" fill="none"/></svg></span>
+          <span class="at-text">Push all new themes to remote</span>
+          <span class="at-st">pending</span>
+        </div>
+      </div>
+      <div class="agent-stream-col">
+        <p>Good. I have the reference theme from <code>nord-dark.zsh-theme</code>. Creating the gruvbox variant now with warm earth tones and high contrast.</p>
+        <p>The palette uses <code>#ebdbb2</code> for foreground, <code>#282828</code> for background, and gruvbox accent colors for git status indicators.</p>
+        <p>Setting up the prompt segments: user@host in aqua, current directory in yellow, git branch in green...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Agent 2 — full content -->
+  <div class="agent-node" style="--node-color: var(--accent-magenta)">
+    <div class="ahdr">
+      <div class="a-lane" style="background: var(--accent-magenta)"></div>
+      <span class="a-name">Set up database schema</span>
+      <span class="a-meta">tool_exec &middot; 8t</span>
+    </div>
+    <div class="agent-body">
+      <div class="agent-tasks-col">
+        <div class="at done">
+          <span><svg width="12" height="12" viewBox="0 0 14 14"><rect x="1" y="1" width="12" height="12" rx="3" fill="#4ade80" opacity="0.15" stroke="#4ade80" stroke-width="1.3"/><path d="M4 7l2 2 4-4" stroke="#4ade80" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="at-text">Create schema file</span>
+          <span class="at-st">done</span>
+        </div>
+        <div class="at wip">
+          <span><svg class="sat-spinner" width="12" height="12" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" stroke="#fbbf24" stroke-width="1.2" stroke-dasharray="3 2.5" fill="none"/></svg></span>
+          <span class="at-text">Run migrations</span>
+          <span class="at-st active">executing</span>
+        </div>
+        <div class="trow">
+          <span>&#9654;</span>
+          <span class="t-nm">Bash</span>
+          <span class="t-p">alembic upgrade head</span>
+          <span class="t-tm">340ms</span>
+        </div>
+        <div class="at pending">
+          <span><svg width="12" height="12" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" stroke="#475569" stroke-width="1.2" fill="none"/></svg></span>
+          <span class="at-text">Seed test data</span>
+          <span class="at-st">pending</span>
+        </div>
+      </div>
+      <div class="agent-stream-col">
+        <p>Schema file created with <code>users</code>, <code>sessions</code>, and <code>audit_log</code> tables. Running Alembic migration now.</p>
+        <p>Using async engine with <code>asyncpg</code> driver and connection pooling. Foreign key constraints and B-tree indices defined in migration revision.</p>
+        <p>Waiting for <code>alembic upgrade head</code> to complete...</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

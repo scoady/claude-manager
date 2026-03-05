@@ -199,6 +199,7 @@ export class AgentSection {
           <span class="agent-turn-count" title="Turns">${this._turnCount}t</span>
         </div>
         <div class="agent-section-actions">
+          <button class="icon-btn agent-popout-btn hidden" title="Pop out full view">\u2922</button>
           <button class="icon-btn agent-status-btn" title="Ask status">?</button>
           <button class="icon-btn danger agent-kill-btn" title="Kill agent">
             <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
@@ -282,6 +283,11 @@ export class AgentSection {
 
     this.el.querySelector('.agent-section-header').addEventListener('click', () => {
       this.setExpanded(!this._expanded);
+    });
+
+    this.el.querySelector('.agent-popout-btn')?.addEventListener('click', e => {
+      e.stopPropagation();
+      this._togglePopout();
     });
 
     this.el.querySelector('.agent-kill-btn').addEventListener('click', e => {
@@ -816,6 +822,10 @@ export class AgentSection {
     this.el.classList.toggle('compact', enabled);
 
     if (enabled) {
+      // Show popout button
+      const popout = this.el.querySelector('.agent-popout-btn');
+      if (popout) popout.classList.remove('hidden');
+
       // Create compact task list container (replaces stream area as primary view)
       const body = this.el.querySelector('.agent-section-body');
       if (body && !body.querySelector('.compact-task-list')) {
@@ -823,17 +833,11 @@ export class AgentSection {
         ctl.className = 'compact-task-list';
         body.insertBefore(ctl, body.firstChild);
       }
-      // Create compact stream preview (single-line text preview)
-      const body2 = this.el.querySelector('.agent-section-body');
-      if (body2 && !body2.querySelector('.compact-stream-preview')) {
+      // Create compact stream preview at the END of body (bottom of card)
+      if (body && !body.querySelector('.compact-stream-preview')) {
         const preview = document.createElement('div');
         preview.className = 'compact-stream-preview';
-        const taskList = body2.querySelector('.compact-task-list');
-        if (taskList) {
-          taskList.after(preview);
-        } else {
-          body2.insertBefore(preview, body2.firstChild);
-        }
+        body.appendChild(preview);
       }
     }
   }
@@ -890,6 +894,29 @@ export class AgentSection {
     if (status === 'in_progress')
       return '<svg class="sat-spinner" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5" stroke="var(--accent-amber)" stroke-width="1.5" fill="none" stroke-dasharray="20 12" stroke-linecap="round"/></svg>';
     return '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5" stroke="var(--text-muted)" stroke-width="1.3" fill="none"/></svg>';
+  }
+
+  /** Toggle popout — expand compact card to full view and back. */
+  _togglePopout() {
+    const isPopped = this.el.classList.toggle('popped-out');
+    const btn = this.el.querySelector('.agent-popout-btn');
+    if (btn) btn.textContent = isPopped ? '\u2716' : '\u2922';
+
+    if (isPopped) {
+      // Show full stream area + raw log
+      const streamArea = this.el.querySelector('.agent-stream-area');
+      if (streamArea) streamArea.classList.remove('hidden');
+      const toggle = this.el.querySelector('.agent-detail-toggle');
+      if (toggle) toggle.classList.remove('hidden');
+    } else {
+      // Re-hide stream area in compact mode
+      const streamArea = this.el.querySelector('.agent-stream-area');
+      if (streamArea) streamArea.classList.add('hidden');
+      const toggle = this.el.querySelector('.agent-detail-toggle');
+      if (toggle) toggle.classList.add('hidden');
+      const rawLog = this.el.querySelector('.agent-raw-log');
+      if (rawLog) rawLog.classList.add('hidden');
+    }
   }
 
   // ── Private helpers ─────────────────────────────────────────────────────────

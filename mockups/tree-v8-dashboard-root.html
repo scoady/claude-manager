@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Tree v8 — Dashboard Table Root</title>
+<style>
+  :root {
+    --bg-base: #080c14; --bg-surface: #0e1525; --bg-elevated: #141d30;
+    --bg-hover: #1a2640; --bg-border: #243352; --bg-border-dim: #1a2640;
+    --accent-green: #4ade80; --accent-amber: #fbbf24; --accent-cyan: #67e8f9;
+    --accent-red: #f87171; --accent-purple: #a78bfa; --accent-magenta: #c084fc;
+    --text-primary: #e2e8f0; --text-secondary: #94a3b8; --text-muted: #475569;
+    --font-mono: 'IBM Plex Mono', 'Fira Code', monospace;
+    --font-ui: 'DM Sans', system-ui, sans-serif;
+    --radius-sm: 6px; --radius-md: 10px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg-base); color: var(--text-primary); font-family: var(--font-ui); padding: 20px; }
+  h2 { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; font-family: var(--font-mono); margin-bottom: 12px; }
+  .design-note { color: var(--accent-cyan); font-size: 12px; font-family: var(--font-mono); margin-bottom: 20px; padding: 10px 14px; border: 1px solid rgba(103,232,249,0.15); border-radius: var(--radius-sm); background: rgba(103,232,249,0.03); }
+
+  /* ─── Controller Dashboard ─── */
+  .ctrl-root {
+    border: 1px solid var(--bg-border);
+    border-radius: var(--radius-md);
+    background: linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-surface) 100%);
+    overflow: hidden;
+  }
+  .ctrl-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--bg-border-dim);
+  }
+  .ctrl-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-green); animation: breathe 2s ease-in-out infinite; box-shadow: 0 0 8px rgba(74,222,128,0.4); }
+  @keyframes breathe { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(1.3)} }
+  .ctrl-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--accent-amber); font-family: var(--font-mono); }
+  .ctrl-stat { font-size: 12px; color: var(--text-secondary); font-family: var(--font-mono); margin-left: auto; }
+  .ctrl-phase { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
+  .ctrl-prog-row { display: flex; align-items: center; gap: 12px; padding: 0 20px 12px; }
+  .ctrl-prog-bar { flex: 1; height: 3px; background: var(--bg-hover); border-radius: 2px; overflow: hidden; }
+  .ctrl-prog-fill { height: 100%; background: linear-gradient(90deg, var(--accent-green), var(--accent-cyan)); border-radius: 2px; }
+  .ctrl-prog-pct { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
+
+  /* Task table */
+  .task-table { width: 100%; border-collapse: collapse; }
+  .task-table th {
+    text-align: left; padding: 8px 16px; font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted);
+    font-family: var(--font-mono); border-bottom: 1px solid var(--bg-border);
+    background: var(--bg-surface);
+  }
+  .task-table td {
+    padding: 8px 16px; font-size: 12px;
+    border-bottom: 1px solid var(--bg-border-dim);
+  }
+  .task-table tr:hover td { background: var(--bg-hover); }
+  .task-table tr:last-child td { border-bottom: none; }
+  .tt-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: middle; }
+  .tt-status {
+    font-size: 10px; font-family: var(--font-mono); padding: 2px 8px;
+    border-radius: 10px; display: inline-flex; align-items: center; gap: 4px;
+  }
+  .tt-status.queued { color: var(--text-muted); background: rgba(71,85,105,0.1); }
+  .tt-status.active { color: var(--accent-amber); background: rgba(251,191,36,0.08); }
+  .tt-status.done { color: var(--accent-green); background: rgba(74,222,128,0.08); }
+  .tt-agent { font-size: 10px; font-family: var(--font-mono); color: var(--text-muted); }
+  .tt-agent a { color: var(--accent-cyan); text-decoration: none; }
+  .tt-agent a:hover { text-decoration: underline; }
+  .tt-task-done { color: var(--text-muted); text-decoration: line-through; }
+
+  /* ─── Connector ─── */
+  .conn-v { width: 2px; height: 24px; background: var(--bg-border); margin: 0 auto; }
+
+  /* ─── WIDE agent cards ─── */
+  .tree-row {
+    display: flex; align-items: flex-start; justify-content: center;
+    position: relative; width: 100%; gap: 12px;
+  }
+  .tree-row::before {
+    content: ''; position: absolute; top: 0; left: 25%; right: 25%;
+    height: 2px; background: var(--bg-border);
+  }
+  .agent-col {
+    display: flex; flex-direction: column; align-items: center;
+    flex: 1; min-width: 320px; position: relative;
+  }
+  .agent-col::before { content: ''; width: 2px; height: 20px; background: var(--bg-border); }
+  .agent-card {
+    width: 100%;
+    border: 1px solid var(--bg-border-dim); border-radius: var(--radius-sm);
+    background: var(--bg-elevated); overflow: hidden;
+  }
+  .ac-hdr {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 16px; border-bottom: 1px solid var(--bg-border-dim);
+  }
+  .ac-lane { width: 3px; height: 22px; border-radius: 2px; flex-shrink: 0; }
+  .ac-name { font-size: 13px; font-weight: 600; flex: 1; }
+  .ac-badge { font-size: 9px; font-family: var(--font-mono); padding: 2px 7px; border-radius: 12px; }
+  .ac-badge.explore { color: var(--accent-cyan); background: rgba(103,232,249,0.08); border: 1px solid rgba(103,232,249,0.15); }
+  .ac-badge.general { color: var(--accent-magenta); background: rgba(192,132,252,0.08); border: 1px solid rgba(192,132,252,0.15); }
+  .ac-meta { font-size: 10px; font-family: var(--font-mono); color: var(--accent-amber); }
+  .ac-popout {
+    width: 26px; height: 26px; border: 1px solid var(--bg-border); border-radius: 4px;
+    background: transparent; color: var(--text-muted); cursor: pointer; font-size: 13px;
+    display: flex; align-items: center; justify-content: center; transition: all 150ms;
+  }
+  .ac-popout:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); background: rgba(103,232,249,0.05); }
+  .ac-body { height: 260px; overflow-y: auto; }
+  .ac-task {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 16px 8px 20px; border-bottom: 1px solid var(--bg-border-dim); font-size: 12px;
+  }
+  .act-text { flex: 1; }
+  .ac-task.done .act-text { color: var(--text-muted); text-decoration: line-through; }
+  .ac-task.pending .act-text { color: var(--text-secondary); }
+  .act-st { font-size: 9px; font-family: var(--font-mono); color: var(--text-muted); }
+  .act-st.active { color: var(--accent-green); }
+  .ac-tool {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 16px 4px 34px; font-size: 11px; font-family: var(--font-mono);
+  }
+  .act-nm { color: var(--accent-cyan); font-weight: 600; }
+  .act-path { color: var(--text-secondary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .act-tm { color: var(--text-muted); font-size: 9px; }
+  .ac-stream {
+    padding: 8px 16px; font-size: 12px; color: var(--text-secondary); line-height: 1.6;
+    border-top: 1px solid var(--bg-border-dim);
+  }
+  .ac-stream code { color: var(--accent-cyan); font-family: var(--font-mono); font-size: 11px; }
+  @keyframes sat-spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+  .sat-spinner { animation: sat-spin 1.5s linear infinite; }
+</style>
+</head>
+<body>
+<h2>Design v8 — Dashboard Table Root</h2>
+<div class="design-note">
+  Controller root = task table with status/agent columns. Compact, scannable, dense info.<br>
+  Same WIDE agent cards below with fixed height + popout.
+</div>
+
+<div class="ctrl-root">
+  <div class="ctrl-header">
+    <span class="ctrl-dot"></span>
+    <span class="ctrl-lbl">Controller</span>
+    <span class="ctrl-stat">2 active · 5/8 tasks</span>
+    <span class="ctrl-phase">idle · 12t</span>
+  </div>
+  <div class="ctrl-prog-row">
+    <div class="ctrl-prog-bar"><div class="ctrl-prog-fill" style="width:62%"></div></div>
+    <span class="ctrl-prog-pct">62%</span>
+  </div>
+  <table class="task-table">
+    <thead><tr><th>Task</th><th>Status</th><th>Agent</th></tr></thead>
+    <tbody>
+      <tr><td class="tt-task-done"><span class="tt-dot" style="background:var(--accent-green)"></span>Set up scaffolding</td><td><span class="tt-status done">done</span></td><td class="tt-agent">—</td></tr>
+      <tr><td class="tt-task-done"><span class="tt-dot" style="background:var(--accent-green)"></span>Configure linting</td><td><span class="tt-status done">done</span></td><td class="tt-agent">—</td></tr>
+      <tr><td class="tt-task-done"><span class="tt-dot" style="background:var(--accent-green)"></span>Create CI pipeline</td><td><span class="tt-status done">done</span></td><td class="tt-agent">—</td></tr>
+      <tr><td><span class="tt-dot" style="background:var(--accent-cyan)"></span>Generate themes & push</td><td><span class="tt-status active">active</span></td><td class="tt-agent"><a href="#">agent-1</a></td></tr>
+      <tr><td><span class="tt-dot" style="background:var(--accent-magenta)"></span>Set up DB schema</td><td><span class="tt-status active">active</span></td><td class="tt-agent"><a href="#">agent-2</a></td></tr>
+      <tr><td><span class="tt-dot" style="background:var(--text-muted)"></span>Add auth system</td><td><span class="tt-status queued">queued</span></td><td class="tt-agent">—</td></tr>
+      <tr><td><span class="tt-dot" style="background:var(--text-muted)"></span>Write integration tests</td><td><span class="tt-status queued">queued</span></td><td class="tt-agent">—</td></tr>
+      <tr><td><span class="tt-dot" style="background:var(--text-muted)"></span>Update documentation</td><td><span class="tt-status queued">queued</span></td><td class="tt-agent">—</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="conn-v"></div>
+
+<div class="tree-row">
+  <div class="agent-col">
+    <div class="agent-card">
+      <div class="ac-hdr">
+        <div class="ac-lane" style="background:var(--accent-cyan)"></div>
+        <span class="ac-name">Generate themes & push</span>
+        <span class="ac-badge explore">explore</span>
+        <span class="ac-meta">thinking · 5t</span>
+        <button class="ac-popout" title="Pop out full view">⤢</button>
+      </div>
+      <div class="ac-body">
+        <div class="ac-task wip"><span><svg class="sat-spinner" width="12" height="12" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" stroke="#fbbf24" stroke-width="1.2" stroke-dasharray="3 2.5" fill="none"/></svg></span><span class="act-text">Create gruvbox-extra theme</span><span class="act-st active">writing</span></div>
+        <div class="ac-tool"><span>📄</span><span class="act-nm">Read</span><span class="act-path">themes/nord-dark.zsh-theme</span><span class="act-tm">1ms</span></div>
+        <div class="ac-tool"><span>✎</span><span class="act-nm">Write</span><span class="act-path">themes/gruvbox-extra.zsh-theme</span><span class="act-tm">1ms</span></div>
+        <div class="ac-task pending"><span><svg width="12" height="12" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" stroke="#475569" stroke-width="1.2" fill="none"/></svg></span><span class="act-text">Create cyberpunk-extra neon</span><span class="act-st">pending</span></div>
+        <div class="ac-task pending"><span><svg width="12" height="12" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" stroke="#475569" stroke-width="1.2" fill="none"/></svg></span><span class="act-text">Push all new themes</span><span class="act-st">pending</span></div>
+        <div class="ac-stream"><p>Reading reference theme <code>nord-dark.zsh-theme</code>. Creating gruvbox variant with warm earth tones.</p></div>
+      </div>
+    </div>
+  </div>
+  <div class="agent-col">
+    <div class="agent-card">
+      <div class="ac-hdr">
+        <div class="ac-lane" style="background:var(--accent-magenta)"></div>
+        <span class="ac-name">Set up database schema</span>
+        <span class="ac-badge general">general-purpose</span>
+        <span class="ac-meta">tool_exec · 8t</span>
+        <button class="ac-popout" title="Pop out full view">⤢</button>
+      </div>
+      <div class="ac-body">
+        <div class="ac-task done"><span><svg width="12" height="12" viewBox="0 0 14 14"><rect x="1" y="1" width="12" height="12" rx="3" fill="#4ade80" opacity="0.15" stroke="#4ade80" stroke-width="1.3"/><path d="M4 7l2 2 4-4" stroke="#4ade80" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="act-text">Create schema file</span><span class="act-st">done</span></div>
+        <div class="ac-task wip"><span><svg class="sat-spinner" width="12" height="12" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" stroke="#fbbf24" stroke-width="1.2" stroke-dasharray="3 2.5" fill="none"/></svg></span><span class="act-text">Run migrations</span><span class="act-st active">executing</span></div>
+        <div class="ac-tool"><span>▶</span><span class="act-nm">Bash</span><span class="act-path">alembic upgrade head</span><span class="act-tm">340ms</span></div>
+        <div class="ac-tool"><span>✎</span><span class="act-nm">Write</span><span class="act-path">migrations/0001_initial.py</span><span class="act-tm">2ms</span></div>
+        <div class="ac-task pending"><span><svg width="12" height="12" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" stroke="#475569" stroke-width="1.2" fill="none"/></svg></span><span class="act-text">Seed test data</span><span class="act-st">pending</span></div>
+        <div class="ac-stream"><p>Schema created with <code>users</code>, <code>sessions</code>, <code>audit_log</code>. Running Alembic migration.</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

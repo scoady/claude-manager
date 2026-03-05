@@ -66,6 +66,7 @@ export class FeedController {
 
     // 2a. Orchestrator root node
     this._orchestratorBanner = new OrchestratorBanner();
+    this._orchestratorBanner._taskAgentMap = this._taskAgentMap;
     this._treeContainer.appendChild(this._orchestratorBanner.el);
 
     // 2b. Vertical connector from orchestrator to children

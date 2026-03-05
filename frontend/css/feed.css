@@ -2367,7 +2367,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 14px 18px;
+  padding: 14px 20px;
   border-bottom: 1px solid var(--bg-border-dim);
 }
 
@@ -2419,7 +2419,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 18px;
+  padding: 0 20px 12px;
 }
 
 .orch-bar {
@@ -2442,6 +2442,95 @@
   font-size: 10px;
   color: var(--text-muted);
   font-family: var(--font-mono);
+}
+
+/* ─── Controller Task Table ──────────────────────────────────────────────── */
+
+.orch-task-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.orch-task-table th {
+  text-align: left;
+  padding: 8px 16px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  border-bottom: 1px solid var(--bg-border);
+  background: var(--bg-surface);
+}
+
+.orch-task-table td {
+  padding: 8px 16px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--bg-border-dim);
+}
+
+.orch-task-table tr:hover td {
+  background: var(--bg-hover);
+}
+
+.orch-task-table tr:last-child td {
+  border-bottom: none;
+}
+
+.ott-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.ott-task-done {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.ott-status {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  padding: 2px 8px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ott-status.queued {
+  color: var(--text-muted);
+  background: rgba(71, 85, 105, 0.1);
+}
+
+.ott-status.active {
+  color: var(--accent-amber);
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.ott-status.done {
+  color: var(--accent-green);
+  background: rgba(74, 222, 128, 0.08);
+}
+
+.ott-agent {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.ott-agent-link {
+  color: var(--accent-cyan);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.ott-agent-link:hover {
+  text-decoration: underline;
 }
 
 /* ─── Tree Connector Lines ─── */
@@ -2541,7 +2630,26 @@
 }
 
 .tree-agent-col .agent-section-title {
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  flex: 1;
+}
+
+/* Compact meta: phase + turns render as "thinking · 5t" style */
+.tree-agent-col .agent-phase-badge {
+  font-size: 10px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--accent-amber);
+  font-family: var(--font-mono);
+}
+.tree-agent-col .agent-turn-count {
+  font-size: 10px;
+  color: var(--accent-amber);
+}
+.tree-agent-col .agent-phase-timeline {
+  display: none;
 }
 
 /* Hide action buttons by default — show on hover */
@@ -2555,16 +2663,21 @@
   opacity: 1 !important;
 }
 
-/* Hide inject composer and raw log in tree cards */
-.tree-agent-col .agent-inject-composer,
+/* Hide inject composer and raw log in tree cards (unless popped out) */
+.tree-agent-col .agent-inject-composer {
+  display: none !important;
+}
 .tree-agent-col .agent-detail-toggle,
 .tree-agent-col .agent-raw-log {
   display: none !important;
 }
+.tree-agent-col .agent-section.popped-out .agent-detail-toggle {
+  display: block !important;
+}
 
-/* Constrain body height for tree cards */
+/* Fixed height body for tree cards (matches mockup .ac-body: 260px) */
 .tree-agent-col .agent-section-body {
-  max-height: 320px;
+  height: 260px;
   overflow-y: auto;
 }
 
@@ -2672,14 +2785,14 @@
   border-top: none;
 }
 
-/* Task rows inside agent (matches mockup) */
+/* Task rows inside agent (matches mockup .ac-task) */
 .ct-task {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 14px 9px 28px;
+  gap: 8px;
+  padding: 8px 16px 8px 20px;
   border-bottom: 1px solid var(--bg-border-dim);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .ct-task:last-of-type {
@@ -2712,7 +2825,7 @@
 }
 
 .ct-status {
-  font-size: 10px;
+  font-size: 9px;
   font-family: var(--font-mono);
   color: var(--text-muted);
   white-space: nowrap;
@@ -2724,20 +2837,20 @@
 
 /* Task detail area (holds compact tool rows) */
 .ct-task-detail {
-  padding-left: 42px;
+  padding-left: 0;
 }
 
 .ct-task-detail:empty {
   display: none;
 }
 
-/* Compact tool rows (inside task detail or task list) */
+/* Compact tool rows (inside task detail or task list — matches mockup .ac-tool) */
 .compact-tool-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 14px 4px 0;
-  font-size: 12px;
+  gap: 6px;
+  padding: 4px 16px 4px 34px;
+  font-size: 11px;
   font-family: var(--font-mono);
 }
 
@@ -2762,26 +2875,77 @@
 
 .ctr-time {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 9px;
   flex-shrink: 0;
 }
 
-/* Stream text preview (single line) */
+/* Stream text preview — bottom of compact card, matches mockup .ac-stream */
 .compact-stream-preview {
-  padding: 6px 14px 6px 28px;
+  padding: 8px 16px;
   font-size: 12px;
   color: var(--text-secondary);
-  line-height: 1.5;
+  line-height: 1.6;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   border-top: 1px solid var(--bg-border-dim);
   font-family: var(--font-ui);
-  font-style: italic;
+}
+
+.compact-stream-preview code {
+  color: var(--accent-cyan);
+  font-family: var(--font-mono);
+  font-size: 11px;
 }
 
 .compact-stream-preview:empty {
   display: none;
+}
+
+/* ─── Popout Button ──────────────────────────────────────────────────────── */
+
+.agent-popout-btn {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--bg-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 150ms;
+  padding: 0;
+}
+
+.agent-popout-btn:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  background: rgba(103, 232, 249, 0.05);
+}
+
+.agent-popout-btn.hidden {
+  display: none;
+}
+
+/* Popped-out state — expand card to show full content */
+.agent-section.compact.popped-out .agent-stream-area {
+  display: block !important;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 10px 14px;
+  border-top: 1px solid var(--bg-border-dim);
+}
+
+.agent-section.compact.popped-out .agent-detail-toggle {
+  display: block !important;
+}
+
+.tree-agent-col .agent-section.compact.popped-out {
+  max-width: 600px;
+  z-index: 5;
 }
 
 /* ─── Tasks Container ─────────────────────────────────────────────────────── */

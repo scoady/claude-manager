@@ -1,4 +1,5 @@
 /** OrchestratorBanner — standalone orchestrator root node card (org chart tree root). */
+import { escapeHtml } from '../utils.js';
 import { renderMarkdown } from './MarkdownRenderer.js';
 
 export class OrchestratorBanner {
@@ -9,6 +10,7 @@ export class OrchestratorBanner {
     this._phase = null;
     this._summaryText = '';
     this._tasks = [];
+    this._taskAgentMap = null; // Map<taskIndex, sessionId> — set by FeedController
     this._render();
   }
 
@@ -62,7 +64,7 @@ export class OrchestratorBanner {
     this._el.innerHTML = `
       <div class="orch-header">
         <span class="orch-dot orch-alive"></span>
-        <span class="orch-label">Orchestrator</span>
+        <span class="orch-label">Controller</span>
         <span class="orch-summary-stat"></span>
         <span class="orch-phase">connecting</span>
       </div>
@@ -70,6 +72,7 @@ export class OrchestratorBanner {
         <div class="orch-bar"><div class="orch-fill" style="width: 0%"></div></div>
         <span class="orch-pct"></span>
       </div>
+      <div class="orch-task-table-wrap"></div>
     `;
   }
 
@@ -97,7 +100,7 @@ export class OrchestratorBanner {
     const statEl = this._el.querySelector('.orch-summary-stat');
     if (statEl) {
       statEl.textContent = total > 0
-        ? `${wip ? wip + ' active · ' : ''}${done}/${total}`
+        ? `${wip ? wip + ' active \u00b7 ' : ''}${done}/${total} tasks`
         : '';
     }
 
@@ -105,5 +108,44 @@ export class OrchestratorBanner {
     if (pctEl) {
       pctEl.textContent = total > 0 ? `${pct}%` : '';
     }
+
+    this._renderTaskTable();
+  }
+
+  /** Render the task table inside the controller root. */
+  _renderTaskTable() {
+    const wrap = this._el.querySelector('.orch-task-table-wrap');
+    if (!wrap) return;
+
+    const tasks = this._tasks;
+    if (!tasks.length) {
+      wrap.innerHTML = '';
+      return;
+    }
+
+    const statusOrder = { in_progress: 0, queued: 1, planned: 1, pending: 1, done: 2 };
+    const sorted = [...tasks].sort((a, b) => (statusOrder[a.status] ?? 1) - (statusOrder[b.status] ?? 1));
+
+    wrap.innerHTML = `
+      <table class="orch-task-table">
+        <thead><tr><th>Task</th><th>Status</th><th>Agent</th></tr></thead>
+        <tbody>
+          ${sorted.map((t, i) => {
+            const st = t.status || 'pending';
+            const isDone = st === 'done';
+            const isActive = st === 'in_progress';
+            const dotColor = isDone ? 'var(--accent-green)' : isActive ? 'var(--accent-cyan)' : 'var(--text-muted)';
+            const statusCls = isDone ? 'done' : isActive ? 'active' : 'queued';
+            const statusLabel = isDone ? 'done' : isActive ? 'active' : st;
+            const agentId = this._taskAgentMap?.get(t.index ?? i) || null;
+            const agentLabel = agentId ? `<a class="ott-agent-link" data-session="${escapeHtml(agentId)}">${escapeHtml(agentId.slice(0, 8))}</a>` : '\u2014';
+            return `<tr>
+              <td class="${isDone ? 'ott-task-done' : ''}"><span class="ott-dot" style="background:${dotColor}"></span>${escapeHtml(t.text || t.content || '')}</td>
+              <td><span class="ott-status ${statusCls}">${statusLabel}</span></td>
+              <td class="ott-agent">${agentLabel}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
   }
 }
