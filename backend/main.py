@@ -1424,27 +1424,84 @@ async def save_widget_template(body: dict[str, Any]) -> dict[str, Any]:
 
 _TEMPLATE_GEN_PROMPT = _DESIGN_SYSTEM_PROMPT + """
 
-ADDITIONAL FOR TEMPLATES:
-- Use {{placeholder}} syntax for all dynamic data values
-- For repeating lists, use {{#each listName}}...{{/each}} blocks
-- Inside each blocks, use {{property}} for item fields and {{@index}} for index
-- The template will be rendered server-side before sending to the browser
-- Include a data_schema describing expected fields and their types
-- Include preview_data with realistic sample values
+YOU ARE BUILDING A REUSABLE, PARAMETERIZED TEMPLATE — NOT A STATIC WIDGET.
 
-OUTPUT FORMAT — respond with ONLY a JSON object (no markdown fences, no explanation):
+## CRITICAL RULES — ZERO HARDCODED DATA
+
+Every single piece of text, number, label, status, message, name, title, value,
+and list item in the HTML MUST come from a {{placeholder}} or {{#each}} block.
+There must be ABSOLUTELY ZERO hardcoded content strings in the HTML.
+
+If it's a string the user would see → it MUST be a {{variable}}.
+If it's a list of items → it MUST use {{#each items}}...{{/each}}.
+If it's a number, count, or metric → it MUST be a {{variable}}.
+
+WRONG: <span class="label">CPU Usage</span>
+RIGHT: <span class="label">{{label}}</span>
+
+WRONG: <div class="entry">2026-03-05 Connection established</div>
+RIGHT: {{#each entries}}<div class="entry">{{time}} {{message}}</div>{{/each}}
+
+## Template Syntax
+
+- Simple values: {{fieldName}}
+- Lists: {{#each arrayField}}...{{/each}}
+- Inside each: {{property}} for item fields, {{@index}} for 0-based index
+- The template engine does simple string replacement — no conditionals, no helpers.
+- CSS and JS can reference variables too if needed.
+
+## data_schema — THIS IS THE CONTRACT
+
+The data_schema defines EVERY field the template expects. Agents use this schema
+to know what data to push. Make it thorough:
+
+```json
+{
+  "title": {"type": "string", "description": "Widget heading"},
+  "entries": {
+    "type": "array",
+    "description": "Log entries to display",
+    "items": {
+      "time": {"type": "string", "description": "Timestamp"},
+      "message": {"type": "string", "description": "Log message"}
+    }
+  }
+}
+```
+
+## preview_data — Realistic sample values
+
+Provide preview_data that demonstrates the template with realistic but generic
+sample values. This is used for catalog previews. Example:
+
+```json
+{
+  "title": "System Monitor",
+  "entries": [
+    {"time": "12:00:01", "message": "Service started"},
+    {"time": "12:00:05", "message": "Health check passed"}
+  ]
+}
+```
+
+## OUTPUT FORMAT
+
+Respond with ONLY a JSON object (no markdown fences, no explanation):
 {
   "name": "Short Template Name",
-  "description": "What this template visualizes",
+  "description": "One-line description of what this template visualizes",
   "category": "metrics|chart|status|log|custom",
-  "data_schema": {"field": {"type": "string|number|array", "description": "..."}},
-  "preview_data": {"field": "sample value"},
-  "html": "... {{placeholders}} ...",
+  "data_schema": {"field": {"type": "...", "description": "..."}, ...},
+  "preview_data": {"field": "sample value", ...},
+  "html": "... ONLY {{placeholders}} for all visible text ...",
   "css": "...",
   "js": "...",
   "col_span": 1,
   "row_span": 1
 }
+
+FINAL CHECK: Before responding, scan your HTML output. If ANY visible text string
+is not wrapped in {{...}}, you have a bug. Fix it.
 """
 
 
@@ -1498,14 +1555,14 @@ async def generate_widget_template(body: dict[str, Any]) -> dict[str, Any]:
     prompt = (
         f"Create a PARAMETERIZED widget template.\n\n"
         f"DESCRIPTION: {description}\n\n"
-        f"SAMPLE DATA: {json.dumps(preview_data, indent=2)}\n\n"
-        f"Create a reusable template where data values use {{{{key}}}} placeholders.\n"
-        f"For lists, use {{{{#each items}}}}...{{{{/each}}}} with {{{{property}}}} inside.\n"
-        f"Also use {{{{@index}}}} for the iteration index.\n\n"
-        f"Example placeholders: {{{{value}}}}, {{{{label}}}}, {{{{title}}}}\n"
-        f"Example each: {{{{#each entries}}}}<div>{{{{name}}}}: {{{{score}}}}</div>{{{{/each}}}}\n\n"
-        f"IMPORTANT: The template must work when placeholders are replaced with real data.\n"
-        f"Include realistic preview data that demonstrates the widget's capability.\n"
+        + (f"SAMPLE DATA (use as preview_data basis): {json.dumps(preview_data, indent=2)}\n\n" if preview_data else "")
+        + f"RULES:\n"
+        f"1. EVERY visible text string in the HTML must be a {{{{placeholder}}}} variable\n"
+        f"2. EVERY list/repeated element must use {{{{#each array}}}}...{{{{/each}}}}\n"
+        f"3. ZERO hardcoded text — if a user would see it, it must be a variable\n"
+        f"4. data_schema must describe EVERY field with type and description\n"
+        f"5. preview_data must have realistic sample values for all schema fields\n"
+        f"6. The template is rendered server-side by replacing {{{{key}}}} with data values\n\n"
         f"Respond with ONLY a JSON object — no markdown fences, no explanation."
     )
 
