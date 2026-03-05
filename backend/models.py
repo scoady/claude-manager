@@ -316,6 +316,8 @@ class WidgetState(BaseModel):
     html: str = ""
     css: str = ""
     js: str = ""
+    template_id: str | None = None  # widget catalog template used to render
+    template_data: dict | None = None  # raw data passed to the template
     grid_col: int = 1
     grid_row: int = 1
     col_span: int = 1
@@ -335,6 +337,8 @@ class WidgetCreate(BaseModel):
     html: str = ""
     css: str = ""
     js: str = ""
+    template_id: str | None = None
+    template_data: dict | None = None
     grid_col: int = 1
     grid_row: int = 1
     col_span: int = 1
@@ -350,6 +354,8 @@ class WidgetUpdate(BaseModel):
     html: str | None = None
     css: str | None = None
     js: str | None = None
+    template_id: str | None = None
+    template_data: dict | None = None
     grid_col: int | None = None
     grid_row: int | None = None
     col_span: int | None = None

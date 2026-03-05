@@ -241,60 +241,32 @@ def canvas_put(
     """
     Create or update a dashboard widget for a project.
 
-    PREFERRED: Use template + data (JSON string). The server renders
-    styled HTML automatically — you never write HTML/CSS.
-
-    Available templates:
-      "status-card" — Status badge, heading, description, item list, expandable details.
-          data keys: status, heading, description, details (string),
-                     items (list of {label, status})
-      "progress"    — Big percentage, progress bar, stat breakdown.
-          data keys: value, total, label, breakdown (dict of label→count)
-      "key-value"   — Clean key-value pairs display.
-          data keys: pairs (dict of key→value)
-      "log"         — Activity feed / log stream.
-          data keys: entries (list of {time, level, message})
-
-    Examples:
-      canvas_put(project="myapp", widget_id="build-status", title="Build",
-                 template="status-card",
-                 data='{"status":"in_progress","heading":"Building v2.1",
-                        "description":"Running test suite...",
-                        "items":[{"label":"Unit tests","status":"done"},
-                                 {"label":"Integration","status":"active"},
-                                 {"label":"Deploy","status":"pending"}]}')
-
-      canvas_put(project="myapp", widget_id="task-progress", title="Tasks",
-                 template="progress",
-                 data='{"value":7,"total":12,"label":"7 of 12 tasks",
-                        "breakdown":{"done":7,"active":2,"pending":3}}')
+    PREFERRED: Use template + data (JSON string). The backend renders
+    styled HTML automatically from the widget catalog — you never write HTML/CSS.
+    Pass a template ID from the widget catalog and a JSON data string matching
+    the template's data schema. The backend stores template_id + data so
+    widgets can be re-rendered with fresh data on updates.
 
     FALLBACK: Pass raw html/css/js if no template fits your content.
 
     widget_id: stable ID — reuse the same ID to update in-place.
     col_span/row_span: how many grid cells the widget occupies (default 1).
     """
+    parsed_data = None
+    if data:
+        parsed_data = json.loads(data) if isinstance(data, str) else data
+
+    # If using a template, let the backend canvas service handle rendering.
+    # Pass template_id + template_data; the backend auto-renders from catalog.
+    # Also support legacy inline templates as a fallback.
     rendered_html = html
     rendered_css = css
 
-    if template and data:
-        parsed = json.loads(data) if isinstance(data, str) else data
+    if template and parsed_data:
         renderer = _TEMPLATES.get(template)
         if renderer:
-            rendered_html, rendered_css = renderer(parsed)
-        else:
-            # Try custom template from catalog
-            preview_url = f"{CANVAS_API}/api/widget-catalog/{template}/preview"
-            try:
-                with httpx.Client(timeout=10) as preview_client:
-                    preview_resp = preview_client.post(preview_url, json={"data": parsed})
-                    if preview_resp.status_code == 200:
-                        result = preview_resp.json()
-                        rendered_html = result.get("html", html)
-                        rendered_css = result.get("css", css)
-                        js = result.get("js", js)
-            except Exception:
-                pass  # Fall through to raw html
+            # Legacy inline template — render here
+            rendered_html, rendered_css = renderer(parsed_data)
 
     payload = {
         "id": widget_id,
@@ -305,6 +277,12 @@ def canvas_put(
         "col_span": col_span,
         "row_span": row_span,
     }
+
+    # Pass template_id + template_data for catalog templates
+    # (the backend canvas service auto-renders and stores them)
+    if template and parsed_data and template not in _TEMPLATES:
+        payload["template_id"] = template
+        payload["template_data"] = parsed_data
 
     url_put = f"{CANVAS_API}/api/canvas/{project}/widgets/{widget_id}"
     url_post = f"{CANVAS_API}/api/canvas/{project}/widgets"
@@ -397,6 +375,32 @@ def canvas_list(project: str) -> list:
             }
             for w in widgets
         ]
+
+
+@mcp.tool()
+def canvas_templates() -> list[dict]:
+    """
+    List available widget templates from the catalog.
+
+    Returns template IDs, names, categories, and data schemas.
+    Use the template ID in canvas_put(template=..., data=...) to create widgets.
+    The backend renders the template — you just push data matching the schema.
+    """
+    url = f"{CANVAS_API}/api/widget-catalog"
+    with httpx.Client(timeout=10) as client:
+        resp = client.get(url)
+        resp.raise_for_status()
+        templates = resp.json()
+    return [
+        {
+            "id": t.get("id"),
+            "name": t.get("name"),
+            "category": t.get("category"),
+            "description": t.get("description"),
+            "data_schema": t.get("data_schema", {}),
+        }
+        for t in templates
+    ]
 
 
 if __name__ == "__main__":

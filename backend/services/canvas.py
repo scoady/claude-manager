@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from ..models import WidgetCreate, WidgetState, WidgetUpdate
+from .widget_catalog import render_template as _render_catalog_template
 
 # Storage dir: ~/.claude/canvas/
 _CANVAS_DIR = Path.home() / ".claude" / "canvas"
@@ -91,33 +92,52 @@ class CanvasService:
     ) -> WidgetState:
         """Create or update a widget.
 
-        The provided ``widget_id`` is always used as the widget's ID — if
-        a caller (e.g. the MCP canvas_put tool) supplies an ID it is preserved
-        rather than replaced with a new UUID.  This allows the MCP tool to issue
-        deterministic IDs so that repeated calls to canvas_put with the same
-        widget_id reliably update the existing widget.
+        If ``template_id`` and ``template_data`` are provided, the widget's
+        html/css/js are rendered from the catalog template.  The raw
+        template_id + template_data are persisted so the widget can be
+        re-rendered with fresh data on subsequent updates.
         """
         store = self._project_store(project)
         now = datetime.utcnow()
 
+        fields = data.model_dump(exclude_none=True)
+
+        # Auto-render from template if template_id + template_data are set
+        tmpl_id = fields.get("template_id")
+        tmpl_data = fields.get("template_data")
+        if tmpl_id and tmpl_data:
+            result = _render_catalog_template(tmpl_id, tmpl_data)
+            if result:
+                html, css, js = result
+                fields["html"] = html
+                fields["css"] = css
+                fields["js"] = js
+
         if widget_id in store:
             existing = store[widget_id]
-            # Apply only the non-None fields from data
-            update_fields = data.model_dump(exclude_none=True)
-            updated = existing.model_copy(update={**update_fields, "updated_at": now})
+            # On update: inherit template_id from existing if not overridden,
+            # so agents only need to push new template_data
+            if "template_id" not in fields and existing.template_id:
+                fields["template_id"] = existing.template_id
+                if "template_data" in fields and existing.template_id:
+                    result = _render_catalog_template(existing.template_id, fields["template_data"])
+                    if result:
+                        html, css, js = result
+                        fields["html"] = html
+                        fields["css"] = css
+                        fields["js"] = js
+            updated = existing.model_copy(update={**fields, "updated_at": now})
             store[widget_id] = updated
         else:
-            # Create new widget — use the caller-supplied widget_id as the id.
-            create_fields = data.model_dump(exclude_none=True)
-            # Remove 'id' and 'project' from spread to avoid duplicate keyword args
-            create_fields.pop("id", None)
-            create_fields.pop("project", None)
+            # Create new widget
+            fields.pop("id", None)
+            fields.pop("project", None)
             widget = WidgetState(
                 id=widget_id,
                 project=project,
                 created_at=now,
                 updated_at=now,
-                **create_fields,
+                **fields,
             )
             store[widget_id] = widget
 

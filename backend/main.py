@@ -70,6 +70,33 @@ def _escape_html(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
 
+def _build_template_catalog_docs() -> str:
+    """Build dynamic template documentation from the widget catalog for agent prompts."""
+    templates = widget_catalog_svc.list_templates()
+    if not templates:
+        return "No widget templates available.\n"
+
+    lines = []
+    for t in templates:
+        tid = t.get("id", "?")
+        name = t.get("name", "Untitled")
+        category = t.get("category", "custom")
+        desc = t.get("description", "")
+        schema = t.get("data_schema", {})
+
+        lines.append(f'- **"{tid}"** ({name}, {category}): {desc}')
+        if schema:
+            fields = []
+            for key, info in schema.items():
+                ftype = info.get("type", "string") if isinstance(info, dict) else "string"
+                fdesc = info.get("description", "") if isinstance(info, dict) else ""
+                fields.append(f"    - `{key}` ({ftype}){': ' + fdesc if fdesc else ''}")
+            lines.append("  Data fields:")
+            lines.extend(fields)
+
+    return "\n".join(lines)
+
+
 # ─── Background tasks ─────────────────────────────────────────────────────────
 
 
@@ -279,18 +306,21 @@ async def create_project(body: BootstrapProjectRequest) -> ManagedProject:
             "   - Be specific: 'Create hello.sh that prints Hello World' not 'Set up project'\n"
             "3. Stop when all tasks are created.\n\n"
             "## Dashboard Management\n"
-            "You OWN the project dashboard. After creating tasks, set up dashboard widgets:\n\n"
-            f'canvas_put(project="{project_name}", widget_id="task-progress", title="Task Progress",\n'
-            '  template="progress", data=\'{"value":0,"total":N,"label":"0 of N tasks","breakdown":{"pending":N}}\')\n\n'
-            f'canvas_put(project="{project_name}", widget_id="task-board", title="Task Board",\n'
-            '  template="status-card", data=\'{"status":"active","heading":"Sprint 1","description":"...",\n'
-            '  "items":[{"label":"task name","status":"pending"},...]}\')\n\n'
+            "You OWN the project dashboard. After creating tasks, set up dashboard widgets.\n"
+            "Use `canvas_put()` with `template` (template ID) and `data` (JSON matching the schema).\n"
+            "The system renders templates server-side — just push data, no HTML needed.\n\n"
+            "Available templates:\n"
+            f"{_build_template_catalog_docs()}\n\n"
+            "Example:\n"
+            f'canvas_put(project="{project_name}", widget_id="task-board", title="Tasks",\n'
+            '  template="<template_id>", data=\'{{...fields matching schema...}}\')\n\n'
             "Dashboard rules:\n"
             "- YOU are the only agent that creates/updates/removes widgets\n"
             "- Worker agents report results back to you; you update the dashboard\n"
             "- Use stable widget_ids so updates replace existing widgets (not create duplicates)\n"
             "- Standard widget_ids: task-progress, task-board, project-status, activity-log\n"
-            "- Update widgets when: tasks are created, tasks complete, status changes\n\n"
+            "- Update widgets when: tasks are created, tasks complete, status changes\n"
+            "- Push DATA, not HTML — the template engine renders it for you\n\n"
             "IMPORTANT: You are a planner/coordinator only. Do NOT write code, do NOT dispatch agents.\n"
             "Worker agents are spawned automatically for each task you create.\n"
             "Always use create_tasks() — NEVER edit TASKS.md directly."
@@ -636,11 +666,9 @@ async def ensure_orchestrator(name: str):
                 f'- canvas_list(project="{name}") — see current widgets\n'
                 f'- canvas_put(project="{name}", widget_id="...", title="...", template="...", data="...") — create or update a widget\n'
                 f'- canvas_remove(project="{name}", widget_id="...") — remove a widget\n\n'
-                "## Dashboard Widget Templates\n"
-                '- "status-card": data={{status, heading, description, items:[{{label,status}}]}}\n'
-                '- "progress": data={{value, total, label, breakdown:{{done:N,active:N,pending:N}}}}\n'
-                '- "key-value": data={{pairs:{{key:value,...}}}}\n'
-                '- "log": data={{entries:[{{time,level,message}}]}}\n\n'
+                "## Widget Templates (from catalog)\n"
+                "Push DATA via template + data params — the system renders HTML for you.\n"
+                f"{_build_template_catalog_docs()}\n\n"
                 "## Standard Widget IDs\n"
                 "Use consistent IDs so updates replace widgets (not create duplicates):\n"
                 '- "task-progress" — overall progress bar\n'
@@ -1187,19 +1215,17 @@ async def seed_canvas(project: str) -> dict[str, Any]:
     }
 
     KANBAN_TEMPLATE = "84f7d654"
-    result = await loop.run_in_executor(
-        None, widget_catalog_svc.render_template, KANBAN_TEMPLATE, kanban_data,
-    )
 
     widgets_created = []
-    if result:
-        html, css, js = result
-        w = WidgetCreate(
-            id="sys-agent-kanban",
-            title=f"{project} — Agent Pipeline",
-            html=html, css=css, js=js,
-            col_span=2, row_span=1,
-        )
+    # Create widget with template_id + template_data — canvas service auto-renders
+    w = WidgetCreate(
+        id="sys-agent-kanban",
+        title=f"{project} — Agent Pipeline",
+        template_id=KANBAN_TEMPLATE,
+        template_data=kanban_data,
+        col_span=2, row_span=1,
+    )
+    if True:
         widget = await loop.run_in_executor(
             None, canvas_service.upsert_widget, project, "sys-agent-kanban", w,
         )

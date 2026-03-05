@@ -260,27 +260,25 @@ export class FeedController {
   async _addWidgetFromTemplate(projectName, template) {
     try {
       const templateId = template.id || template.template_id;
-      // Render the template with preview data on the backend
-      const renderResp = await fetch(`/api/widget-catalog/${encodeURIComponent(templateId)}/render`);
-      if (!renderResp.ok) throw new Error('Render failed');
-      const rendered = await renderResp.json();
-
       const widgetId = `tpl-${Date.now().toString(36)}`;
+
+      // Pass template_id + template_data (preview_data as initial seed).
+      // The backend canvas service renders HTML from the catalog template
+      // and stores template_id + data so agents can push fresh data later.
       const body = {
         id: widgetId,
-        title: rendered.name || template.name || 'Widget',
-        html: rendered.html || '',
-        css: rendered.css || '',
-        js: rendered.js || '',
-        gs_w: Math.max(rendered.col_span || 1, 1) * 4,
-        gs_h: Math.max(rendered.row_span || 1, 1) * 3,
+        title: template.name || 'Widget',
+        template_id: templateId,
+        template_data: template.preview_data || {},
+        gs_w: Math.max(template.col_span || 1, 1) * 4,
+        gs_h: Math.max(template.row_span || 1, 1) * 3,
       };
       await fetch(`/api/canvas/${encodeURIComponent(projectName)}/widgets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      toast(`Added "${rendered.name || template.name}" widget`, 'success');
+      toast(`Added "${template.name}" widget — agents can push live data to it`, 'success');
     } catch (e) {
       toast(`Failed: ${e.message}`, 'error');
     }
