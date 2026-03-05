@@ -3396,35 +3396,232 @@
   overflow: hidden;
 }
 
-/* ─── Dashboard Widget Grid (agent-controlled) ─── */
+/* ─── Dashboard Widget Grid (GridStack-powered) ─── */
 
 .dashboard-widget-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-auto-flow: dense;
-  grid-auto-rows: 1fr;
-  gap: 10px;
   flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* GridStack overrides to match our design system */
+.dashboard-widget-grid .grid-stack-item-content {
+  background: transparent;
+  border: none;
+  overflow: visible;
+  inset: 5px;
+}
+
+.dashboard-widget-grid .grid-stack-item-content > .widget-frame {
+  width: 100%;
+  height: 100%;
   min-height: 0;
   overflow: hidden;
 }
 
-.dashboard-widget-grid:empty::after {
-  content: 'Loading dashboard...';
-  grid-column: 1 / -1;
-  text-align: center;
-  font-size: 12px;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  padding: 40px 0;
-  border: 1px dashed var(--bg-border-dim);
+/* Drag placeholder styling */
+.dashboard-widget-grid .grid-stack-placeholder > .placeholder-content {
+  background: rgba(103, 232, 249, 0.06);
+  border: 1px dashed rgba(103, 232, 249, 0.3);
   border-radius: var(--radius-md);
 }
 
-.dashboard-widget-grid .widget-frame {
-  min-height: 0;
-  max-height: 100%;
+/* Resize handle */
+.dashboard-widget-grid .grid-stack-item > .ui-resizable-se {
+  background: none;
+  width: 16px;
+  height: 16px;
+  right: 2px;
+  bottom: 2px;
+}
+.dashboard-widget-grid .grid-stack-item > .ui-resizable-se::after {
+  content: '';
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid rgba(103, 232, 249, 0.3);
+  border-bottom: 2px solid rgba(103, 232, 249, 0.3);
+  border-radius: 0 0 2px 0;
+  transition: border-color 150ms ease;
+}
+.dashboard-widget-grid .grid-stack-item:hover > .ui-resizable-se::after {
+  border-color: rgba(103, 232, 249, 0.6);
+}
+
+/* ─── Add from Template Placeholder ─── */
+
+.gs-add-placeholder .grid-stack-item-content {
+  cursor: pointer;
+}
+
+.add-widget-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  border: 1px dashed var(--bg-border);
+  border-radius: var(--radius-md);
+  background: rgba(14, 21, 37, 0.3);
+  transition: border-color 250ms ease, background 250ms ease, transform 200ms ease;
+}
+.add-widget-placeholder:hover {
+  border-color: rgba(103, 232, 249, 0.4);
+  background: rgba(103, 232, 249, 0.04);
+  transform: scale(1.01);
+}
+.add-widget-icon {
+  color: var(--text-muted);
+  transition: color 200ms ease;
+}
+.add-widget-placeholder:hover .add-widget-icon {
+  color: var(--accent-cyan);
+}
+.add-widget-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+}
+.add-widget-hint {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* ─── Save Layout Button ─── */
+
+.feed-save-layout-btn {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: rgba(103, 232, 249, 0.08);
+  border: 1px solid rgba(103, 232, 249, 0.15);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+.feed-save-layout-btn:hover {
+  background: rgba(103, 232, 249, 0.15);
+  border-color: rgba(103, 232, 249, 0.3);
+  color: var(--accent-cyan);
+}
+
+/* ─── Template Picker Modal ─── */
+
+.template-picker-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.template-picker-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+}
+.template-picker-dialog {
+  position: relative;
+  width: min(640px, 90vw);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border: 1px solid var(--bg-border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
   overflow: hidden;
+}
+.template-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--bg-border);
+  background: rgba(14, 21, 37, 0.72);
+}
+.template-picker-title {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+}
+.template-picker-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 150ms ease, background 150ms ease;
+}
+.template-picker-close:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.06);
+}
+.template-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+  padding: 16px;
+  overflow-y: auto;
+}
+.template-picker-card {
+  padding: 14px;
+  border: 1px solid var(--bg-border-dim);
+  border-radius: var(--radius-md);
+  background: var(--bg-base);
+  cursor: pointer;
+  transition: border-color 200ms ease, background 200ms ease, transform 150ms ease;
+}
+.template-picker-card:hover {
+  border-color: rgba(103, 232, 249, 0.35);
+  background: rgba(103, 232, 249, 0.04);
+  transform: translateY(-2px);
+}
+.template-picker-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.template-picker-card-name {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.template-picker-card-category {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--accent-cyan);
+  background: rgba(103, 232, 249, 0.08);
+  padding: 2px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.template-picker-card-desc {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
 }
 
 /* ─── Agent Strip ─── */

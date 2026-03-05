@@ -1351,6 +1351,14 @@ async def clear_canvas(project: str) -> dict[str, bool]:
     return {"ok": True}
 
 
+@app.put("/api/canvas/{project}/layout")
+async def save_layout(project: str, body: list[dict[str, Any]]) -> dict[str, bool]:
+    """Save GridStack layout positions for all widgets in a project."""
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, canvas_service.save_layout, project, body)
+    return {"ok": True}
+
+
 # ─── Widget Catalog API ───────────────────────────────────────────────────────
 
 
@@ -1358,6 +1366,28 @@ async def clear_canvas(project: str) -> dict[str, bool]:
 async def list_widget_templates() -> list[dict[str, Any]]:
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, widget_catalog_svc.list_templates)
+
+
+@app.get("/api/widget-catalog/{template_id}/render")
+async def render_widget_template(template_id: str) -> dict[str, Any]:
+    """Render a widget template with its preview_data."""
+    loop = asyncio.get_event_loop()
+    tmpl = await loop.run_in_executor(None, widget_catalog_svc.get_template, template_id)
+    if not tmpl:
+        raise HTTPException(status_code=404, detail="Template not found")
+    preview_data = tmpl.get("preview_data", {})
+    result = await loop.run_in_executor(
+        None, widget_catalog_svc.render_template, template_id, preview_data
+    )
+    if not result:
+        raise HTTPException(status_code=500, detail="Render failed")
+    html, css, js = result
+    return {
+        "html": html, "css": css, "js": js,
+        "name": tmpl.get("name", ""),
+        "col_span": tmpl.get("col_span", 1),
+        "row_span": tmpl.get("row_span", 1),
+    }
 
 
 @app.post("/api/widget-catalog", status_code=201)

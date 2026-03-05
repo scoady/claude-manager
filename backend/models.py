@@ -320,6 +320,11 @@ class WidgetState(BaseModel):
     grid_row: int = 1
     col_span: int = 1
     row_span: int = 1
+    # GridStack layout fields (x, y, w, h in grid units)
+    gs_x: int | None = None
+    gs_y: int | None = None
+    gs_w: int = 4
+    gs_h: int = 3
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -334,6 +339,10 @@ class WidgetCreate(BaseModel):
     grid_row: int = 1
     col_span: int = 1
     row_span: int = 1
+    gs_x: int | None = None
+    gs_y: int | None = None
+    gs_w: int = 4
+    gs_h: int = 3
 
 
 class WidgetUpdate(BaseModel):
@@ -345,6 +354,10 @@ class WidgetUpdate(BaseModel):
     grid_row: int | None = None
     col_span: int | None = None
     row_span: int | None = None
+    gs_x: int | None = None
+    gs_y: int | None = None
+    gs_w: int | None = None
+    gs_h: int | None = None
 
 
 class WSMessageType(str, Enum):

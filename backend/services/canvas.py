@@ -150,6 +150,21 @@ class CanvasService:
         self._save(project)
         return list(new_store.values())
 
+    def save_layout(self, project: str, items: list[dict]) -> None:
+        """Persist GridStack layout positions (gs_x, gs_y, gs_w, gs_h) for widgets."""
+        store = self._project_store(project)
+        for item in items:
+            wid = item.get("id")
+            if wid and wid in store:
+                w = store[wid]
+                store[wid] = w.model_copy(update={
+                    "gs_x": item.get("x"),
+                    "gs_y": item.get("y"),
+                    "gs_w": item.get("w", w.gs_w),
+                    "gs_h": item.get("h", w.gs_h),
+                })
+        self._save(project)
+
     def clear(self, project: str) -> None:
         """Remove all widgets for a project."""
         self._widgets[project] = {}

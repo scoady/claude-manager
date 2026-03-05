@@ -47,8 +47,7 @@ export class WidgetFrame {
     this._hostEl.className = 'widget-frame entering';
     this._hostEl.dataset.widgetId = this._def.widget_id;
 
-    // Apply grid placement.
-    this._applyGridPlacement(this._def);
+    // Grid placement is handled by GridStack — no inline styles needed.
 
     // Widget-specific CSS (if any) — scoped via data attribute.
     if (this._def.css) {

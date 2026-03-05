@@ -45,7 +45,7 @@ export class FeedController {
     this._subagentMap = new Map(); // tool_use_id → subagent section id
     this._taskAgentMap = new Map(); // taskIndex → sessionId
     this._onDeleteProject = onDeleteProject || null;
-    this._dashboardCanvas = new CanvasEngine();
+    this._dashboardCanvas = null;
     this._dashboardWidgetGrid = null;
   }
 
@@ -71,14 +71,16 @@ export class FeedController {
     // 2a. System strip — reserved top zone for system-generated widgets (tasks, agents)
     this._systemStrip = document.createElement('div');
     this._systemStrip.className = 'system-widget-strip';
-    this._systemCanvas = new CanvasEngine();
+    this._systemCanvas = new CanvasEngine(null, { static: true });
     this._overviewContainer.appendChild(this._systemStrip);
     this._systemCanvas.mount(this._systemStrip);
 
-    // 2b. Agent widget grid (agent-controlled)
+    // 2b. Agent widget grid (agent-controlled, drag/resize via GridStack)
     this._dashboardWidgetGrid = document.createElement('div');
     this._dashboardWidgetGrid.className = 'dashboard-widget-grid';
     this._overviewContainer.appendChild(this._dashboardWidgetGrid);
+    this._dashboardCanvas = new CanvasEngine();
+    this._dashboardCanvas.setProject(project.name);
     this._dashboardCanvas.mount(this._dashboardWidgetGrid);
 
     this._el.appendChild(this._overviewContainer);
@@ -156,7 +158,132 @@ export class FeedController {
           this._dashboardCanvas.create(w);
         }
       }
+
+      // Add "Add from Template" placeholder tile
+      this._addTemplatePlaceholder(projectName);
     } catch (_) {}
+  }
+
+  _addTemplatePlaceholder(projectName) {
+    if (!this._dashboardWidgetGrid || !this._dashboardCanvas) return;
+
+    // Remove existing placeholder if any
+    const existing = this._dashboardWidgetGrid.querySelector('.gs-add-placeholder');
+    if (existing && this._dashboardCanvas._grid) {
+      this._dashboardCanvas._grid.removeWidget(existing, false);
+    } else if (existing) {
+      existing.remove();
+    }
+
+    const placeholderContent = `
+      <div class="add-widget-placeholder">
+        <div class="add-widget-icon">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+            <rect x="3" y="3" width="22" height="22" rx="6" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.4"/>
+            <path d="M14 9v10M9 14h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <span class="add-widget-label">Add from Template</span>
+        <span class="add-widget-hint">Browse widget catalog</span>
+      </div>
+    `;
+
+    if (this._dashboardCanvas._grid) {
+      const gridEl = this._dashboardCanvas._grid.addWidget({
+        w: 4, h: 3, content: placeholderContent, noResize: true, noMove: true,
+        id: '__add-placeholder__',
+      });
+      gridEl.classList.add('gs-add-placeholder');
+      gridEl.dataset.widgetId = '__add-placeholder__';
+      gridEl.addEventListener('click', () => {
+        this._showTemplatePickerModal(projectName);
+      });
+    }
+  }
+
+  async _showTemplatePickerModal(projectName) {
+    // Fetch available templates
+    let templates = [];
+    try {
+      const resp = await fetch('/api/widget-catalog');
+      templates = await resp.json();
+    } catch (_) {
+      toast('Failed to load templates', 'error');
+      return;
+    }
+
+    if (templates.length === 0) {
+      toast('No templates available — create one in Widget Studio', 'info');
+      return;
+    }
+
+    // Build modal
+    const modal = document.createElement('div');
+    modal.className = 'template-picker-modal';
+    modal.innerHTML = `
+      <div class="template-picker-backdrop"></div>
+      <div class="template-picker-dialog">
+        <div class="template-picker-header">
+          <span class="template-picker-title">Add Widget from Template</span>
+          <button class="template-picker-close">&times;</button>
+        </div>
+        <div class="template-picker-grid">
+          ${templates.map(t => `
+            <div class="template-picker-card" data-template-id="${t.template_id || t.id}">
+              <div class="template-picker-card-header">
+                <span class="template-picker-card-name">${escapeHtml(t.name || t.template_id || 'Untitled')}</span>
+                <span class="template-picker-card-category">${escapeHtml(t.category || 'custom')}</span>
+              </div>
+              <div class="template-picker-card-desc">${escapeHtml(t.description || '')}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+
+    const close = () => modal.remove();
+    modal.querySelector('.template-picker-backdrop').addEventListener('click', close);
+    modal.querySelector('.template-picker-close').addEventListener('click', close);
+
+    modal.querySelectorAll('.template-picker-card').forEach(card => {
+      card.addEventListener('click', async () => {
+        const templateId = card.dataset.templateId;
+        const tpl = templates.find(t => (t.template_id || t.id) === templateId);
+        close();
+        await this._addWidgetFromTemplate(projectName, tpl);
+      });
+    });
+
+    document.body.appendChild(modal);
+  }
+
+  async _addWidgetFromTemplate(projectName, template) {
+    try {
+      const templateId = template.id || template.template_id;
+      // Render the template with preview data on the backend
+      const renderResp = await fetch(`/api/widget-catalog/${encodeURIComponent(templateId)}/render`);
+      if (!renderResp.ok) throw new Error('Render failed');
+      const rendered = await renderResp.json();
+
+      const widgetId = `tpl-${Date.now().toString(36)}`;
+      const body = {
+        id: widgetId,
+        title: rendered.name || template.name || 'Widget',
+        html: rendered.html || '',
+        css: rendered.css || '',
+        js: rendered.js || '',
+        gs_w: Math.max(rendered.col_span || 1, 1) * 4,
+        gs_h: Math.max(rendered.row_span || 1, 1) * 3,
+      };
+      await fetch(`/api/canvas/${encodeURIComponent(projectName)}/widgets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      toast(`Added "${rendered.name || template.name}" widget`, 'success');
+    } catch (e) {
+      toast(`Failed: ${e.message}`, 'error');
+    }
   }
 
   async _seedDashboard(projectName) {
@@ -173,7 +300,7 @@ export class FeedController {
 
   /** Route a canvas widget event to the appropriate zone (system strip vs agent grid). */
   handleCanvasEvent(type, data) {
-    if (!this._project) return;
+    if (!this._project || !this._dashboardCanvas) return;
 
     const _engine = (widgetId) =>
       widgetId?.startsWith('sys-') ? this._systemCanvas : this._dashboardCanvas;
@@ -231,6 +358,13 @@ export class FeedController {
         <button class="feed-tab" data-feed-tab="milestones">Milestones</button>
         <button class="feed-tab" data-feed-tab="workflow">Workflow</button>
         <button class="feed-tab" data-feed-tab="artifacts">Artifacts</button>
+        <button class="feed-save-layout-btn" title="Save dashboard layout">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <path d="M10.5 11.5H2.5a1 1 0 01-1-1V2.5a1 1 0 011-1h6.59a1 1 0 01.7.29l1.92 1.92a1 1 0 01.29.7V10.5a1 1 0 01-1 1z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+            <path d="M4.5 1.5v3h4v-3M4.5 8h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+          Save Layout
+        </button>
       </div>
       <div class="feed-dispatch-composer">
         <div class="feed-dispatch-row">
@@ -305,6 +439,12 @@ export class FeedController {
           model: modelSel.value || null,
         });
       } catch (_) {}
+    });
+
+    // Save layout
+    el.querySelector('.feed-save-layout-btn')?.addEventListener('click', async () => {
+      await this._dashboardCanvas.saveLayout();
+      toast('Layout saved', 'success', 2000);
     });
 
     // Delete project
@@ -680,6 +820,7 @@ export class FeedController {
         const showOverviewUI = (tabName === 'overview');
         this._headerEl.querySelector('.feed-dispatch-composer')?.classList.toggle('hidden', !showOverviewUI);
         this._headerEl.querySelector('.skill-toggle-panel')?.classList.toggle('hidden', !showOverviewUI);
+        this._headerEl.querySelector('.feed-save-layout-btn')?.classList.toggle('hidden', !showOverviewUI);
 
         // Stop panel refreshes
         this._milestonesPanel?.stopAutoRefresh();
