@@ -122,13 +122,25 @@ export class WorkflowPanel {
     });
   }
 
-  _renderConfigForm() {
+  async _renderConfigForm() {
     const tpl = this._selectedTemplate;
     if (!tpl) { this._step = 'template'; this._render(); return; }
 
+    // Fetch merged roles (template built-ins + custom)
+    try {
+      const allRoles = await api.getAllRoles(tpl.id);
+      if (allRoles.length) {
+        this._mergedRolePresets = allRoles;
+      } else {
+        this._mergedRolePresets = tpl.role_presets;
+      }
+    } catch (_) {
+      this._mergedRolePresets = tpl.role_presets;
+    }
+
     const wf = this._workflow;
     const team = wf?.team || tpl.default_team || [
-      { role: tpl.role_presets[0]?.role || 'worker', count: 1, instructions: '' },
+      { role: (this._mergedRolePresets[0]?.role || tpl.role_presets[0]?.role || 'worker'), count: 1, instructions: '' },
     ];
 
     // Build config values from template defaults + existing workflow values
@@ -150,7 +162,7 @@ export class WorkflowPanel {
         <div class="wf-team-section">
           <label class="wf-label">Team Composition</label>
           <div class="wf-team-rows">
-            ${team.map((r, i) => this._roleRow(r, i, tpl.role_presets)).join('')}
+            ${team.map((r, i) => this._roleRow(r, i, this._mergedRolePresets || tpl.role_presets)).join('')}
           </div>
           <button class="wf-add-role-btn">+ Add Role</button>
         </div>
@@ -218,7 +230,7 @@ export class WorkflowPanel {
       <div class="wf-role-row" data-index="${index}">
         <select class="wf-role-select">
           ${rolePresets.map(p =>
-            `<option value="${p.role}" ${p.role === role.role ? 'selected' : ''}>${escapeHtml(p.label)}</option>`
+            `<option value="${p.role}" ${p.role === role.role ? 'selected' : ''}>${escapeHtml(p.label)}${p.builtin === false ? ' *' : ''}</option>`
           ).join('')}
         </select>
         <input type="number" class="wf-role-count" value="${role.count}" min="1" max="8" />
@@ -338,10 +350,11 @@ export class WorkflowPanel {
     this._el.querySelector('.wf-add-role-btn')?.addEventListener('click', () => {
       const rows = this._el.querySelector('.wf-team-rows');
       const index = rows.querySelectorAll('.wf-role-row').length;
-      const defaultRole = tpl.role_presets[0]?.role || 'worker';
+      const presets = this._mergedRolePresets || tpl.role_presets;
+      const defaultRole = presets[0]?.role || 'worker';
       const wrapper = document.createElement('div');
       wrapper.innerHTML = this._roleRow(
-        { role: defaultRole, count: 1, instructions: '' }, index, tpl.role_presets
+        { role: defaultRole, count: 1, instructions: '' }, index, presets
       );
       rows.appendChild(wrapper.firstElementChild);
     });

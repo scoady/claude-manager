@@ -340,6 +340,83 @@ export const api = {
     return true;
   },
 
+  // ─── Roles ───────────────────────────────────────────────────────────────
+
+  async getRoles() {
+    const res = await fetch(`${BASE}/api/roles`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
+  async createRole(data) {
+    const res = await fetch(`${BASE}/api/roles`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
+  async updateRole(roleId, data) {
+    const res = await fetch(`${BASE}/api/roles/${encodeURIComponent(roleId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
+  async deleteRole(roleId) {
+    const res = await fetch(`${BASE}/api/roles/${encodeURIComponent(roleId)}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok && res.status !== 404) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return true;
+  },
+
+  async getAllRoles(templateId) {
+    const url = templateId
+      ? `${BASE}/api/roles/all?template_id=${encodeURIComponent(templateId)}`
+      : `${BASE}/api/roles/all`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
+  // ─── Artifacts ──────────────────────────────────────────────────────────────
+
+  async listFiles(projectName, path = '') {
+    const url = `${BASE}/api/projects/${encodeURIComponent(projectName)}/files?path=${encodeURIComponent(path)}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
+  async readFile(projectName, path) {
+    const url = `${BASE}/api/projects/${encodeURIComponent(projectName)}/files/content?path=${encodeURIComponent(path)}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
+  async getGitStatus(projectName) {
+    const url = `${BASE}/api/projects/${encodeURIComponent(projectName)}/files/status`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
   // ─── Settings ──────────────────────────────────────────────────────────────
 
   async getStats() {

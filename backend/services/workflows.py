@@ -701,10 +701,30 @@ def _isolation_instructions(template) -> str:
     return ""
 
 
-def _role_instructions(team: list[TeamRole]) -> str:
+def _role_instructions(team: list[TeamRole], template=None) -> str:
+    # Build a lookup of role personas from template + custom roles
+    persona_map: dict[str, str] = {}
+    if template and template.role_presets:
+        for rp in template.role_presets:
+            if rp.persona:
+                persona_map[rp.role] = rp.persona
+    # Also check custom roles
+    try:
+        from . import roles as roles_svc
+        for cr in roles_svc.list_roles():
+            if cr.persona and cr.role not in persona_map:
+                persona_map[cr.role] = cr.persona
+    except Exception:
+        pass
+
     parts = []
     for r in team:
-        if r.instructions:
+        persona = persona_map.get(r.role, "")
+        if persona and r.instructions:
+            parts.append(f"\n- **{r.role}** (persona: \"{persona}\"): {r.instructions}")
+        elif persona:
+            parts.append(f"\n- **{r.role}** (persona: \"{persona}\")")
+        elif r.instructions:
             parts.append(f"\n- **{r.role}**: {r.instructions}")
     if parts:
         return "Role-specific instructions:" + "".join(parts)
@@ -726,7 +746,7 @@ def _build_phase_prompt(wf: Workflow, phase: WorkflowPhase) -> str:
                 "project_name": wf.project_name,
                 "isolation_table": _isolation_table(wf.isolation, wf.worktrees),
                 "isolation_instructions": _isolation_instructions(template),
-                "role_instructions": _role_instructions(wf.team),
+                "role_instructions": _role_instructions(wf.team, template),
                 "subagent_report_instruction": SUBAGENT_REPORT_INSTRUCTION,
                 **config_vars,
             }

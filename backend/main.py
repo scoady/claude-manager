@@ -27,6 +27,7 @@ from .models import (
     ManagedProject,
     PlanTaskRequest,
     ProjectConfig,
+    RolePreset,
     SessionPhase,
     SkillInfo,
     UpdateTaskRequest,
@@ -44,6 +45,8 @@ from .services.projects import SUBAGENT_REPORT_INSTRUCTION
 from .services import settings as settings_svc
 from .services import skills as skills_svc
 from .services import tasks as tasks_svc
+from .services import roles as roles_svc
+from .services import artifacts as artifacts_svc
 from .services import templates as templates_svc
 from .ws_manager import WSManager
 
@@ -820,6 +823,82 @@ async def disable_project_skill(name: str, skill_name: str) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"project": name, "skill": skill_name, "enabled": False}
+
+
+# ─── Roles API ──────────────────────────────────────────────────────────────
+
+
+@app.get("/api/roles", response_model=list[RolePreset])
+async def list_custom_roles() -> list[RolePreset]:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, roles_svc.list_roles)
+
+
+@app.get("/api/roles/all")
+async def get_all_roles(template_id: str | None = None) -> list[dict[str, Any]]:
+    loop = asyncio.get_event_loop()
+    roles = await loop.run_in_executor(None, roles_svc.get_all_roles, template_id)
+    return [r.model_dump() for r in roles]
+
+
+@app.post("/api/roles", response_model=RolePreset, status_code=201)
+async def create_role(body: RolePreset) -> RolePreset:
+    try:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, roles_svc.create_role, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
+@app.put("/api/roles/{role_id}")
+async def update_role(role_id: str, body: dict[str, Any]) -> dict[str, Any]:
+    try:
+        loop = asyncio.get_event_loop()
+        role = await loop.run_in_executor(None, roles_svc.update_role, role_id, body)
+        return role.model_dump()
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.delete("/api/roles/{role_id}", status_code=204)
+async def delete_role(role_id: str) -> None:
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, roles_svc.delete_role, role_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+# ─── Artifacts API ──────────────────────────────────────────────────────────
+
+
+@app.get("/api/projects/{name}/files")
+async def list_project_files(name: str, path: str = "") -> list[dict[str, Any]]:
+    try:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, artifacts_svc.list_files, name, path)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/api/projects/{name}/files/content")
+async def read_project_file(name: str, path: str = "") -> dict[str, Any]:
+    if not path:
+        raise HTTPException(status_code=400, detail="path parameter required")
+    try:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, artifacts_svc.read_file, name, path)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/api/projects/{name}/files/status")
+async def get_project_git_status(name: str) -> dict[str, str]:
+    try:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, artifacts_svc.get_git_status, name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @app.get("/api/stats", response_model=GlobalStats)

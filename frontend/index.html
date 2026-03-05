@@ -11,6 +11,8 @@
   <link rel="stylesheet" href="/css/feed.css" />
   <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/github-dark.min.css" />
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
 </head>
 <body>
   <div id="app">
@@ -160,6 +162,13 @@
           </svg>
           Skills
         </button>
+        <button class="settings-nav-item" data-tab="roles">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <circle cx="7" cy="4.5" r="2.5" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M2.5 12.5c0-2.5 2-4.5 4.5-4.5s4.5 2 4.5 4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          Roles
+        </button>
       </nav>
 
       <div class="settings-content">
@@ -253,6 +262,50 @@ description:
             </div>
             <div class="settings-actions">
               <button class="settings-btn-primary" id="skill-create-btn">Create Skill</button>
+            </div>
+          </div>
+        </div>
+        <div class="settings-tab" id="settings-tab-roles">
+          <div class="settings-section-header">
+            <h2>Agent Roles</h2>
+            <p>Custom agent personas shared across all workflow templates</p>
+          </div>
+          <div id="roles-list" class="roles-list">
+            <div class="settings-loading">Loading…</div>
+          </div>
+          <div class="settings-section-header" style="margin-top: 32px;">
+            <h2>Create Role</h2>
+            <p>Define a reusable agent persona with custom behavior</p>
+          </div>
+          <div class="role-creator-form" id="role-creator-form">
+            <div class="role-creator-row">
+              <div class="form-group">
+                <label class="form-label" for="role-create-id">Role ID</label>
+                <input type="text" id="role-create-id" class="form-input" placeholder="senior-engineer" spellcheck="false" />
+                <span class="form-hint">Lowercase slug used in workflows</span>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="role-create-label">Display Name</label>
+                <input type="text" id="role-create-label" class="form-input" placeholder="Senior Engineer" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="role-create-persona">Persona</label>
+              <textarea id="role-create-persona" class="form-textarea" rows="4" placeholder="You are a meticulous senior engineer who writes clean, tested code. You always consider edge cases and prefer simple solutions over clever ones."></textarea>
+              <span class="form-hint">System prompt / personality description injected into agent context</span>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="role-create-expertise">Expertise Tags</label>
+              <input type="text" id="role-create-expertise" class="form-input" placeholder="python, testing, architecture (comma-separated)" />
+            </div>
+            <div class="form-group">
+              <label class="form-label role-worker-label">
+                <input type="checkbox" id="role-create-worker" checked />
+                Worker role (gets isolation workspace in workflows)
+              </label>
+            </div>
+            <div class="settings-actions">
+              <button class="settings-btn-primary" id="role-create-btn">Create Role</button>
             </div>
           </div>
         </div>

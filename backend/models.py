@@ -127,6 +127,9 @@ class RolePreset(BaseModel):
     role: str
     label: str
     is_worker: bool = True
+    persona: str = ""
+    expertise: list[str] = []
+    builtin: bool = False
 
 
 class ConfigField(BaseModel):

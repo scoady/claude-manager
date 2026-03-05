@@ -14,6 +14,7 @@ export function initSettingsTabs() {
       $(`settings-tab-${tab}`)?.classList.add('active');
       if (tab === 'plugins') loadPlugins();
       if (tab === 'skills') loadSkills();
+      if (tab === 'roles') loadRoles();
     });
   });
 }
@@ -257,6 +258,116 @@ function mktCard(p) {
           : ''}
       </div>
     </div>`;
+}
+
+// ─── Roles ──────────────────────────────────────────────────────────────
+
+let _rolesLoaded = false;
+
+async function loadRoles() {
+  await loadRolesList();
+  if (!_rolesLoaded) {
+    initRoleCreator();
+    _rolesLoaded = true;
+  }
+}
+
+async function loadRolesList() {
+  const list = $('roles-list');
+  if (!list) return;
+  list.innerHTML = '<div class="settings-loading">Loading…</div>';
+  try {
+    // Load all roles (built-in + custom)
+    const res = await fetch('/api/roles/all');
+    const roles = await res.json();
+    if (!roles.length) {
+      list.innerHTML = '<div class="settings-loading">No roles defined. Create one below or use a workflow template.</div>';
+      return;
+    }
+    list.innerHTML = roles.map(r => `
+      <div class="role-card${r.builtin ? ' role-builtin' : ''}">
+        <div class="role-card-header">
+          <div class="role-card-icon">${escHtml(r.label.slice(0, 2).toUpperCase())}</div>
+          <div class="role-card-info">
+            <div class="role-card-name">${escHtml(r.label)}</div>
+            <div class="role-card-id">${escHtml(r.role)}</div>
+          </div>
+          <div class="role-card-badges">
+            ${r.builtin ? '<span class="role-badge role-badge-builtin">built-in</span>' : '<span class="role-badge role-badge-custom">custom</span>'}
+            ${r.is_worker ? '<span class="role-badge role-badge-worker">worker</span>' : '<span class="role-badge role-badge-coordinator">coordinator</span>'}
+          </div>
+          ${!r.builtin ? `<button class="role-delete-btn" data-role="${escHtml(r.role)}" title="Delete role">&times;</button>` : ''}
+        </div>
+        ${r.persona ? `<div class="role-card-persona">${escHtml(r.persona)}</div>` : ''}
+        ${r.expertise?.length ? `<div class="role-card-tags">${r.expertise.map(t => `<span class="role-tag">${escHtml(t)}</span>`).join('')}</div>` : ''}
+      </div>`).join('');
+
+    // Bind delete buttons
+    list.querySelectorAll('.role-delete-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const roleId = btn.dataset.role;
+        if (!confirm(`Delete role "${roleId}"?`)) return;
+        try {
+          await fetch(`/api/roles/${encodeURIComponent(roleId)}`, { method: 'DELETE' });
+          toast(`Role "${roleId}" deleted`, 'success');
+          await loadRolesList();
+        } catch (e) {
+          toast(`Failed: ${e.message}`, 'error');
+        }
+      });
+    });
+  } catch (e) {
+    list.innerHTML = `<div class="settings-loading">Error: ${escHtml(e.message)}</div>`;
+  }
+}
+
+function initRoleCreator() {
+  const idEl = $('role-create-id');
+  const labelEl = $('role-create-label');
+  const personaEl = $('role-create-persona');
+  const expertiseEl = $('role-create-expertise');
+  const workerEl = $('role-create-worker');
+  const createBtn = $('role-create-btn');
+  if (!idEl || !createBtn) return;
+
+  createBtn.addEventListener('click', async () => {
+    const role = idEl.value.trim();
+    const label = labelEl.value.trim();
+    if (!role) { toast('Role ID is required', 'error'); return; }
+    if (!label) { toast('Display name is required', 'error'); return; }
+
+    const expertise = expertiseEl.value.trim()
+      ? expertiseEl.value.split(',').map(s => s.trim()).filter(Boolean)
+      : [];
+
+    createBtn.disabled = true;
+    createBtn.textContent = 'Creating…';
+    try {
+      await fetch('/api/roles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role,
+          label,
+          persona: personaEl.value.trim(),
+          expertise,
+          is_worker: workerEl.checked,
+        }),
+      });
+      toast(`Role "${label}" created`, 'success');
+      idEl.value = '';
+      labelEl.value = '';
+      personaEl.value = '';
+      expertiseEl.value = '';
+      workerEl.checked = true;
+      await loadRolesList();
+    } catch (e) {
+      toast(`Failed: ${e.message}`, 'error');
+    } finally {
+      createBtn.disabled = false;
+      createBtn.textContent = 'Create Role';
+    }
+  });
 }
 
 function initSkillCreator() {

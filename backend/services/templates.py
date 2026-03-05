@@ -30,6 +30,9 @@ def _ensure_loaded() -> None:
             try:
                 data = json.loads(path.read_text("utf-8"))
                 tpl = WorkflowTemplate(**data)
+                # Tag template-defined roles as built-in
+                for rp in tpl.role_presets:
+                    rp.builtin = True
                 _cache[tpl.id] = tpl
             except Exception as exc:
                 print(f"[templates] failed to load {path}: {exc}")
