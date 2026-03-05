@@ -2347,7 +2347,7 @@
   padding: 16px 20px 0;
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .tree-container.hidden {
@@ -2361,9 +2361,8 @@
   border: 1px solid var(--bg-border);
   border-radius: var(--radius-md);
   background: linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-surface) 100%);
-  overflow: hidden;
   position: relative;
-  max-height: clamp(180px, 35vh, 45vh);
+  max-height: clamp(220px, 40vh, 50vh);
   display: flex;
   flex-direction: column;
 }
@@ -2496,6 +2495,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
 }
 
 .orch-task-table {
