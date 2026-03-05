@@ -1340,8 +1340,6 @@ async def design_widget(project: str, body: dict[str, Any]) -> dict[str, Any]:
         f"if the intent calls for it. Match the design system exactly."
     )
 
-    broker: AgentBroker = app.state.broker
-
     # Use a simple --print call to get the design output
     import subprocess
     from .broker.agent_session import CLAUDE_BIN, _get_spawn_env

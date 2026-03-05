@@ -658,6 +658,7 @@ function initTemplateCatalog() {
     _pendingTemplate = null;
     previewEl?.classList.add('hidden');
     statusEl?.classList.add('hidden');
+    if (promptEl) promptEl.value = '';
   });
 
   // Enter key in prompt → generate

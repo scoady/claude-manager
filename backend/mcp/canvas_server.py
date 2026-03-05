@@ -292,7 +292,7 @@ def canvas_put(
                         result = preview_resp.json()
                         rendered_html = result.get("html", html)
                         rendered_css = result.get("css", css)
-                        js = result.get("js", js) or js
+                        js = result.get("js", js)
             except Exception:
                 pass  # Fall through to raw html
 
