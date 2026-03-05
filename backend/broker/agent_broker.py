@@ -205,6 +205,12 @@ class AgentBroker:
             if session.is_controller and session._subagent_captured_this_cycle:
                 should_capture = False
 
+            # Skip if agent's last action was asking the user a question
+            if should_capture and session.milestones:
+                last_ms = session.milestones[-1].lower()
+                if "askuserquestion" in last_ms or "ask_user" in last_ms:
+                    should_capture = False
+
             if should_capture:
                 try:
                     summary = ""
