@@ -343,6 +343,12 @@ export class FeedController {
 
     this._sections.set(sessionId, section);
 
+    // Skip mounting non-controller agents that are already idle/done
+    const isAlreadyDone = !isController && ['idle', 'cancelled', 'error'].includes(phase);
+    if (isAlreadyDone) {
+      return section; // track it but don't show it
+    }
+
     // Determine where to mount this section
     if (isController) {
       // Controller → link to orchestrator banner + nest inside as first card
@@ -486,20 +492,8 @@ export class FeedController {
         const { session_id, reason } = msg.data;
         const section = this._sections.get(session_id);
         section?.markDone(reason);
-
-        // Hide completed non-controller agents from the orchestrator container
         if (section && !section._isController) {
-          const orchAgents = this._orchestratorBanner?.agentsContainer;
-          if (orchAgents?.contains(section.el)) {
-            setTimeout(() => {
-              section.el.style.transition = 'opacity 0.4s ease, max-height 0.4s ease, margin 0.4s ease, padding 0.4s ease';
-              section.el.style.opacity = '0';
-              section.el.style.maxHeight = '0';
-              section.el.style.marginBottom = '0';
-              section.el.style.overflow = 'hidden';
-              setTimeout(() => section.el.remove(), 500);
-            }, 2000);
-          }
+          this._fadeOutDoneSection(section);
         }
         break;
       }
@@ -559,6 +553,7 @@ export class FeedController {
           // Render structured checklist if available, else raw markdown
           if (result) section.setSubagentResult(result);
           section.markDone(is_error ? 'error' : 'idle');
+          this._fadeOutDoneSection(section);
         }
 
         this._subagentMap.delete(tool_use_id);
@@ -652,6 +647,28 @@ export class FeedController {
         section.setExpanded(false);
       }
     }
+  }
+
+  // ── Done agent cleanup ───────────────────────────────────────────────────
+
+  /** Fade out and remove a completed non-controller agent from the orchestrator. */
+  _fadeOutDoneSection(section, delay = 2000) {
+    if (!section?.el?.isConnected) return;
+    // Only fade out if it's inside the orchestrator container
+    const orchContainer = this._orchestratorBanner?.el;
+    if (!orchContainer?.contains(section.el)) return;
+
+    setTimeout(() => {
+      if (!section.el.isConnected) return;
+      section.el.style.transition = 'opacity 0.4s ease, max-height 0.4s ease, margin 0.4s ease';
+      section.el.style.opacity = '0';
+      section.el.style.maxHeight = '0';
+      section.el.style.marginBottom = '0';
+      section.el.style.overflow = 'hidden';
+      setTimeout(() => {
+        if (section.el.isConnected) section.el.remove();
+      }, 500);
+    }, delay);
   }
 
   // ── Agent actions ──────────────────────────────────────────────────────────
