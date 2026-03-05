@@ -2341,10 +2341,11 @@
 /* ─── Org Chart Tree Layout ──────────────────────────────────────────────────── */
 
 .tree-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 0;
   padding: 16px 20px 0;
+  min-height: 0; /* allow shrinking inside flex parent */
 }
 
 .tree-container.hidden {
@@ -2355,12 +2356,12 @@
 
 .orch-node {
   width: 100%;
-  max-width: 900px;
   border: 1px solid var(--bg-border);
   border-radius: var(--radius-md);
   background: linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-surface) 100%);
   overflow: hidden;
   position: relative;
+  /* Intrinsic sizing: grows with content, never wastes width */
 }
 
 .orch-header {
@@ -2446,8 +2447,9 @@
 
 /* ─── Controller Task Table ──────────────────────────────────────────────── */
 
+/* Table scrolls within remaining space — clamp prevents both too-tiny and too-tall */
 .orch-task-table-wrap {
-  max-height: 320px;
+  max-height: clamp(160px, 35vh, 50vh);
   overflow-y: auto;
 }
 
@@ -2555,45 +2557,42 @@
   display: none;
 }
 
-/* ─── Children Row (horizontal fan-out) ─── */
+/* ─── Children Row — CSS Grid, fills available width ─── */
 
 .tree-children {
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  position: relative;
+  display: grid;
+  /* Each agent gets equal share; clamp prevents absurdly narrow or wide cards */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 12px;
   width: 100%;
-  max-width: 1100px;
-  gap: 8px;
+  position: relative;
+  align-items: start;
 }
 
-/* Horizontal connector line spanning from first to last child center */
+/* Horizontal connector line spanning between children */
 .tree-children::before {
   content: '';
   position: absolute;
   top: 0;
   height: 2px;
   background: var(--bg-border);
-  /* Dynamic: spans between first and last child centers */
   left: calc(100% / var(--child-count, 1) / 2);
   right: calc(100% / var(--child-count, 1) / 2);
   pointer-events: none;
 }
 
-/* Hide horizontal line when 0 or 1 children */
 .tree-children:empty::before,
 .tree-children:has(> :only-child)::before {
   display: none;
 }
 
-/* ─── Agent Column (child of tree) ─── */
+/* ─── Agent Column — fills its grid cell ─── */
 
 .tree-agent-col {
   display: flex;
   flex-direction: column;
   align-items: center;
-  flex: 1;
-  min-width: 200px;
+  min-width: 0; /* prevent grid blowout */
   position: relative;
 }
 
@@ -2606,15 +2605,16 @@
   flex-shrink: 0;
 }
 
-/* Style agent sections inside tree columns as cards */
+/* Agent cards fill their column — no max-width cap */
 .tree-agent-col .agent-section {
-  width: 96%;
-  max-width: 420px;
+  width: 100%;
   margin: 0 !important;
   border: 1px solid var(--bg-border-dim) !important;
   border-radius: var(--radius-sm) !important;
   background: var(--bg-elevated) !important;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .tree-agent-col .agent-section:hover {
@@ -2643,7 +2643,7 @@
   flex: 1;
 }
 
-/* Compact meta: phase + turns render as "thinking · 5t" style */
+/* Compact meta: phase + turns as "thinking · 5t" */
 .tree-agent-col .agent-phase-badge {
   font-size: 10px;
   padding: 0;
@@ -2660,7 +2660,7 @@
   display: none;
 }
 
-/* Hide action buttons by default — show on hover */
+/* Action buttons: reveal on hover */
 .tree-agent-col .agent-section-actions .agent-status-btn,
 .tree-agent-col .agent-section-actions .agent-kill-btn {
   opacity: 0 !important;
@@ -2683,15 +2683,15 @@
   display: block !important;
 }
 
-/* Fixed height body for tree cards (matches mockup .ac-body: 260px) */
+/* Card body fills remaining vertical space — no fixed pixel height */
 .tree-agent-col .agent-section-body {
-  height: 260px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
-/* Tighter stream area in tree cards */
+/* Stream area within tree cards */
 .tree-agent-col .agent-stream-area {
-  max-height: 280px;
   overflow-y: auto;
   padding: 10px 14px !important;
 }
@@ -2778,15 +2778,18 @@
 
 .agent-section.compact .agent-section-body {
   padding: 0;
-  max-height: none;
-  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
-/* Compact task list — primary content */
+/* Compact task list — fills card body, scrolls intrinsically */
 .compact-task-list {
   border-top: 1px solid var(--bg-border-dim);
-  max-height: 300px;
   overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .compact-task-list:empty {
@@ -2887,7 +2890,7 @@
   flex-shrink: 0;
 }
 
-/* Stream text preview — bottom of compact card, matches mockup .ac-stream */
+/* Stream text preview — pinned to bottom of compact card */
 .compact-stream-preview {
   padding: 8px 16px;
   font-size: 12px;
@@ -2898,6 +2901,7 @@
   text-overflow: ellipsis;
   border-top: 1px solid var(--bg-border-dim);
   font-family: var(--font-ui);
+  flex-shrink: 0;
 }
 
 .compact-stream-preview code {
@@ -2938,10 +2942,11 @@
   display: none;
 }
 
-/* Popped-out state — expand card to show full content */
+/* Popped-out state — reveal full stream content */
 .agent-section.compact.popped-out .agent-stream-area {
   display: block !important;
-  max-height: 400px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 10px 14px;
   border-top: 1px solid var(--bg-border-dim);
@@ -2952,7 +2957,6 @@
 }
 
 .tree-agent-col .agent-section.compact.popped-out {
-  max-width: 600px;
   z-index: 5;
 }
 
