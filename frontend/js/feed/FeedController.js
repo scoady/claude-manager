@@ -332,10 +332,11 @@ export class FeedController {
 
     try {
       await api.updateProjectConfig(projectName, { parallelism, model });
-      await api.dispatchTask(projectName, task, model || undefined);
+      const result = await api.dispatchTask(projectName, task, model || undefined);
       textarea.value = '';
       textarea.style.height = 'auto';
-      toast(`Dispatched to ${projectName}`, 'success', 2000);
+      const route = result.status === 'delegated' ? 'controller' : 'new agent';
+      toast(`Dispatched to ${route}`, 'success', 2000);
     } catch (e) {
       toast(`Dispatch failed: ${e.message}`, 'error');
     } finally {

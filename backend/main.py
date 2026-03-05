@@ -352,13 +352,25 @@ async def dispatch_task(name: str, body: DispatchRequest) -> dict[str, Any]:
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    # Track dispatched work in TASKS.md so it appears on the Tasks tab
+    tasks = await loop.run_in_executor(None, tasks_svc.add_task, name, body.task)
+    # Mark as in-progress since we're dispatching immediately
+    new_task_idx = len(tasks) - 1
+    tasks = await loop.run_in_executor(
+        None, tasks_svc.update_task_status, name, new_task_idx, "in_progress"
+    )
+    await ws_manager.broadcast(WSMessageType.TASKS_UPDATED, {
+        "project_name": name,
+        "tasks": tasks,
+    })
+
     # Route through controller if available and idle
     controller = broker.get_controller_for_project(name)
     if controller and controller.phase == SessionPhase.IDLE:
         task_prompt = (
-            f'New task dispatched: "{body.task}"\n\n'
-            f'Use dispatch_custom(project="{name}", task="...") to spawn a worker agent for this. '
-            f'Give the worker a clear, detailed prompt with all context it needs. '
+            f'New task dispatched (TASKS.md index #{new_task_idx}): "{body.task}"\n\n'
+            f'Use dispatch_agent(project="{name}", task_index={new_task_idx}) to spawn a worker for this task. '
+            f'This links the worker to the task so it auto-completes when done. '
             f'Do NOT implement anything yourself — you are the coordinator. '
             f'Monitor with get_agents() and report results when done.\n\n'
             f'After dispatching, update the dashboard:\n'
@@ -383,6 +395,7 @@ async def dispatch_task(name: str, body: DispatchRequest) -> dict[str, Any]:
             initial_task=body.task,
             model=model,
             mcp_config_path=mcp_config,
+            task_index=new_task_idx,
         )
         session_ids.append(session.session_id)
 
