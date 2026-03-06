@@ -11,7 +11,6 @@
 ---
 
 ## Sprint 2 — Agent Integration + Constellation ✅
-- [~] You are a creative UX research agent. Your mission is to find inspiration for unique, distinctive designs for the claude-manager agent orchestration dashboard.
 
 ## Context
 

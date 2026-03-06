@@ -77,7 +77,6 @@ spec:
               readOnly: true
             - name: gitconfig
               mountPath: /root/.gitconfig
-              subPath: .gitconfig
               readOnly: true
             - name: docker-socket
               mountPath: /var/run/docker.sock
