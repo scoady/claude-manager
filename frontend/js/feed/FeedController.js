@@ -167,40 +167,8 @@ export class FeedController {
   }
 
   _addTemplatePlaceholder(projectName) {
-    if (!this._dashboardWidgetGrid || !this._dashboardCanvas) return;
-
-    // Remove existing placeholder if any
-    const existing = this._dashboardWidgetGrid.querySelector('.gs-add-placeholder');
-    if (existing && this._dashboardCanvas._grid) {
-      this._dashboardCanvas._grid.removeWidget(existing, false);
-    } else if (existing) {
-      existing.remove();
-    }
-
-    const placeholderContent = `
-      <div class="add-widget-placeholder">
-        <div class="add-widget-icon">
-          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-            <rect x="3" y="3" width="22" height="22" rx="6" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.4"/>
-            <path d="M14 9v10M9 14h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <span class="add-widget-label">Add from Template</span>
-        <span class="add-widget-hint">Browse widget catalog</span>
-      </div>
-    `;
-
-    if (this._dashboardCanvas._grid) {
-      const gridEl = this._dashboardCanvas._grid.addWidget({
-        w: 4, h: 3, content: placeholderContent, noResize: true, noMove: true,
-        id: '__add-placeholder__',
-      });
-      gridEl.classList.add('gs-add-placeholder');
-      gridEl.dataset.widgetId = '__add-placeholder__';
-      gridEl.addEventListener('click', () => {
-        this._showTemplatePickerModal(projectName);
-      });
-    }
+    // Hidden for now — add-widget placeholder disabled to keep canvas clean
+    return;
   }
 
   async _showTemplatePickerModal(projectName) {
