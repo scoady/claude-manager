@@ -1175,72 +1175,44 @@ async def replace_canvas_scene(
 
 @app.post("/api/canvas/{project}/seed")
 async def seed_canvas(project: str) -> dict[str, Any]:
-    """Seed the dashboard with a Kanban Board widget rendered from live project data."""
+    """Seed the dashboard with default widgets (Stellar Command + Terminal).
+
+    Only seeds if the canvas is currently empty — avoids overwriting user changes.
+    Widget templates in backend/canvas_defaults/ use {{PROJECT}} placeholders
+    that are replaced with the actual project name at seed time.
+    """
     loop = asyncio.get_event_loop()
     proj = await loop.run_in_executor(None, projects_svc.get_project, project, [])
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    tasks = await loop.run_in_executor(None, tasks_svc.get_tasks, project)
-    broker: AgentBroker = app.state.broker
-    agents = [s.to_dict() for s in broker.get_sessions_for_project(project)]
+    # Skip if canvas already has widgets
+    existing = await loop.run_in_executor(None, canvas_service.get_widgets, project)
+    if existing:
+        return {"seeded": False, "count": 0, "reason": "canvas already has widgets"}
 
-    # Build kanban data from live agents + tasks
-    queued = []
-    in_progress = []
-    done_list = []
-
-    for a in agents:
-        phase = a.get("phase", "idle")
-        sid = (a.get("session_id") or "")[:8]
-        task_text = (a.get("task") or "")[:60]
-        is_ctrl = a.get("is_controller", False)
-        label = f"{'ctrl' if is_ctrl else 'agent'}-{sid}"
-
-        if phase in ("idle", "cancelled", "error"):
-            done_list.append({"agent": label, "task": task_text or "idle", "duration": "-", "result": "success" if phase == "idle" else phase})
-        elif phase in ("pending",):
-            queued.append({"agent": label, "task": task_text or "waiting", "wait_time": "-"})
-        else:
-            ms_count = len(a.get("milestones", []))
-            in_progress.append({"agent": label, "task": task_text or "working", "elapsed": "-", "progress": 50, "milestones": ms_count})
-
-    # Also map tasks without agents
-    for t in tasks:
-        st = t.get("status", "pending")
-        text = (t.get("text") or "")[:60]
-        if st == "done":
-            done_list.append({"agent": "-", "task": text, "duration": "-", "result": "success"})
-        elif st == "in_progress" and not any(text in (ip.get("task", "") for ip in in_progress)):
-            in_progress.append({"agent": "-", "task": text, "elapsed": "-", "progress": 30, "milestones": 0})
-        elif st == "pending":
-            queued.append({"agent": "-", "task": text, "wait_time": "-"})
-
-    kanban_data = {
-        "title": f"{project} Pipeline",
-        "queued": queued[:6],
-        "in_progress": in_progress[:6],
-        "done": done_list[:6],
-    }
-
-    KANBAN_TEMPLATE = "84f7d654"
-
+    import json as _json
+    defaults_dir = Path(__file__).parent / "canvas_defaults"
     widgets_created = []
-    # Create widget with template_id + template_data — canvas service auto-renders
-    w = WidgetCreate(
-        id="sys-agent-kanban",
-        title=f"{project} — Agent Pipeline",
-        template_id=KANBAN_TEMPLATE,
-        template_data=kanban_data,
-        col_span=2, row_span=1,
-    )
-    if True:
-        widget = await loop.run_in_executor(
-            None, canvas_service.upsert_widget, project, "sys-agent-kanban", w,
-        )
-        widgets_created.append(widget)
 
-    # Broadcast
+    for json_file in sorted(defaults_dir.glob("*.json")):
+        try:
+            raw = _json.loads(json_file.read_text("utf-8"))
+            # Replace {{PROJECT}} placeholder with actual project name
+            for field in ("js", "html", "css"):
+                if field in raw and raw[field]:
+                    raw[field] = raw[field].replace("{{PROJECT}}", project)
+
+            widget_id = raw.pop("id", json_file.stem)
+            w = WidgetCreate(**{k: v for k, v in raw.items() if k != "project"})
+            widget = await loop.run_in_executor(
+                None, canvas_service.upsert_widget, project, widget_id, w,
+            )
+            widgets_created.append(widget)
+        except Exception as exc:
+            print(f"[seed] failed to load {json_file.name}: {exc}")
+
+    # Broadcast new widgets
     for w in widgets_created:
         await ws_manager.broadcast(
             WSMessageType.CANVAS_WIDGET_CREATED,
