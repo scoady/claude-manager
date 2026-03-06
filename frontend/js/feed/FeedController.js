@@ -47,6 +47,9 @@ export class FeedController {
     this._onDeleteProject = onDeleteProject || null;
     this._dashboardCanvas = null;
     this._dashboardWidgetGrid = null;
+    this._canvasTab = 'main';    // active canvas tab
+    this._canvasTabs = ['main']; // known canvas tabs
+    this._canvasTabBar = null;   // tab bar DOM element
   }
 
   // ── Project ────────────────────────────────────────────────────────────────
@@ -63,6 +66,12 @@ export class FeedController {
     // 1. Header (tabs + dispatch composer)
     this._headerEl = this._buildHeader(project);
     this._el.appendChild(this._headerEl);
+
+    // 1b. Canvas tab bar — sits between header and grid
+    this._canvasTab = 'main';
+    this._canvasTabs = ['main'];
+    this._canvasTabBar = this._buildCanvasTabBar();
+    this._el.appendChild(this._canvasTabBar);
 
     // 2. Overview container — system strip + agent widget grid
     this._overviewContainer = document.createElement('div');
@@ -144,13 +153,29 @@ export class FeedController {
 
   async _loadDashboardWidgets(projectName) {
     try {
-      const resp = await fetch(`/api/canvas/${encodeURIComponent(projectName)}`);
+      // Fetch tabs list from backend to sync
+      try {
+        const tabsResp = await fetch(`/api/canvas/${encodeURIComponent(projectName)}/tabs`);
+        if (tabsResp.ok) {
+          const tabs = await tabsResp.json();
+          // Merge with locally known tabs (user may have created one not yet persisted)
+          const merged = new Set([...tabs, ...this._canvasTabs]);
+          this._canvasTabs = ['main', ...Array.from(merged).filter(t => t !== 'main').sort()];
+          this._renderCanvasTabs();
+        }
+      } catch (_) {}
+
+      // Fetch widgets for the active canvas tab
+      const tab = this._canvasTab || 'main';
+      const resp = await fetch(`/api/canvas/${encodeURIComponent(projectName)}?tab=${encodeURIComponent(tab)}`);
       const widgets = await resp.json();
       this._dashboardCanvas.clear();
       this._systemCanvas.clear();
 
-      // Always seed system widgets (they update from live data)
-      await this._seedDashboard(projectName);
+      // Only seed system widgets on the main tab
+      if (tab === 'main') {
+        await this._seedDashboard(projectName);
+      }
 
       for (const w of widgets) {
         if (!w.widget_id) w.widget_id = w.id;
@@ -239,6 +264,7 @@ export class FeedController {
       const body = {
         id: widgetId,
         title: template.name || 'Widget',
+        tab: this._canvasTab || 'main',
         template_id: templateId,
         template_data: template.preview_data || {},
         gs_w: Math.max(template.col_span || 1, 1) * 4,
@@ -266,14 +292,20 @@ export class FeedController {
   }
 
   async _clearAllWidgets(projectName) {
-    if (!confirm('Clear all dashboard widgets?')) return;
+    const tabLabel = this._canvasTab === 'main' ? 'Main' : this._canvasTab;
+    if (!confirm(`Clear all widgets on the "${tabLabel}" tab?`)) return;
     try {
-      await fetch(`/api/canvas/${encodeURIComponent(projectName)}`, {
-        method: 'DELETE',
-      });
+      // Fetch widgets for the current tab and delete them individually
+      const resp = await fetch(`/api/canvas/${encodeURIComponent(projectName)}?tab=${encodeURIComponent(this._canvasTab)}`);
+      const widgets = await resp.json();
+      for (const w of widgets) {
+        await fetch(`/api/canvas/${encodeURIComponent(projectName)}/widgets/${encodeURIComponent(w.id)}`, {
+          method: 'DELETE',
+        });
+      }
       this._dashboardCanvas?.clear();
       this._addTemplatePlaceholder(projectName);
-      toast('Dashboard cleared', 'success', 2000);
+      toast(`"${tabLabel}" tab cleared`, 'success', 2000);
     } catch (e) {
       toast(`Failed: ${e.message}`, 'error');
     }
@@ -302,6 +334,15 @@ export class FeedController {
       const w = data.widget ?? data;
       if (w.project && w.project !== this._project.name) return;
       if (w && !w.widget_id && w.id) w.widget_id = w.id;
+      // Track new tabs discovered from incoming widgets
+      const wTab = w.tab || 'main';
+      if (!this._canvasTabs.includes(wTab)) {
+        this._canvasTabs.push(wTab);
+        this._renderCanvasTabs();
+      }
+      // Only render widget if it belongs to the active canvas tab (or is a sys- widget)
+      const isSys = (w.widget_id || w.id)?.startsWith('sys-');
+      if (!isSys && wTab !== this._canvasTab) return;
       _engine(w.widget_id || w.id).create(w);
     } else if (type === 'canvas_widget_updated') {
       const widgetId = data.widget_id;
@@ -609,6 +650,176 @@ export class FeedController {
     }
   }
 
+  // ── Canvas Tab Bar ─────────────────────────────────────────────────────────
+
+  _buildCanvasTabBar() {
+    const bar = document.createElement('div');
+    bar.className = 'canvas-tab-bar';
+    this._renderCanvasTabs(bar);
+    return bar;
+  }
+
+  _renderCanvasTabs(bar) {
+    if (!bar) bar = this._canvasTabBar;
+    if (!bar) return;
+
+    bar.innerHTML = '';
+    for (const tab of this._canvasTabs) {
+      const btn = document.createElement('button');
+      btn.className = 'canvas-tab' + (tab === this._canvasTab ? ' active' : '');
+      btn.dataset.canvasTab = tab;
+      btn.textContent = tab === 'main' ? 'Main' : tab;
+
+      // Double-click to rename (except "main")
+      if (tab !== 'main') {
+        btn.addEventListener('dblclick', (e) => {
+          e.stopPropagation();
+          this._renameCanvasTab(tab, btn);
+        });
+
+        // Close button (visible on hover via CSS)
+        const closeBtn = document.createElement('span');
+        closeBtn.className = 'canvas-tab-close';
+        closeBtn.textContent = '\u00d7';
+        closeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._deleteCanvasTab(tab);
+        });
+        btn.appendChild(closeBtn);
+      }
+
+      btn.addEventListener('click', () => {
+        if (tab === this._canvasTab) return;
+        this._switchCanvasTab(tab);
+      });
+
+      // Right-click to rename (except "main")
+      if (tab !== 'main') {
+        btn.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          this._renameCanvasTab(tab, btn);
+        });
+      }
+
+      bar.appendChild(btn);
+    }
+
+    // Add tab button
+    const addBtn = document.createElement('button');
+    addBtn.className = 'canvas-tab-add';
+    addBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 1v8M1 5h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>';
+    addBtn.title = 'New canvas tab';
+    addBtn.addEventListener('click', () => this._addCanvasTab());
+    bar.appendChild(addBtn);
+  }
+
+  async _switchCanvasTab(tab) {
+    this._canvasTab = tab;
+    this._renderCanvasTabs();
+    await this._loadDashboardWidgets(this._project.name);
+  }
+
+  async _addCanvasTab() {
+    const name = prompt('New tab name:');
+    if (!name || !name.trim()) return;
+    const slug = name.trim();
+    if (this._canvasTabs.includes(slug)) {
+      toast('Tab already exists', 'warn', 2000);
+      return;
+    }
+    this._canvasTabs.push(slug);
+    this._canvasTab = slug;
+    this._renderCanvasTabs();
+    // Clear the grid for the new empty tab
+    this._dashboardCanvas?.clear();
+    this._addTemplatePlaceholder(this._project.name);
+  }
+
+  _renameCanvasTab(oldName, btnEl) {
+    // Replace button text with an inline input
+    const input = document.createElement('input');
+    input.className = 'canvas-tab-rename-input';
+    input.value = oldName;
+    input.size = Math.max(oldName.length, 4);
+
+    const closeEl = btnEl.querySelector('.canvas-tab-close');
+    btnEl.textContent = '';
+    btnEl.appendChild(input);
+    if (closeEl) btnEl.appendChild(closeEl);
+    input.focus();
+    input.select();
+
+    const commit = async () => {
+      const newName = input.value.trim();
+      if (!newName || newName === oldName) {
+        this._renderCanvasTabs();
+        return;
+      }
+      if (this._canvasTabs.includes(newName)) {
+        toast('Tab name already exists', 'warn', 2000);
+        this._renderCanvasTabs();
+        return;
+      }
+
+      // Rename: update all widgets on this tab via the API
+      const idx = this._canvasTabs.indexOf(oldName);
+      if (idx !== -1) this._canvasTabs[idx] = newName;
+      if (this._canvasTab === oldName) this._canvasTab = newName;
+
+      // Rename widgets on the backend
+      try {
+        const resp = await fetch(`/api/canvas/${encodeURIComponent(this._project.name)}?tab=${encodeURIComponent(oldName)}`);
+        const widgets = await resp.json();
+        for (const w of widgets) {
+          await fetch(`/api/canvas/${encodeURIComponent(this._project.name)}/widgets/${encodeURIComponent(w.id)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tab: newName }),
+          });
+        }
+      } catch (e) {
+        console.warn('[FeedController] Failed to rename tab widgets:', e);
+      }
+
+      this._renderCanvasTabs();
+    };
+
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+      if (e.key === 'Escape') { this._renderCanvasTabs(); }
+    });
+  }
+
+  async _deleteCanvasTab(tab) {
+    if (tab === 'main') return;
+    if (!confirm(`Delete tab "${tab}" and all its widgets?`)) return;
+
+    // Delete all widgets on this tab
+    try {
+      const resp = await fetch(`/api/canvas/${encodeURIComponent(this._project.name)}?tab=${encodeURIComponent(tab)}`);
+      const widgets = await resp.json();
+      for (const w of widgets) {
+        await fetch(`/api/canvas/${encodeURIComponent(this._project.name)}/widgets/${encodeURIComponent(w.id)}`, {
+          method: 'DELETE',
+        });
+      }
+    } catch (e) {
+      console.warn('[FeedController] Failed to delete tab widgets:', e);
+    }
+
+    const idx = this._canvasTabs.indexOf(tab);
+    if (idx !== -1) this._canvasTabs.splice(idx, 1);
+
+    // Switch to main if we deleted the active tab
+    if (this._canvasTab === tab) {
+      this._canvasTab = 'main';
+      await this._loadDashboardWidgets(this._project.name);
+    }
+    this._renderCanvasTabs();
+    toast(`Tab "${tab}" deleted`, 'success', 2000);
+  }
+
   // ── Sections ───────────────────────────────────────────────────────────────
 
   /** Create and append an AgentSection for a newly spawned agent. */
@@ -878,6 +1089,7 @@ export class FeedController {
         this._headerEl.querySelector('.skill-toggle-panel')?.classList.toggle('hidden', !showOverviewUI);
         this._headerEl.querySelector('.feed-save-layout-btn')?.classList.toggle('hidden', !showOverviewUI);
         this._headerEl.querySelector('.feed-clear-widgets-btn')?.classList.toggle('hidden', !showOverviewUI);
+        this._canvasTabBar?.classList.toggle('hidden', !showOverviewUI);
 
         // Stop panel refreshes
         this._milestonesPanel?.stopAutoRefresh();

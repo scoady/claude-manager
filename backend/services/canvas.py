@@ -79,10 +79,28 @@ class CanvasService:
 
     # ── public API ───────────────────────────────────────────────────────────
 
-    def get_widgets(self, project: str) -> list[WidgetState]:
-        """Return all widgets for a project, sorted by (grid_row, grid_col)."""
+    def get_widgets(self, project: str, tab: str | None = None) -> list[WidgetState]:
+        """Return widgets for a project, optionally filtered by tab.
+
+        If ``tab`` is None, returns all widgets across all tabs.
+        """
         store = self._project_store(project)
-        return sorted(store.values(), key=lambda w: (w.grid_row, w.grid_col))
+        widgets = store.values()
+        if tab is not None:
+            widgets = [w for w in widgets if getattr(w, "tab", "main") == tab]
+        return sorted(widgets, key=lambda w: (w.grid_row, w.grid_col))
+
+    def get_tabs(self, project: str) -> list[str]:
+        """Return a sorted list of unique tab names for a project.
+
+        Always includes 'main' as the first entry.
+        """
+        store = self._project_store(project)
+        tabs = set()
+        for w in store.values():
+            tabs.add(getattr(w, "tab", "main"))
+        tabs.discard("main")
+        return ["main"] + sorted(tabs)
 
     def upsert_widget(
         self,

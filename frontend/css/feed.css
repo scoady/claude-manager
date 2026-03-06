@@ -4494,3 +4494,112 @@
   background: transparent;
   padding: 0;
 }
+
+/* ─── Canvas Tab Bar ───────────────────────────────────────────────────────── */
+
+.canvas-tab-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 20px 2px;
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.canvas-tab-bar::-webkit-scrollbar { display: none; }
+.canvas-tab-bar.hidden { display: none; }
+
+.canvas-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 14px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 200ms ease, border-color 200ms ease, background 200ms ease;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+.canvas-tab:hover {
+  color: var(--text-secondary);
+  background: rgba(103, 232, 249, 0.04);
+}
+
+.canvas-tab.active {
+  color: var(--accent-cyan);
+  border-bottom-color: var(--accent-cyan);
+  text-shadow: 0 0 12px rgba(103, 232, 249, 0.35);
+}
+
+/* Close button — visible on hover only */
+.canvas-tab-close {
+  display: none;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--text-muted);
+  margin-left: 2px;
+  padding: 0 2px;
+  cursor: pointer;
+  transition: color 150ms ease;
+  font-family: var(--font-ui);
+}
+.canvas-tab:hover .canvas-tab-close { display: inline; }
+.canvas-tab-close:hover { color: var(--accent-red); }
+
+/* Add tab button */
+.canvas-tab-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px dashed var(--bg-border-dim);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  margin-left: 4px;
+  flex-shrink: 0;
+  transition: border-color 200ms ease, color 200ms ease, background 200ms ease;
+}
+.canvas-tab-add:hover {
+  border-color: rgba(103, 232, 249, 0.3);
+  color: var(--accent-cyan);
+  background: rgba(103, 232, 249, 0.06);
+}
+
+/* Inline rename input */
+.canvas-tab-rename-input {
+  background: var(--bg-surface);
+  border: 1px solid var(--accent-cyan);
+  border-radius: 3px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 4px;
+  width: 80px;
+  outline: none;
+  box-shadow: 0 0 8px rgba(103, 232, 249, 0.2);
+}
+
+/* Subtle divider under the tab bar */
+.canvas-tab-bar::after {
+  content: '';
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 0;
+  height: 1px;
+  background: var(--bg-border-dim);
+  pointer-events: none;
+}

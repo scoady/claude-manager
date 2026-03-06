@@ -47,13 +47,22 @@ def list_templates() -> list[dict[str, Any]]:
 def get_template(template_id: str) -> dict[str, Any] | None:
     """Return a full template by ID (including html/css/js)."""
     _ensure_dir()
+    # Try direct filename match first
     path = TEMPLATES_DIR / f"{template_id}.json"
-    if not path.exists():
-        return None
-    try:
-        return json.loads(path.read_text("utf-8"))
-    except Exception:
-        return None
+    if path.exists():
+        try:
+            return json.loads(path.read_text("utf-8"))
+        except Exception:
+            return None
+    # Fall back to scanning files for matching id field
+    for f in TEMPLATES_DIR.glob("*.json"):
+        try:
+            data = json.loads(f.read_text("utf-8"))
+            if data.get("id") == template_id:
+                return data
+        except Exception:
+            continue
+    return None
 
 
 def save_template(template: dict[str, Any]) -> dict[str, Any]:

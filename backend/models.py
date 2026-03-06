@@ -317,6 +317,7 @@ class WidgetState(BaseModel):
     html: str = ""
     css: str = ""
     js: str = ""
+    tab: str = "main"  # canvas tab this widget belongs to
     template_id: str | None = None  # widget catalog template used to render
     template_data: dict | None = None  # raw data passed to the template
     grid_col: int = 1
@@ -340,6 +341,7 @@ class WidgetCreate(BaseModel):
     html: str = ""
     css: str = ""
     js: str = ""
+    tab: str = "main"  # canvas tab this widget belongs to
     template_id: str | None = None
     template_data: dict | None = None
     grid_col: int = 1
@@ -359,6 +361,7 @@ class WidgetUpdate(BaseModel):
     html: str | None = None
     css: str | None = None
     js: str | None = None
+    tab: str | None = None  # canvas tab this widget belongs to
     template_id: str | None = None
     template_data: dict | None = None
     grid_col: int | None = None

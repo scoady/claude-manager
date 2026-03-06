@@ -1101,9 +1101,15 @@ async def get_project_git_status(name: str) -> dict[str, str]:
 
 
 @app.get("/api/canvas/{project}", response_model=list[WidgetState])
-async def list_canvas_widgets(project: str) -> list[WidgetState]:
+async def list_canvas_widgets(project: str, tab: str | None = None) -> list[WidgetState]:
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, canvas_service.get_widgets, project)
+    return await loop.run_in_executor(None, canvas_service.get_widgets, project, tab)
+
+
+@app.get("/api/canvas/{project}/tabs")
+async def list_canvas_tabs(project: str) -> list[str]:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, canvas_service.get_tabs, project)
 
 
 @app.post("/api/canvas/{project}/widgets", response_model=WidgetState, status_code=201)
@@ -1268,7 +1274,10 @@ OUTPUT FORMAT — respond with ONLY a JSON object, no markdown, no explanation:
 
 - html: the widget interior HTML
 - css: CSS scoped to your widget (will be auto-prefixed with a data-attribute selector)
-- js: code that receives (root, host) — runs once after HTML is inserted
+- js: a BARE function body that receives (root, host) — runs via new Function('root','host',js)
+  CRITICAL: Do NOT wrap in (function(root,host){...}) or any IIFE. Just write the bare code.
+  WRONG: (function(root,host){ const c = ... })
+  RIGHT: const c = document.createElement('canvas'); root.appendChild(c); ...
 - title: short widget title for the header bar
 - col_span/row_span: grid size (1-3 cols, 1-2 rows)
 """
@@ -1330,13 +1339,28 @@ async def design_widget(project: str, body: dict[str, Any]) -> dict[str, Any]:
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Design agent failed: {exc}")
 
+    # Strip IIFE wrappers — widget JS runs via new Function('root','host',js)
+    # so it's already in a function body. IIFEs shadow the root/host params.
+    js_code = widget_def.get("js", "")
+    if js_code:
+        stripped = js_code.strip()
+        # Match: (function(root, host) { ... }) or (function(root,host){...})(root,host);
+        import re as _re
+        iife_match = _re.match(
+            r'^\(function\s*\(\s*root\s*,\s*host\s*\)\s*\{(.*)\}\s*\)\s*(?:\(\s*root\s*,\s*host\s*\)\s*)?;?\s*$',
+            stripped,
+            _re.DOTALL,
+        )
+        if iife_match:
+            js_code = iife_match.group(1).strip()
+
     # Create the widget
     w = WidgetCreate(
         id=widget_id,
         title=widget_def.get("title", "Designed Widget"),
         html=widget_def.get("html", ""),
         css=widget_def.get("css", ""),
-        js=widget_def.get("js", ""),
+        js=js_code,
         col_span=widget_def.get("col_span", 1),
         row_span=widget_def.get("row_span", 1),
     )
