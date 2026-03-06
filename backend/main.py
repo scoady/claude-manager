@@ -1366,6 +1366,79 @@ async def save_layout(project: str, body: list[dict[str, Any]]) -> dict[str, boo
     return {"ok": True}
 
 
+# ── Widget Templates ──────────────────────────────────────────────────────────
+
+_TEMPLATES_DIR = Path.home() / ".claude" / "canvas" / "templates"
+
+
+@app.get("/api/canvas/templates")
+async def list_widget_templates() -> list[dict[str, Any]]:
+    """List all saved widget templates."""
+    _TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
+    templates = []
+    for f in sorted(_TEMPLATES_DIR.glob("*.json")):
+        try:
+            data = json.loads(f.read_text("utf-8"))
+            templates.append({
+                "filename": f.name,
+                "id": data.get("id", f.stem),
+                "title": data.get("title", f.stem),
+                "gs_w": data.get("gs_w"),
+                "gs_h": data.get("gs_h"),
+            })
+        except Exception:
+            pass
+    return templates
+
+
+@app.post("/api/canvas/templates")
+async def save_widget_template(body: dict[str, Any]) -> dict[str, Any]:
+    """Save a widget as a reusable template. Body is the full widget JSON."""
+    _TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
+    widget_id = body.get("id", body.get("widget_id", "untitled"))
+    source_project = body.pop("_source_project", body.pop("project", None))
+    # Replace project-specific references with {{PROJECT}} for reusability
+    for field in ("js", "html", "css"):
+        if field in body and body[field] and source_project:
+            body[field] = body[field].replace(source_project, "{{PROJECT}}")
+    filename = f"{widget_id}.json"
+    path = _TEMPLATES_DIR / filename
+    path.write_text(json.dumps(body, indent=2), encoding="utf-8")
+    return {"ok": True, "filename": filename, "path": str(path)}
+
+
+@app.post("/api/canvas/{project}/widgets/{widget_id}/paste-template")
+async def paste_template_to_widget(
+    project: str, widget_id: str, body: dict[str, Any]
+) -> WidgetState:
+    """Paste a template into a project, replacing {{PROJECT}} with the project name."""
+    template_filename = body.get("template")
+    if not template_filename:
+        raise HTTPException(400, "template filename required")
+    path = _TEMPLATES_DIR / template_filename
+    if not path.exists():
+        raise HTTPException(404, "Template not found")
+    data = json.loads(path.read_text("utf-8"))
+    # Replace placeholder
+    for field in ("js", "html", "css"):
+        if field in data and data[field]:
+            data[field] = data[field].replace("{{PROJECT}}", project)
+    data.pop("id", None)
+    data.pop("project", None)
+    data.pop("_source_project", None)
+    data.pop("_collected_at", None)
+    w = WidgetCreate(**{k: v for k, v in data.items() if k not in ("created_at", "updated_at")})
+    loop = asyncio.get_event_loop()
+    widget = await loop.run_in_executor(
+        None, canvas_service.upsert_widget, project, widget_id, w,
+    )
+    await ws_manager.broadcast(
+        WSMessageType.CANVAS_WIDGET_CREATED,
+        {"widget": widget.model_dump(mode="json")},
+    )
+    return widget
+
+
 @app.get("/api/canvas/{project}/contract")
 async def get_dashboard_contract(project: str) -> dict[str, Any]:
     """Return the dashboard data contract — widget schemas for structured data requests."""

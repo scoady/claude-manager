@@ -32,6 +32,7 @@ export class WidgetFrame {
     this._customStyleEl = null;
 
     this._build();
+    this._setupContextMenu();
   }
 
   /** The outer host element that goes into the grid. */
@@ -270,6 +271,199 @@ export class WidgetFrame {
     void this._hostEl.offsetWidth;
     this._hostEl.classList.remove('entering');
     this._hostEl.classList.add('visible');
+  }
+
+  // ── Context Menu (right-click) ─────────────────────────────────────────────
+
+  _setupContextMenu() {
+    this._hostEl.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this._showContextMenu(e.clientX, e.clientY);
+    });
+  }
+
+  _showContextMenu(x, y) {
+    // Remove any existing menu
+    document.querySelector('.wf-ctx-menu')?.remove();
+
+    const menu = document.createElement('div');
+    menu.className = 'wf-ctx-menu';
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+
+    const items = [
+      { label: 'Copy Widget', icon: '\u2398', action: () => this._copyWidget() },
+      { label: 'Save as Template', icon: '\u2605', action: () => this._saveAsTemplate() },
+      { label: 'Paste from Template\u2026', icon: '\u2913', action: () => this._pasteFromTemplate() },
+      null, // separator
+      { label: 'Copy JSON', icon: '{}', action: () => this._copyJSON() },
+    ];
+
+    items.forEach(item => {
+      if (!item) {
+        const sep = document.createElement('div');
+        sep.className = 'wf-ctx-sep';
+        menu.appendChild(sep);
+        return;
+      }
+      const el = document.createElement('div');
+      el.className = 'wf-ctx-item';
+      el.innerHTML = `<span class="wf-ctx-icon">${item.icon}</span>${item.label}`;
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        menu.remove();
+        item.action();
+      });
+      menu.appendChild(el);
+    });
+
+    document.body.appendChild(menu);
+
+    // Keep menu in viewport
+    requestAnimationFrame(() => {
+      const rect = menu.getBoundingClientRect();
+      if (rect.right > window.innerWidth) menu.style.left = `${x - rect.width}px`;
+      if (rect.bottom > window.innerHeight) menu.style.top = `${y - rect.height}px`;
+    });
+
+    // Close on click outside
+    const close = () => { menu.remove(); document.removeEventListener('click', close); };
+    setTimeout(() => document.addEventListener('click', close), 0);
+  }
+
+  _getWidgetData() {
+    return {
+      id: this._def.widget_id,
+      title: this._def.title || '',
+      html: this._def.html || '',
+      css: this._def.css || '',
+      js: this._def.js || '',
+      gs_w: this._def.gs_w,
+      gs_h: this._def.gs_h,
+      gs_x: this._def.gs_x,
+      gs_y: this._def.gs_y,
+      no_resize: this._def.no_resize,
+      no_move: this._def.no_move,
+    };
+  }
+
+  async _copyWidget() {
+    // Store in a global clipboard for paste across widgets
+    window.__widgetClipboard = this._getWidgetData();
+    this._toast('Widget copied');
+  }
+
+  async _copyJSON() {
+    const data = this._getWidgetData();
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+      this._toast('JSON copied to clipboard');
+    } catch {
+      window.__widgetClipboard = data;
+      this._toast('Widget copied (clipboard unavailable)');
+    }
+  }
+
+  async _saveAsTemplate() {
+    const data = this._getWidgetData();
+    // Get the project from the nearest canvas context
+    const project = this._hostEl.closest('[data-project]')?.dataset.project
+      || document.querySelector('[data-active-project]')?.dataset.activeProject
+      || '';
+    data._source_project = project;
+    try {
+      const resp = await fetch('/api/canvas/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (resp.ok) {
+        this._toast(`Saved template: ${data.id}`);
+      } else {
+        this._toast('Failed to save template', true);
+      }
+    } catch {
+      this._toast('Failed to save template', true);
+    }
+  }
+
+  async _pasteFromTemplate() {
+    try {
+      const resp = await fetch('/api/canvas/templates');
+      if (!resp.ok) return;
+      const templates = await resp.json();
+      if (!templates.length) {
+        this._toast('No templates saved');
+        return;
+      }
+      this._showTemplatePicker(templates);
+    } catch {
+      this._toast('Failed to load templates', true);
+    }
+  }
+
+  _showTemplatePicker(templates) {
+    document.querySelector('.wf-tpl-picker')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'wf-tpl-picker';
+
+    const panel = document.createElement('div');
+    panel.className = 'wf-tpl-panel';
+    panel.innerHTML = '<div class="wf-tpl-title">Paste from Template</div>';
+
+    const list = document.createElement('div');
+    list.className = 'wf-tpl-list';
+
+    templates.forEach(t => {
+      const item = document.createElement('div');
+      item.className = 'wf-tpl-item';
+      item.innerHTML = `<span class="wf-tpl-name">${this._escapeHtml(t.title || t.id)}</span>
+        <span class="wf-tpl-size">${t.gs_w || '?'}\u00d7${t.gs_h || '?'}</span>`;
+      item.addEventListener('click', () => {
+        overlay.remove();
+        this._applyTemplate(t.filename);
+      });
+      list.appendChild(item);
+    });
+
+    panel.appendChild(list);
+    overlay.appendChild(panel);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+  }
+
+  async _applyTemplate(filename) {
+    const project = this._hostEl.closest('[data-project]')?.dataset.project
+      || document.querySelector('[data-active-project]')?.dataset.activeProject
+      || '';
+    try {
+      const resp = await fetch(
+        `/api/canvas/${encodeURIComponent(project)}/widgets/${encodeURIComponent(this._def.widget_id)}/paste-template`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ template: filename }),
+        }
+      );
+      if (resp.ok) {
+        this._toast('Template applied');
+      } else {
+        this._toast('Failed to apply template', true);
+      }
+    } catch {
+      this._toast('Failed to apply template', true);
+    }
+  }
+
+  _toast(msg, isError = false) {
+    const el = document.createElement('div');
+    el.className = 'wf-toast' + (isError ? ' wf-toast-err' : '');
+    el.textContent = msg;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('wf-toast-show'));
+    setTimeout(() => { el.classList.remove('wf-toast-show'); setTimeout(() => el.remove(), 300); }, 2000);
   }
 
   /**

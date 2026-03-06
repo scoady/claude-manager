@@ -78,6 +78,7 @@ export class FeedController {
     // 2b. Agent widget grid (agent-controlled, drag/resize via GridStack)
     this._dashboardWidgetGrid = document.createElement('div');
     this._dashboardWidgetGrid.className = 'dashboard-widget-grid';
+    this._dashboardWidgetGrid.dataset.activeProject = project.name;
     this._overviewContainer.appendChild(this._dashboardWidgetGrid);
     this._dashboardCanvas = new CanvasEngine(null, {
       onRemove: (widgetId) => this._deleteWidget(project.name, widgetId),
