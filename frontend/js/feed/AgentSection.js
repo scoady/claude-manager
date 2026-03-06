@@ -391,7 +391,7 @@ export class AgentSection {
       }
 
       if (summary) {
-        const card = this.el.querySelector('.agent-status-card');
+        const card = this.el.querySelector('.agent-live-content > .agent-status-card');
         if (card) {
           card.innerHTML = renderMarkdown(summary);
           card.classList.remove('hidden');
@@ -490,7 +490,7 @@ export class AgentSection {
   /** Render a structured subagent result as checklist + collapsed detail. */
   setSubagentResult(resultText) {
     const { items, detail } = parseSubagentResult(resultText);
-    const card = this.el.querySelector('.agent-status-card');
+    const card = this.el.querySelector('.agent-live-content > .agent-status-card');
     if (!card) return;
 
     // Hide stream area
@@ -617,7 +617,21 @@ export class AgentSection {
 
   /** Update the status card with rendered markdown from accumulated text. */
   updateStatusCard() {
-    const card = this.el.querySelector('.agent-status-card');
+    // Controllers keep the live stream area visible — no summary card swap.
+    // The stream area already contains the full rendered markdown output.
+    if (this._isController) {
+      // Just update the raw log and show the detail toggle
+      const rawPre = this.el.querySelector('.agent-raw-pre');
+      if (rawPre) rawPre.innerHTML = renderMarkdown(this._streamText);
+      this._lastCardIndex = this._streamText.length;
+      const toggle = this.el.querySelector('.agent-detail-toggle');
+      if (toggle) toggle.classList.remove('hidden');
+      return;
+    }
+
+    // Target the template card (outside .agent-stream-area), not dynamically
+    // created cards inside the stream area.
+    const card = this.el.querySelector('.agent-live-content > .agent-status-card');
     if (!card) return;
 
     const newText = this._streamText.slice(this._lastCardIndex).trim();
@@ -720,7 +734,7 @@ export class AgentSection {
     // When resuming work from idle, switch back to live stream view
     if (prevPhase === 'idle' && !['idle', 'cancelled', 'error'].includes(phase)) {
       const streamArea = this.el.querySelector('.agent-stream-area');
-      const card = this.el.querySelector('.agent-status-card');
+      const card = this.el.querySelector('.agent-live-content > .agent-status-card');
       const toggle = this.el.querySelector('.agent-detail-toggle');
       const rawLog = this.el.querySelector('.agent-raw-log');
       streamArea?.classList.remove('hidden');
