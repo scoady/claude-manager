@@ -6,6 +6,7 @@ import { MilestonesPanel } from './MilestonesPanel.js';
 import { WorkflowPanel } from './WorkflowPanel.js';
 import { ArtifactsPanel } from './ArtifactsPanel.js';
 import { CronPanel } from './CronPanel.js';
+import { EditorPanel } from './EditorPanel.js';
 import { renderMarkdown } from './MarkdownRenderer.js';
 import { CanvasEngine } from '../canvas/CanvasEngine.js';
 import { api } from '../api.js';
@@ -141,6 +142,15 @@ export class FeedController {
     if (this._artifactsPanel) this._artifactsPanel.destroy();
     this._artifactsPanel = new ArtifactsPanel(project.name);
     this._artifactsContainer.appendChild(this._artifactsPanel.el);
+
+    // 6b. Editor container (hidden by default)
+    this._editorContainer = document.createElement('div');
+    this._editorContainer.className = 'feed-editor-container hidden';
+    this._el.appendChild(this._editorContainer);
+
+    if (this._editorPanel) this._editorPanel.destroy();
+    this._editorPanel = new EditorPanel(project.name);
+    this._editorContainer.appendChild(this._editorPanel.el);
 
     // 7. Cron container (hidden by default)
     this._cronContainer = document.createElement('div');
@@ -409,6 +419,7 @@ export class FeedController {
         <button class="feed-tab" data-feed-tab="milestones">Milestones</button>
         <button class="feed-tab" data-feed-tab="workflow">Workflow</button>
         <button class="feed-tab" data-feed-tab="artifacts">Artifacts</button>
+        <button class="feed-tab" data-feed-tab="editor">Editor</button>
         <button class="feed-tab" data-feed-tab="cron">Cron</button>
         <button class="feed-save-layout-btn" title="Save dashboard layout">
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
@@ -1123,6 +1134,7 @@ export class FeedController {
         this._milestonesContainer?.classList.add('hidden');
         this._workflowContainer?.classList.add('hidden');
         this._artifactsContainer?.classList.add('hidden');
+        this._editorContainer?.classList.add('hidden');
         this._cronContainer?.classList.add('hidden');
 
         // Overview-only UI elements
@@ -1154,6 +1166,9 @@ export class FeedController {
         } else if (tabName === 'artifacts') {
           this._artifactsContainer?.classList.remove('hidden');
           this._artifactsPanel?.load();
+        } else if (tabName === 'editor') {
+          this._editorContainer?.classList.remove('hidden');
+          this._editorPanel?.load();
         } else if (tabName === 'cron') {
           this._cronContainer?.classList.remove('hidden');
           this._cronPanel?.load();
