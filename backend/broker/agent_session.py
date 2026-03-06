@@ -101,6 +101,10 @@ class AgentSession:
     _pending_agent_tools: dict[str, dict[str, Any]] = field(default_factory=dict, repr=False)
     _subagent_captured_this_cycle: bool = field(default=False, repr=False)
     _cycle_start_time: str | None = field(default=None, repr=False)
+    # Partial message streaming state
+    _current_tool_name: str | None = field(default=None, repr=False)
+    _current_tool_id: str | None = field(default=None, repr=False)
+    _tool_input_buf: str = field(default="", repr=False)
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -231,7 +235,8 @@ class AgentSession:
         self._cycle_start_time = datetime.now(timezone.utc).isoformat()
         self._subagent_captured_this_cycle = False
 
-        cmd = [CLAUDE_BIN, "--print", "--output-format", "stream-json", "--verbose",
+        cmd = [CLAUDE_BIN, "--print", "--output-format", "stream-json",
+               "--verbose", "--include-partial-messages",
                "--permission-mode", "acceptEdits"]
 
         if resume and self._cli_session_id:
@@ -355,9 +360,12 @@ class AgentSession:
 
     # ── Stream event handling ──────────────────────────────────────────────────
     #
-    # With --verbose (no --include-partial-messages), the CLI emits high-level
-    # events:  system → assistant → user → assistant → ... → result
-    # Each "assistant" event contains the full message with content blocks.
+    # With --include-partial-messages, the CLI emits both high-level events
+    # (system, assistant, user, result) AND granular partial events
+    # (content_block_start, content_block_delta, content_block_stop,
+    # message_start, message_stop).  We use the partial events for real-time
+    # text streaming and milestone extraction, and still handle full assistant/
+    # user events for tool_use finalization and subagent lifecycle.
 
     async def _handle_stream_event(self, event: dict[str, Any]) -> None:
         """Process one stream-json event from the claude subprocess."""
@@ -370,7 +378,130 @@ class AgentSession:
                 self._cli_session_id = cli_sid
             return
 
-        # ── Assistant message — contains text, tool_use, thinking blocks ──────
+        # ── Partial streaming: content_block_start ────────────────────────────
+        if etype == "content_block_start":
+            block = event.get("content_block", {})
+            btype = block.get("type", "")
+            if btype == "tool_use":
+                self._current_tool_name = block.get("name", "tool")
+                self._current_tool_id = block.get("id", "")
+                self._tool_input_buf = ""
+                await self._set_phase(SessionPhase.TOOL_INPUT)
+            elif btype == "thinking":
+                await self._set_phase(SessionPhase.THINKING)
+            elif btype == "text":
+                await self._set_phase(SessionPhase.GENERATING)
+            return
+
+        # ── Partial streaming: content_block_delta ────────────────────────────
+        if etype == "content_block_delta":
+            delta = event.get("delta", {})
+            dtype = delta.get("type", "")
+
+            if dtype == "text_delta":
+                chunk = delta.get("text", "")
+                if chunk:
+                    self.last_text_chunk = chunk
+                    if self.on_text_delta:
+                        await self.on_text_delta(self.session_id, chunk)
+            elif dtype == "input_json_delta":
+                self._tool_input_buf += delta.get("partial_json", "")
+            elif dtype == "thinking_delta":
+                # Keep phase as thinking — no text to emit
+                pass
+            return
+
+        # ── Partial streaming: content_block_stop ─────────────────────────────
+        if etype == "content_block_stop":
+            if self._current_tool_name:
+                # Finalize tool use — parse accumulated input JSON
+                tool_name = self._current_tool_name
+                tool_id = self._current_tool_id or ""
+                try:
+                    tool_input = json.loads(self._tool_input_buf) if self._tool_input_buf else {}
+                except json.JSONDecodeError:
+                    tool_input = {}
+
+                await self._set_phase(SessionPhase.TOOL_EXEC)
+
+                milestone = _format_milestone(tool_name, tool_input)
+                self.milestones.append(milestone)
+                if len(self.milestones) > 20:
+                    self.milestones.pop(0)
+
+                tool_event = {
+                    "session_id": self.session_id,
+                    "tool_use_id": tool_id,
+                    "tool_name": tool_name,
+                    "tool_input": tool_input,
+                    "started_at": datetime.now(timezone.utc).isoformat(),
+                }
+
+                # Agent tool → track for subagent lifecycle
+                if tool_name == "Agent":
+                    self._pending_agent_tools[tool_id] = tool_event.copy()
+                    if self.on_subagent_spawned:
+                        await self.on_subagent_spawned(
+                            self.session_id, tool_id, tool_input
+                        )
+                else:
+                    # TodoWrite/TaskCreate while subagent active → forward task list
+                    if (
+                        tool_name in ("TodoWrite", "TaskCreate", "TaskUpdate")
+                        and self._pending_agent_tools
+                        and self.on_subagent_tasks
+                    ):
+                        active_tool_id = next(iter(self._pending_agent_tools))
+                        todos = tool_input.get("todos", [])
+                        if not todos and tool_name in ("TaskCreate", "TaskUpdate"):
+                            todos = [{
+                                "content": tool_input.get("subject", ""),
+                                "status": tool_input.get("status", "pending"),
+                                "activeForm": tool_input.get("activeForm", ""),
+                            }]
+                        if todos:
+                            await self.on_subagent_tasks(
+                                self.session_id, active_tool_id, todos
+                            )
+
+                    # Tag with parent subagent tool_use_id for frontend routing
+                    if self._pending_agent_tools:
+                        tool_event["parent_tool_use_id"] = next(
+                            iter(self._pending_agent_tools)
+                        )
+
+                    if self.on_tool_start:
+                        await self.on_tool_start(self.session_id, tool_event)
+                    if self.on_tool_done:
+                        tool_event["finished_at"] = datetime.now(timezone.utc).isoformat()
+                        await self.on_tool_done(self.session_id, tool_event)
+
+                self.output_buffer.append({
+                    "role": "assistant",
+                    "type": "tool_use",
+                    "tool_name": tool_name,
+                    "tool_id": tool_id,
+                    "tool_input": tool_input,
+                })
+
+                self._current_tool_name = None
+                self._current_tool_id = None
+                self._tool_input_buf = ""
+            return
+
+        # ── message_start — extract model ─────────────────────────────────────
+        if etype == "message_start":
+            msg = event.get("message", {})
+            model = msg.get("model")
+            if model and model != "<synthetic>":
+                self.model = model
+            return
+
+        # ── message_stop — no-op, process exit handles lifecycle ──────────────
+        if etype == "message_stop":
+            return
+
+        # ── Assistant message (full) — used for output_buffer text blocks ─────
         if etype == "assistant":
             msg = event.get("message", {})
             model = msg.get("model")
@@ -381,89 +512,17 @@ class AgentSession:
             for block in content:
                 btype = block.get("type", "")
 
-                if btype == "thinking":
-                    await self._set_phase(SessionPhase.THINKING)
-
-                elif btype == "text":
+                # Text blocks: add to output_buffer (already streamed via deltas)
+                if btype == "text":
                     text = block.get("text", "")
                     if text:
-                        self.last_text_chunk = text
-                        await self._set_phase(SessionPhase.GENERATING)
-                        if self.on_text_delta:
-                            await self.on_text_delta(self.session_id, text)
                         self.output_buffer.append({
                             "role": "assistant",
                             "type": "text",
                             "content": text,
                         })
 
-                elif btype == "tool_use":
-                    tool_name = block.get("name", "tool")
-                    tool_input = block.get("input", {})
-                    tool_id = block.get("id", "")
-
-                    await self._set_phase(SessionPhase.TOOL_EXEC)
-
-                    milestone = _format_milestone(tool_name, tool_input)
-                    self.milestones.append(milestone)
-                    if len(self.milestones) > 20:
-                        self.milestones.pop(0)
-
-                    tool_event = {
-                        "session_id": self.session_id,
-                        "tool_use_id": tool_id,
-                        "tool_name": tool_name,
-                        "tool_input": tool_input,
-                        "started_at": datetime.now(timezone.utc).isoformat(),
-                    }
-
-                    # Agent tool → track for subagent lifecycle
-                    if tool_name == "Agent":
-                        self._pending_agent_tools[tool_id] = tool_event.copy()
-                        if self.on_subagent_spawned:
-                            await self.on_subagent_spawned(
-                                self.session_id, tool_id, tool_input
-                            )
-                    # Normal tools → fire start+done immediately
-                    else:
-                        # TodoWrite/TaskCreate while subagent active → forward task list
-                        if (
-                            tool_name in ("TodoWrite", "TaskCreate", "TaskUpdate")
-                            and self._pending_agent_tools
-                            and self.on_subagent_tasks
-                        ):
-                            active_tool_id = next(iter(self._pending_agent_tools))
-                            todos = tool_input.get("todos", [])
-                            if not todos and tool_name in ("TaskCreate", "TaskUpdate"):
-                                todos = [{
-                                    "content": tool_input.get("subject", ""),
-                                    "status": tool_input.get("status", "pending"),
-                                    "activeForm": tool_input.get("activeForm", ""),
-                                }]
-                            if todos:
-                                await self.on_subagent_tasks(
-                                    self.session_id, active_tool_id, todos
-                                )
-
-                        # Tag with parent subagent tool_use_id for frontend routing
-                        if self._pending_agent_tools:
-                            tool_event["parent_tool_use_id"] = next(
-                                iter(self._pending_agent_tools)
-                            )
-
-                        if self.on_tool_start:
-                            await self.on_tool_start(self.session_id, tool_event)
-                        if self.on_tool_done:
-                            tool_event["finished_at"] = datetime.now(timezone.utc).isoformat()
-                            await self.on_tool_done(self.session_id, tool_event)
-
-                    self.output_buffer.append({
-                        "role": "assistant",
-                        "type": "tool_use",
-                        "tool_name": tool_name,
-                        "tool_id": tool_id,
-                        "tool_input": tool_input,
-                    })
+                # tool_use blocks already handled by content_block_stop
             return
 
         # ── User message (tool results from CLI) ─────────────────────────────

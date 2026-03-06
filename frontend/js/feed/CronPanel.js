@@ -107,7 +107,19 @@ export class CronPanel {
   async _refreshJobs() {
     try {
       this._jobs = await api.getCronJobs(this._project);
-      this._renderContent();
+      // Only update timeline + job list — preserve form input state
+      const body = this._el.querySelector('.cron-body');
+      if (!body) return;
+      const sortedJobs = [...this._jobs].sort((a, b) => {
+        if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
+        return (a.next_run || '').localeCompare(b.next_run || '');
+      });
+      const timeline = body.querySelector('.cron-timeline');
+      if (timeline) timeline.outerHTML = this._renderTimeline(sortedJobs);
+      const jobList = body.querySelector('.cron-job-list');
+      if (jobList) jobList.outerHTML = this._renderJobList(sortedJobs);
+      this._bindJobEvents(body);
+      this._startTimelineAnimation(body);
     } catch (_) {}
   }
 
@@ -266,13 +278,15 @@ export class CronPanel {
   _renderJobList(jobs) {
     if (!jobs.length) {
       return `
-        <div class="cron-empty">
-          <svg width="36" height="36" viewBox="0 0 36 36" fill="none" opacity="0.3">
-            <circle cx="18" cy="18" r="14" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M18 10v9l5 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <div class="cron-empty-text">No scheduled jobs yet</div>
-          <div class="cron-empty-sub">Create a job to automate agent tasks on a schedule</div>
+        <div class="cron-job-list">
+          <div class="cron-empty">
+            <svg width="36" height="36" viewBox="0 0 36 36" fill="none" opacity="0.3">
+              <circle cx="18" cy="18" r="14" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M18 10v9l5 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <div class="cron-empty-text">No scheduled jobs yet</div>
+            <div class="cron-empty-sub">Create a job to automate agent tasks on a schedule</div>
+          </div>
         </div>
       `;
     }
