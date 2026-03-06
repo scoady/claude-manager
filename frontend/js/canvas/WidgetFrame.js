@@ -108,20 +108,51 @@ export class WidgetFrame {
    */
   _scopeCSS(css) {
     const scope = `[data-widget-id="${this._def.widget_id}"]`;
-    // Handle @keyframes — leave them unscoped (they're name-isolated)
-    return css.replace(
-      /([^@{}]+)\{/g,
-      (match, selector) => {
-        // Don't scope @-rules or closing braces
-        if (selector.trim().startsWith('@') || selector.trim() === '') return match;
-        // Scope each comma-separated selector
-        const scoped = selector
-          .split(',')
-          .map(s => `${scope} ${s.trim()}`)
-          .join(', ');
-        return `${scoped} {`;
+    // Parse CSS tracking brace depth. Scope top-level selectors and selectors
+    // inside @media/@supports, but NOT keyframe stops inside @keyframes blocks.
+    let result = '';
+    let i = 0;
+    let depth = 0;
+    let kfDepth = -1; // depth at which @keyframes block opened (-1 = not inside)
+
+    while (i < css.length) {
+      const openIdx = css.indexOf('{', i);
+      const closeIdx = css.indexOf('}', i);
+
+      if (openIdx === -1 && closeIdx === -1) {
+        result += css.slice(i);
+        break;
       }
-    );
+
+      if (openIdx !== -1 && (closeIdx === -1 || openIdx < closeIdx)) {
+        const before = css.slice(i, openIdx);
+        const trimmed = before.trim();
+
+        if (trimmed.startsWith('@')) {
+          if (/^@keyframes\b/.test(trimmed)) kfDepth = depth;
+          result += before + '{';
+        } else if (trimmed && kfDepth === -1) {
+          // Normal selector outside @keyframes — scope it
+          const scoped = trimmed
+            .split(',')
+            .map(s => `${scope} ${s.trim()}`)
+            .join(', ');
+          result += scoped + ' {';
+        } else {
+          // Inside @keyframes (percentages/from/to) or empty — pass through
+          result += before + '{';
+        }
+        depth++;
+        i = openIdx + 1;
+      } else {
+        const before = css.slice(i, closeIdx);
+        result += before + '}';
+        depth--;
+        if (depth === kfDepth) kfDepth = -1;
+        i = closeIdx + 1;
+      }
+    }
+    return result;
   }
 
   // ── Content injection ────────────────────────────────────────────────────────
@@ -138,14 +169,26 @@ export class WidgetFrame {
   }
 
   _execJS(code) {
-    try {
-      // Run in the context of the content element.
-      // eslint-disable-next-line no-new-func
-      const fn = new Function('root', 'host', code);
-      fn(this._contentEl, this._hostEl);
-    } catch (err) {
-      this._renderError(err);
-    }
+    // Defer execution until the element is in the DOM and has layout dimensions.
+    // Widget JS (e.g. canvas-based renderers) often calls getBoundingClientRect()
+    // immediately, which returns {0,0} if the element isn't laid out yet.
+    const run = () => {
+      try {
+        const fn = new Function('root', 'host', code);
+        fn(this._contentEl, this._hostEl);
+      } catch (err) {
+        this._renderError(err);
+      }
+    };
+
+    const waitForLayout = () => {
+      if (this._hostEl.isConnected && this._contentEl.offsetWidth > 0) {
+        run();
+      } else {
+        requestAnimationFrame(waitForLayout);
+      }
+    };
+    requestAnimationFrame(waitForLayout);
   }
 
   _renderError(err) {
@@ -271,6 +314,8 @@ export class WidgetFrame {
     void this._hostEl.offsetWidth;
     this._hostEl.classList.remove('entering');
     this._hostEl.classList.add('visible');
+    // Notify canvas-based widgets that layout is stable so they can resize.
+    window.dispatchEvent(new Event('resize'));
   }
 
   // ── Context Menu (right-click) ─────────────────────────────────────────────
