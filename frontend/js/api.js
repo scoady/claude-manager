@@ -417,6 +417,24 @@ export const api = {
     return res.json();
   },
 
+  async writeFile(projectName, path, content) {
+    const url = `${BASE}/api/projects/${encodeURIComponent(projectName)}/files/content`;
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, content }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
+  async getGitBranch(projectName) {
+    const url = `${BASE}/api/projects/${encodeURIComponent(projectName)}/files/branch`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
   // ─── Cron ──────────────────────────────────────────────────────────────────
 
   async getCronJobs(projectName) {

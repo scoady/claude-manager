@@ -148,6 +148,35 @@ def get_git_status(project_name: str) -> dict[str, str]:
     return status_map
 
 
+def write_file(project_name: str, rel_path: str, content: str) -> dict:
+    """Write content to a file within a project directory."""
+    if not rel_path:
+        raise ValueError("path is required")
+    target = _safe_path(project_name, rel_path)
+    # Ensure parent directory exists
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        target.write_text(content, encoding="utf-8")
+    except Exception as exc:
+        raise ValueError(f"Failed to write file: {exc}")
+    return {"ok": True, "path": rel_path, "size": len(content.encode("utf-8"))}
+
+
+def get_git_branch(project_name: str) -> str:
+    """Get the current git branch name."""
+    root = _project_root(project_name)
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=root, capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return ""
+
+
 def _get_gitignored_files(project_name: str, directory: Path) -> set[str]:
     """Get set of gitignored file paths in a directory."""
     root = _project_root(project_name)
