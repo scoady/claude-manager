@@ -1,0 +1,21 @@
+# POC 1: Enriched MCP Capability Catalog
+# Runs the enhanced canvas MCP server on port 4051, pointing at the
+# existing backend on host port 4040.
+#
+# Usage:
+#   docker compose -f docker-compose.poc1.yml up -d --build
+
+services:
+  mcp-canvas-poc1:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: python3 -m backend.mcp.canvas_server
+    ports:
+      - "4051:4041"
+    environment:
+      CANVAS_API_URL: "http://host.docker.internal:4040"
+      CANVAS_POC: "catalog"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

@@ -226,6 +226,181 @@ _TEMPLATES = {
 # ── MCP tools ────────────────────────────────────────────────────────────────
 
 @mcp.tool()
+def canvas_capabilities() -> dict:
+    """
+    Return a comprehensive capability manifest describing everything the
+    canvas rendering environment supports.
+
+    Call this FIRST before creating widgets to understand:
+    - The rendering model (how widget JS code is executed)
+    - Available CDN libraries you can load (Three.js, D3, GSAP, etc.)
+    - Helper patterns for loading scripts and CSS
+    - Design tokens (colors, fonts, glass effects)
+    - Cross-widget communication patterns
+    - Example code snippets for common visualizations
+
+    This is your reference guide for building rich, animated, interactive
+    dashboard widgets.
+    """
+    return {
+        "rendering_model": {
+            "execution": "new Function('root','host', code) -- bare function body, NOT an IIFE",
+            "container": "root is the widget DOM element; host is the GridStack item wrapper",
+            "grid": "12-column GridStack, cellHeight=55px, margin=4, float=true",
+            "lifecycle": "Code runs once on mount. Use requestAnimationFrame for animation loops. Clean up with root.cleanup = () => { ... } which is called on widget removal.",
+        },
+        "cdn_libraries": [
+            {
+                "name": "three",
+                "url": "https://cdn.jsdelivr.net/npm/three@0.160/build/three.module.min.js",
+                "type": "esm",
+                "use_cases": ["3D visualization", "particle systems", "starfields"],
+                "load_pattern": "const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.160/build/three.module.min.js');",
+            },
+            {
+                "name": "d3",
+                "url": "https://cdn.jsdelivr.net/npm/d3@7/+esm",
+                "type": "esm",
+                "use_cases": ["charts", "force graphs", "hierarchies", "maps"],
+                "load_pattern": "const d3 = await import('https://cdn.jsdelivr.net/npm/d3@7/+esm');",
+            },
+            {
+                "name": "gsap",
+                "url": "https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js",
+                "type": "script",
+                "use_cases": ["animation", "tweens", "timelines", "scroll effects"],
+            },
+            {
+                "name": "xterm",
+                "url": "https://cdn.jsdelivr.net/npm/xterm@5/lib/xterm.min.js",
+                "css": "https://cdn.jsdelivr.net/npm/xterm@5/css/xterm.min.css",
+                "type": "script",
+                "use_cases": ["terminal emulation", "log viewers"],
+            },
+            {
+                "name": "cytoscape",
+                "url": "https://cdn.jsdelivr.net/npm/cytoscape@3/dist/cytoscape.min.js",
+                "type": "script",
+                "use_cases": ["network graphs", "dependency trees", "relationship maps"],
+            },
+            {
+                "name": "p5",
+                "url": "https://cdn.jsdelivr.net/npm/p5@1/lib/p5.min.js",
+                "type": "script",
+                "use_cases": ["creative coding", "generative art", "interactive sketches"],
+            },
+            {
+                "name": "anime",
+                "url": "https://cdn.jsdelivr.net/npm/animejs@4/lib/anime.min.js",
+                "type": "script",
+                "use_cases": ["DOM animation", "SVG morphing", "staggered reveals"],
+            },
+            {
+                "name": "chart.js",
+                "url": "https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js",
+                "type": "script",
+                "use_cases": ["bar charts", "line charts", "radar", "doughnut"],
+            },
+            {
+                "name": "highlight.js",
+                "url": "https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11/highlight.min.js",
+                "css": "https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11/styles/github-dark.min.css",
+                "type": "script",
+                "use_cases": ["code syntax highlighting"],
+            },
+        ],
+        "cdn_loader_pattern": (
+            "function loadCDN(name, url, type) { "
+            "if (type==='esm') return import(url); "
+            "return new Promise((resolve) => { "
+            "if (window[name]) return resolve(window[name]); "
+            "const s = document.createElement('script'); "
+            "s.src = url; s.onload = () => resolve(window[name]); "
+            "document.head.appendChild(s); }); }"
+        ),
+        "css_loader_pattern": (
+            "function loadCSS(url) { "
+            "if (document.querySelector('link[href=\"'+url+'\"]')) return; "
+            "const l = document.createElement('link'); l.rel='stylesheet'; "
+            "l.href=url; document.head.appendChild(l); }"
+        ),
+        "templates": list(_TEMPLATES.keys()),
+        "cross_widget_comms": {
+            "pattern": "window.__canvasBuffer[widgetId] = data; // write from any widget, read from any other",
+            "events": "root.dispatchEvent(new CustomEvent('widget-data', {detail, bubbles:true}))",
+        },
+        "design_tokens": {
+            "colors": {
+                "cyan": _COLORS["cyan"],
+                "amber": _COLORS["amber"],
+                "purple": _COLORS["purple"],
+                "green": _COLORS["green"],
+                "red": _COLORS["red"],
+                "blue": _COLORS["blue"],
+                "teal": _COLORS["teal"],
+                "pink": _COLORS["pink"],
+                "magenta": _COLORS["magenta"],
+                "primary": _COLORS["primary"],
+                "secondary": _COLORS["secondary"],
+                "muted": _COLORS["muted"],
+                "surface": _COLORS["surface"],
+                "elevated": _COLORS["elevated"],
+                "border": _COLORS["border"],
+            },
+            "glass": (
+                "background: rgba(255,255,255,.04); "
+                "border: 1px solid rgba(255,255,255,.08); "
+                "backdrop-filter: blur(24px)"
+            ),
+            "mono_font": _FONTS["mono"],
+            "title_font": _FONTS["title"],
+            "body_font": _FONTS["body"],
+            "bg": "#030509",
+        },
+        "example_snippets": {
+            "canvas_2d_particle_system": (
+                "const c = document.createElement('canvas'); "
+                "root.appendChild(c); const ctx = c.getContext('2d'); "
+                "c.width = root.offsetWidth; c.height = root.offsetHeight; "
+                "const particles = Array.from({length:80}, () => ({x:Math.random()*c.width, "
+                "y:Math.random()*c.height, vx:(Math.random()-0.5)*0.5, vy:(Math.random()-0.5)*0.5, "
+                "r:Math.random()*2+1})); "
+                "function tick() { ctx.clearRect(0,0,c.width,c.height); "
+                "particles.forEach(p => { p.x+=p.vx; p.y+=p.vy; "
+                "if(p.x<0||p.x>c.width) p.vx*=-1; if(p.y<0||p.y>c.height) p.vy*=-1; "
+                "ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); "
+                "ctx.fillStyle='#67e8f9'; ctx.fill(); }); "
+                "requestAnimationFrame(tick); } tick();"
+            ),
+            "d3_force_graph": (
+                "import('https://cdn.jsdelivr.net/npm/d3@7/+esm').then(d3 => { "
+                "const w=root.offsetWidth, h=root.offsetHeight; "
+                "const svg=d3.select(root).append('svg').attr('width',w).attr('height',h); "
+                "const nodes=[{id:'A'},{id:'B'},{id:'C'}]; "
+                "const links=[{source:'A',target:'B'},{source:'B',target:'C'}]; "
+                "const sim=d3.forceSimulation(nodes)"
+                ".force('link',d3.forceLink(links).id(d=>d.id).distance(60))"
+                ".force('charge',d3.forceManyBody().strength(-100))"
+                ".force('center',d3.forceCenter(w/2,h/2)); "
+                "const link=svg.selectAll('line').data(links).join('line')"
+                ".attr('stroke','#243352').attr('stroke-width',1); "
+                "const node=svg.selectAll('circle').data(nodes).join('circle')"
+                ".attr('r',6).attr('fill','#67e8f9'); "
+                "sim.on('tick',()=>{ link.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y)"
+                ".attr('x2',d=>d.target.x).attr('y2',d=>d.target.y); "
+                "node.attr('cx',d=>d.x).attr('cy',d=>d.y); }); });"
+            ),
+            "fetch_project_data": (
+                "const proj = host.closest('[data-active-project]')"
+                "?.dataset?.activeProject || 'unknown'; "
+                "fetch('/api/projects/'+proj+'/tasks').then(r=>r.json())"
+                ".then(tasks => { /* render tasks here */ });"
+            ),
+        },
+    }
+
+
+@mcp.tool()
 def canvas_put(
     project: str,
     widget_id: str,
@@ -242,14 +417,18 @@ def canvas_put(
     Create or update a dashboard widget for a project.
 
     PREFERRED: Use template + data (JSON string). The backend renders
-    styled HTML automatically from the widget catalog — you never write HTML/CSS.
+    styled HTML automatically from the widget catalog -- you never write HTML/CSS.
     Pass a template ID from the widget catalog and a JSON data string matching
     the template's data schema. The backend stores template_id + data so
     widgets can be re-rendered with fresh data on updates.
 
     FALLBACK: Pass raw html/css/js if no template fits your content.
+    For the js field, write a BARE FUNCTION BODY (not an IIFE). It receives
+    (root, host) where root is the widget DOM element. You can load CDN
+    libraries dynamically -- call canvas_capabilities() first to see the full
+    list of available libraries, design tokens, and code patterns.
 
-    widget_id: stable ID — reuse the same ID to update in-place.
+    widget_id: stable ID -- reuse the same ID to update in-place.
     col_span/row_span: how many grid cells the widget occupies (default 1).
     """
     parsed_data = None
@@ -303,11 +482,16 @@ def canvas_design(
     data: str = "{}",
 ) -> dict:
     """
-    Design a custom widget — describe what you want, get a polished result.
+    Design a custom widget -- describe what you want, get a polished result.
 
     Instead of writing HTML yourself, describe your VISION and pass your DATA.
     A design agent will create a beautiful, animated widget using the app's
     full frontend stack (SVG, canvas, CSS animations, particles, etc).
+
+    The rendering environment supports CDN library loading (Three.js, D3, GSAP,
+    Chart.js, Cytoscape, p5.js, etc.) and uses a space/constellation design
+    theme with frosted glass, neon glows, and particle effects. Call
+    canvas_capabilities() to see the full library list and design tokens.
 
     intent: Describe what you want visually. Be specific and creative.
         Examples:
