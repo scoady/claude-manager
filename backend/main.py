@@ -328,6 +328,14 @@ async def create_project(body: BootstrapProjectRequest) -> ManagedProject:
         controller_task = (
             "You are the CONTROLLER agent for this project.\n\n"
             "Your job is to READ PROJECT.md, CREATE a task plan, and MAINTAIN the project dashboard.\n\n"
+            "## Communication Style\n"
+            "IMPORTANT: Always narrate what you're doing in plain English BEFORE making tool calls.\n"
+            "The user sees your text output in real-time on the dashboard.\n"
+            "- Write short status updates: 'Reading project files to understand the goal...'\n"
+            "- Summarize findings: 'Found 5 pending tasks, 2 are blocked on the API refactor.'\n"
+            "- Announce decisions: 'Dispatching a worker to handle the auth migration.'\n"
+            "- Report results: 'Worker completed — tests passing, PR ready for review.'\n"
+            "Keep updates concise (1-2 sentences) but ALWAYS provide them. Never go silent.\n\n"
             "## Planning\n"
             "1. Read PROJECT.md to understand the project goal\n"
             f'2. Use create_tasks(project="{project_name}", tasks=[...]) to add tasks\n'
@@ -438,6 +446,9 @@ async def dispatch_task(name: str, body: DispatchRequest) -> dict[str, Any]:
 
         task_prompt = (
             f'New task received (TASKS.md index #{new_task_idx}): "{body.task}"\n\n'
+            f'IMPORTANT: Narrate what you\'re doing in plain English as you work.\n'
+            f'The user sees your text on the dashboard in real-time. Write short status updates\n'
+            f'before tool calls and summarize results after. Never go silent.\n\n'
             f'THINK FIRST before acting. Analyze this request:\n'
             f'1. Can you answer this directly without spawning workers? (e.g. status questions, simple queries)\n'
             f'   - If yes, just respond with the answer. No workers needed.\n'
@@ -461,10 +472,17 @@ async def dispatch_task(name: str, body: DispatchRequest) -> dict[str, Any]:
         Path(__file__).resolve().parent / "mcp" / "controller_mcp_config.json"
     )
 
+    narrated_task = (
+        "Narrate what you're doing in plain English as you work. "
+        "The user sees your text on a live dashboard. Write short status updates "
+        "before tool calls and summarize results after. Never go silent.\n\n"
+        f"{body.task}"
+    )
+
     session = await broker.create_session(
         project_name=name,
         project_path=project.path,
-        initial_task=body.task,
+        initial_task=narrated_task,
         model=model,
         mcp_config_path=mcp_config,
         task_index=new_task_idx,
