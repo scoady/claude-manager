@@ -417,6 +417,62 @@ export const api = {
     return res.json();
   },
 
+  // ─── Cron ──────────────────────────────────────────────────────────────────
+
+  async getCronJobs(projectName) {
+    const res = await fetch(`${BASE}/api/projects/${encodeURIComponent(projectName)}/cron`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
+  async createCronJob(projectName, data) {
+    const res = await fetch(`${BASE}/api/projects/${encodeURIComponent(projectName)}/cron`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
+  async updateCronJob(projectName, jobId, data) {
+    const res = await fetch(`${BASE}/api/projects/${encodeURIComponent(projectName)}/cron/${encodeURIComponent(jobId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
+  async deleteCronJob(projectName, jobId) {
+    const res = await fetch(`${BASE}/api/projects/${encodeURIComponent(projectName)}/cron/${encodeURIComponent(jobId)}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
+  async triggerCronJob(projectName, jobId) {
+    const res = await fetch(`${BASE}/api/projects/${encodeURIComponent(projectName)}/cron/${encodeURIComponent(jobId)}/trigger`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
   // ─── Dashboard Controller ───────────────────────────────────────────────────
 
   async setupDashboard(projectName, prompt) {
