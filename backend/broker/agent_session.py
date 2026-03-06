@@ -268,6 +268,7 @@ class AgentSession:
                 stderr=asyncio.subprocess.PIPE,
                 cwd=cwd,
                 env=_get_spawn_env(),
+                limit=1024 * 1024,  # 1MB readline buffer for large stream-json events
             )
         except Exception as exc:
             print(f"[session:{self.session_id[:8]}] spawn error: {exc}")

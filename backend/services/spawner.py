@@ -124,7 +124,7 @@ async def dispatch_agent(
         CLAUDE_BIN,
         "--print",
         "--output-format", "stream-json",
-        "--include-partial-messages",
+        "--verbose", "--include-partial-messages",
     ]
     if model:
         cmd += ["--model", model]
@@ -138,6 +138,7 @@ async def dispatch_agent(
         stderr=asyncio.subprocess.PIPE,
         cwd=cwd,
         env={**os.environ},
+        limit=1024 * 1024,  # 1MB readline buffer for large stream-json events
     )
 
     temp_id = f"pending-{proc.pid}"
@@ -388,7 +389,7 @@ async def _send_followup(
         "--print",
         "--resume", agent.session_id,
         "--output-format", "stream-json",
-        "--include-partial-messages",
+        "--verbose", "--include-partial-messages",
         message,
     ]
 
@@ -401,6 +402,7 @@ async def _send_followup(
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
             env={**os.environ},
+            limit=1024 * 1024,  # 1MB readline buffer for large stream-json events
         )
         agent.proc = proc
         agent.status = AgentStatus.WORKING

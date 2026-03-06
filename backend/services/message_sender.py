@@ -31,6 +31,7 @@ async def send_message(
         "--print",
         "--resume", session_id,
         "--output-format", "stream-json",
+        "--verbose",
         message,
     ]
 
@@ -45,6 +46,7 @@ async def send_message(
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
             env=env,
+            limit=1024 * 1024,  # 1MB readline buffer for large stream-json events
         )
 
         try:
@@ -80,7 +82,7 @@ async def send_message_streaming(
         "--print",
         "--resume", session_id,
         "--output-format", "stream-json",
-        "--include-partial-messages",
+        "--verbose", "--include-partial-messages",
         message,
     ]
 
@@ -94,6 +96,7 @@ async def send_message_streaming(
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
             env=env,
+            limit=1024 * 1024,  # 1MB readline buffer for large stream-json events
         )
         return proc
     except Exception:
