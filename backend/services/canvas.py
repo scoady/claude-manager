@@ -185,6 +185,36 @@ class CanvasService:
                 })
         self._save(project)
 
+    def get_dashboard_contract(self, project: str) -> dict[str, Any] | None:
+        """Build a data contract from current widgets for dashboard data requests.
+
+        Returns a dict with widget layouts and data field schemas that agents
+        can fill with structured data responses.
+        """
+        widgets = self.get_widgets(project)
+        if not widgets:
+            return None
+
+        contract: dict[str, Any] = {"widgets": []}
+        for w in widgets:
+            entry: dict[str, Any] = {
+                "widget_id": w.id,
+                "title": w.title,
+                "col_span": w.col_span,
+                "row_span": w.row_span,
+            }
+            if w.template_id and w.template_data:
+                entry["template_id"] = w.template_id
+                entry["data_fields"] = {k: type(v).__name__ for k, v in w.template_data.items()}
+                entry["sample_data"] = w.template_data
+            elif w.js and "{{" not in w.html:
+                # Raw widget — extract data placeholders from JS if possible
+                entry["type"] = "raw_widget"
+                entry["description"] = f"Custom widget: {w.title}"
+            contract["widgets"].append(entry)
+
+        return contract if contract["widgets"] else None
+
     def clear(self, project: str) -> None:
         """Remove all widgets for a project."""
         self._widgets[project] = {}

@@ -2520,6 +2520,106 @@ pre {
 .app-logo, .app-title { cursor: pointer; }
 .app-title:hover .title-main { color: var(--accent-cyan); transition: color var(--transition); }
 
+/* ─── Dashboard prompt ───────────────────────────────────────────────────── */
+
+.feed-dashboard-prompt {
+  margin-top: 8px;
+  border: 1px solid var(--bg-border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+
+.feed-dashboard-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition);
+  font-size: 12px;
+}
+.feed-dashboard-header:hover { background: var(--bg-elevated); }
+
+.feed-dashboard-chevron {
+  transition: transform var(--transition);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.feed-dashboard-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.feed-dashboard-active {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--accent-green);
+  padding: 1px 6px;
+  background: rgba(74, 222, 128, 0.1);
+  border: 1px solid rgba(74, 222, 128, 0.2);
+  border-radius: 8px;
+  letter-spacing: 0.03em;
+}
+
+.feed-dashboard-body {
+  border-top: 1px solid var(--bg-border);
+  padding: 10px 12px;
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+.feed-dashboard-body.hidden { display: none; }
+
+.feed-dashboard-input {
+  flex: 1;
+  background: var(--bg-elevated);
+  border: 1px solid var(--bg-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  padding: 8px 10px;
+  resize: vertical;
+  min-height: 36px;
+  line-height: 1.4;
+}
+.feed-dashboard-input:focus {
+  outline: none;
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 1px var(--accent-cyan);
+}
+.feed-dashboard-input::placeholder { color: var(--text-muted); }
+
+.feed-dashboard-apply-btn {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent-cyan);
+  background: rgba(103, 232, 249, 0.08);
+  border: 1px solid rgba(103, 232, 249, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 6px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition);
+}
+.feed-dashboard-apply-btn:hover:not(:disabled) {
+  background: rgba(103, 232, 249, 0.15);
+  border-color: rgba(103, 232, 249, 0.4);
+}
+.feed-dashboard-apply-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 /* ─── Skills: feed toggle panel ──────────────────────────────────────────── */
 .skill-toggle-panel {
   margin-top: 12px;

@@ -66,6 +66,7 @@ class ProjectConfig(BaseModel):
     parallelism: int = 1
     model: str | None = None
     mcp_config: str | None = None  # Path to MCP config JSON file
+    dashboard_prompt: str | None = None  # User's dashboard intent description
 
 
 class ManagedProject(BaseModel):

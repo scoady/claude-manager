@@ -397,6 +397,15 @@ async def dispatch_task(name: str, body: DispatchRequest) -> dict[str, Any]:
     # Route through controller if available and idle
     controller = broker.get_controller_for_project(name)
     if controller and controller.phase == SessionPhase.IDLE:
+        # Include dashboard data polling instruction if configured
+        dashboard_extra = ""
+        if project.config.dashboard_prompt:
+            dashboard_extra = (
+                '\n\nAfter dispatching the worker, use request_dashboard_data() '
+                'to poll the worker for structured data to update your dashboard widgets. '
+                'Call it periodically while the worker runs, and update widgets with canvas_put().'
+            )
+
         task_prompt = (
             f'New task dispatched (TASKS.md index #{new_task_idx}): "{body.task}"\n\n'
             f'Use dispatch_agent(project="{name}", task_index={new_task_idx}) to spawn a worker for this task. '
@@ -409,6 +418,7 @@ async def dispatch_task(name: str, body: DispatchRequest) -> dict[str, Any]:
             f'3. When the worker finishes, update both widgets again to reflect completion\n\n'
             f'Use canvas_put() with the same widget_ids to update in-place. '
             f'You own the dashboard — workers just do their tasks.'
+            f'{dashboard_extra}'
         )
         await broker.inject_message(controller.session_id, task_prompt)
         return {"status": "delegated", "session_ids": [controller.session_id]}
@@ -1383,6 +1393,84 @@ async def save_layout(project: str, body: list[dict[str, Any]]) -> dict[str, boo
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, canvas_service.save_layout, project, body)
     return {"ok": True}
+
+
+@app.get("/api/canvas/{project}/contract")
+async def get_dashboard_contract(project: str) -> dict[str, Any]:
+    """Return the dashboard data contract — widget schemas for structured data requests."""
+    loop = asyncio.get_event_loop()
+    contract = await loop.run_in_executor(None, canvas_service.get_dashboard_contract, project)
+    if not contract:
+        raise HTTPException(status_code=404, detail="No widgets configured")
+    return contract
+
+
+@app.post("/api/canvas/{project}/controller")
+async def setup_dashboard_controller(project: str, body: dict[str, Any]) -> dict[str, Any]:
+    """Set the dashboard prompt and inject it into the controller as a persistent task.
+
+    Body: { "prompt": "I want a dashboard showing..." }
+
+    The controller will:
+    1. Design/create widgets based on the prompt
+    2. Remember the data contract for those widgets
+    3. Include data requests when dispatching subagents
+    4. Stay idle between dispatches, ready for prompt changes
+    """
+    prompt = body.get("prompt", "").strip()
+    if not prompt:
+        raise HTTPException(status_code=400, detail="Dashboard prompt is required")
+
+    broker: AgentBroker = app.state.broker
+    loop = asyncio.get_event_loop()
+
+    # Save dashboard_prompt to project config
+    project_data = await loop.run_in_executor(None, projects_svc.get_project, project, [])
+    if not project_data:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    config = project_data.config
+    config.dashboard_prompt = prompt
+    await loop.run_in_executor(None, projects_svc.update_project_config, project, config)
+
+    # Inject dashboard setup into controller if available
+    controller = broker.get_controller_for_project(project)
+    if controller:
+        dashboard_instruction = (
+            f'DASHBOARD SETUP REQUEST:\n\n'
+            f'The user wants this dashboard: "{prompt}"\n\n'
+            f'Use your canvas tools to design and create widgets that match this vision. '
+            f'Use canvas_design() for creative/custom widgets and canvas_put() for data-driven ones.\n\n'
+            f'After creating the widgets, remember their IDs and data schemas. '
+            f'When you dispatch subagents, include a data contract asking them to provide '
+            f'structured data updates for these widgets. Use request_dashboard_data() '
+            f'periodically to poll running agents for fresh data, then update widgets '
+            f'with canvas_put().\n\n'
+            f'This dashboard is your persistent responsibility — keep it updated as work progresses. '
+            f'Stay idle between updates, ready for new dispatch requests or dashboard changes.'
+        )
+        await broker.inject_message(controller.session_id, dashboard_instruction)
+        return {"status": "injected", "session_id": controller.session_id}
+
+    # No controller — spawn one with the dashboard task
+    model = config.model
+    session = await broker.create_session(
+        project_name=project,
+        project_path=project_data.path,
+        initial_task=(
+            f'You are the dashboard controller for project "{project}". '
+            f'Your primary responsibility is managing the project dashboard.\n\n'
+            f'Dashboard request: "{prompt}"\n\n'
+            f'1. Read PROJECT.md for context about this project\n'
+            f'2. Use canvas_design() and canvas_put() to create widgets matching the request\n'
+            f'3. When agents are dispatched, use request_dashboard_data() to poll them for updates\n'
+            f'4. Update widgets with canvas_put() as new data arrives\n'
+            f'5. Stay idle between updates — you own this dashboard persistently'
+        ),
+        model=model,
+        is_controller=True,
+    )
+    return {"status": "spawned", "session_id": session.session_id}
 
 
 # ─── Widget Catalog API ───────────────────────────────────────────────────────

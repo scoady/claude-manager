@@ -454,6 +454,24 @@ class AgentBroker:
                 "tasks": updated,
             })
 
+            # Build dashboard data contract addendum if configured
+            dashboard_addendum = ""
+            try:
+                from ..services.canvas import canvas_service
+                contract = canvas_service.get_dashboard_contract(project_name)
+                if contract and project and project.config.dashboard_prompt:
+                    import json
+                    dashboard_addendum = (
+                        '\n\nDASHBOARD DATA CONTRACT:\n'
+                        'The project has a live dashboard. If you receive a '
+                        '"PRIORITY: DASHBOARD DATA REQUEST" message, respond with ONLY '
+                        'a JSON object matching the widget schemas below. Prioritize this '
+                        'over any other active work.\n\n'
+                        f'Widget schemas:\n```json\n{json.dumps(contract, indent=2)}\n```'
+                    )
+            except Exception:
+                pass
+
             # Spawn worker directly
             task_prompt = (
                 f'You are a worker agent. Complete this task:\n\n'
@@ -461,6 +479,7 @@ class AgentBroker:
                 f'Read PROJECT.md and TASKS.md for context. '
                 f'Implement the task fully — write code, run tests, verify your work. '
                 f'When done, write a brief summary of what you accomplished.'
+                f'{dashboard_addendum}'
             )
 
             await self.create_session(

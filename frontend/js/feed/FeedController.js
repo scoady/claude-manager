@@ -396,6 +396,19 @@ export class FeedController {
           Clear All
         </button>
       </div>
+      <div class="feed-dashboard-prompt">
+        <div class="feed-dashboard-header" title="Configure dashboard controller">
+          <svg class="feed-dashboard-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <path d="M3 2l4 3-4 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="feed-dashboard-label">Dashboard</span>
+          ${project.config?.dashboard_prompt ? '<span class="feed-dashboard-active">active</span>' : ''}
+        </div>
+        <div class="feed-dashboard-body hidden">
+          <textarea class="feed-dashboard-input" rows="2" placeholder="Describe the dashboard you want\u2026 e.g. &quot;Show build status, test coverage, and deploy timeline&quot;">${escapeHtml(project.config?.dashboard_prompt || '')}</textarea>
+          <button class="feed-dashboard-apply-btn" disabled>Apply</button>
+        </div>
+      </div>
       <div class="feed-dispatch-composer">
         <div class="feed-dispatch-row">
           <textarea class="feed-task-input" rows="1" placeholder="Dispatch a task\u2026"></textarea>
@@ -469,6 +482,45 @@ export class FeedController {
           model: modelSel.value || null,
         });
       } catch (_) {}
+    });
+
+    // Dashboard prompt toggle + apply
+    const dashHeader = el.querySelector('.feed-dashboard-header');
+    const dashBody = el.querySelector('.feed-dashboard-body');
+    const dashInput = el.querySelector('.feed-dashboard-input');
+    const dashApplyBtn = el.querySelector('.feed-dashboard-apply-btn');
+
+    dashHeader?.addEventListener('click', () => {
+      dashBody.classList.toggle('hidden');
+      const chevron = dashHeader.querySelector('.feed-dashboard-chevron');
+      if (chevron) chevron.style.transform = dashBody.classList.contains('hidden') ? '' : 'rotate(90deg)';
+    });
+
+    dashInput?.addEventListener('input', () => {
+      const val = dashInput.value.trim();
+      dashApplyBtn.disabled = !val || val === (project.config?.dashboard_prompt || '');
+    });
+
+    dashApplyBtn?.addEventListener('click', async () => {
+      const prompt = dashInput.value.trim();
+      if (!prompt) return;
+      dashApplyBtn.disabled = true;
+      dashApplyBtn.textContent = 'Setting up\u2026';
+      try {
+        const result = await api.setupDashboard(project.name, prompt);
+        toast(`Dashboard ${result.status === 'spawned' ? 'controller spawned' : 'updated'}`, 'success', 3000);
+        // Update the active indicator
+        const activeEl = el.querySelector('.feed-dashboard-active');
+        if (!activeEl) {
+          const label = el.querySelector('.feed-dashboard-label');
+          if (label) label.insertAdjacentHTML('afterend', '<span class="feed-dashboard-active">active</span>');
+        }
+      } catch (e) {
+        toast(`Dashboard setup failed: ${e.message}`, 'error');
+      } finally {
+        dashApplyBtn.textContent = 'Apply';
+        dashApplyBtn.disabled = true;
+      }
     });
 
     // Save layout

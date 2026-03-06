@@ -417,6 +417,21 @@ export const api = {
     return res.json();
   },
 
+  // ─── Dashboard Controller ───────────────────────────────────────────────────
+
+  async setupDashboard(projectName, prompt) {
+    const res = await fetch(`${BASE}/api/canvas/${encodeURIComponent(projectName)}/controller`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
   // ─── Settings ──────────────────────────────────────────────────────────────
 
   async getStats() {

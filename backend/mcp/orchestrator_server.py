@@ -153,5 +153,58 @@ def dispatch_custom(
         return resp.json()
 
 
+@mcp.tool()
+def request_dashboard_data(
+    project: str,
+    agent_session_id: str,
+) -> dict:
+    """
+    Request structured dashboard data from a running worker agent.
+
+    Injects a high-priority data request into the worker, asking it to respond
+    with JSON data matching the dashboard's widget schemas. The worker should
+    prioritize this over other work.
+
+    Use this periodically to keep the dashboard up to date with live data
+    from agents working on the project. After receiving a response, use
+    canvas_put() to update the widgets with the new data.
+
+    Returns injection status. The agent's response will arrive asynchronously.
+    """
+    # First, get the dashboard contract (widget schemas)
+    contract_url = f"{MANAGER_API}/api/canvas/{project}/contract"
+    with httpx.Client(timeout=10) as client:
+        resp = client.get(contract_url)
+        if resp.status_code == 404:
+            return {"error": "No dashboard widgets configured for this project"}
+        resp.raise_for_status()
+        contract = resp.json()
+
+    # Build the data request message
+    import json
+    schemas = json.dumps(contract, indent=2)
+    inject_msg = (
+        "PRIORITY: DASHBOARD DATA REQUEST\n\n"
+        "The dashboard controller needs a data update. Respond with ONLY a JSON object "
+        "containing current status data for the following widget schemas. "
+        "Do not do any other work until you respond to this.\n\n"
+        f"Widget schemas:\n```json\n{schemas}\n```\n\n"
+        "Respond with a JSON object where keys are widget_ids and values are "
+        "the data payloads matching each widget's data_fields. Example:\n"
+        '```json\n{"widget-id": {"field1": "value1", "field2": 42}}\n```\n\n'
+        "Base your response on what you know about the project's current state — "
+        "files you've read, tests you've run, code you've written."
+    )
+
+    # Inject the message
+    inject_url = f"{MANAGER_API}/api/agents/{agent_session_id}/inject"
+    with httpx.Client(timeout=10) as client:
+        resp = client.post(inject_url, json={"message": inject_msg})
+        if resp.status_code == 404:
+            return {"error": f"Agent {agent_session_id} not found"}
+        resp.raise_for_status()
+        return {"status": "data_request_sent", "agent": agent_session_id}
+
+
 if __name__ == "__main__":
     mcp.run(transport="sse", host="0.0.0.0", port=4042)

@@ -167,6 +167,7 @@ def _read_manager_config(project_dir: Path) -> ProjectConfig:
         return ProjectConfig(
             parallelism=int(data.get("parallelism", 1)),
             model=data.get("model") or None,
+            dashboard_prompt=data.get("dashboard_prompt") or None,
         )
     except Exception:
         return ProjectConfig()
@@ -319,7 +320,7 @@ def update_project_config(name: str, config: ProjectConfig) -> None:
         raise ValueError(f"Project '{name}' not found")
     config_path = project_dir / ".claude" / "manager.json"
     config_path.parent.mkdir(exist_ok=True)
-    config_path.write_text(
-        json.dumps({"parallelism": config.parallelism, "model": config.model}, indent=2),
-        "utf-8",
-    )
+    payload = {"parallelism": config.parallelism, "model": config.model}
+    if config.dashboard_prompt:
+        payload["dashboard_prompt"] = config.dashboard_prompt
+    config_path.write_text(json.dumps(payload, indent=2), "utf-8")
