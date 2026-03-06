@@ -223,25 +223,27 @@ export class TasksPanel {
     // Status label
     const statusLabel = st === 'done' ? 'COMPLETE' : st === 'in_progress' ? 'ACTIVE' : 'QUEUED';
 
-    // Last milestone text
-    let milestoneText = '';
+    // Last milestone — structured tool badge or status message
+    let milestoneHtml = '';
     if (lastTool) {
-      milestoneText = this._toolLabel(lastTool.toolName, lastTool.toolInput);
+      const toolName = (lastTool.toolName || '').replace(/^mcp__\w+__/, '');
+      const toolArg = this._toolArg(toolName, lastTool.toolInput);
+      const icon = this._toolIcon(lastTool.toolName);
+      milestoneHtml = `<span class="mc-milestone-badge"><span class="mc-milestone-icon">${icon}</span>${escapeHtml(toolName)}</span>${toolArg ? `<span class="mc-milestone-arg">${escapeHtml(toolArg.split('/').pop())}</span>` : ''}`;
     } else if (st === 'in_progress' && !hasStream && !hasMappedAgent) {
-      milestoneText = 'Waiting for dispatch...';
+      milestoneHtml = `<span class="mc-milestone-text">Waiting for dispatch\u2026</span>`;
     } else if (st === 'in_progress' && !hasStream) {
-      milestoneText = 'Agent starting...';
+      milestoneHtml = `<span class="mc-milestone-text">Agent starting\u2026</span>`;
     }
 
     // Indentation indicator
     const indent = task.indent || 0;
-    const indentMark = indent > 0
-      ? `<span class="mc-card-indent" title="Subtask (depth ${indent})">${'\u2514'.repeat(1)}</span>`
-      : '';
+    const isSubtask = indent > 0;
+    const subtaskClass = isSubtask ? ' mc-card-subtask' : '';
 
     return `
-      <div class="mc-card mc-card-${st}" data-index="${task.index}"
-           style="animation-delay:${staggerIndex * 40}ms">
+      <div class="mc-card mc-card-${st}${subtaskClass}" data-index="${task.index}"
+           style="animation-delay:${staggerIndex * 40}ms${isSubtask ? `;--subtask-accent:${c.main}` : ''}">
         <div class="mc-card-glow" style="background:radial-gradient(ellipse at 50% 0%, ${c.glow}, transparent 70%)"></div>
         <div class="mc-card-inner">
           <div class="mc-card-top">
@@ -269,7 +271,7 @@ export class TasksPanel {
               <div class="mc-card-badge" style="color:${c.main};background:${c.dim};border-color:${c.main}30">
                 ${statusLabel}
               </div>
-              <div class="mc-card-title">${indentMark}${escapeHtml(task.text)}</div>
+              <div class="mc-card-title">${renderMarkdown(task.text)}</div>
             </div>
             <div class="mc-card-actions">
               ${st === 'pending' ? `<button class="mc-start-btn" data-index="${task.index}" title="Start task">
@@ -287,20 +289,21 @@ export class TasksPanel {
               </button>
             </div>
           </div>
-          ${milestoneText ? `
+          ${milestoneHtml ? `
           <div class="mc-card-milestone">
             ${st === 'in_progress' ? '<span class="mc-milestone-dot"></span>' : ''}
-            <span class="mc-milestone-text">${escapeHtml(milestoneText)}</span>
+            ${milestoneHtml}
           </div>` : ''}
-          ${toolCount > 0 ? `
+          ${toolCount > 0 || hasStream ? `
           <div class="mc-card-footer">
-            <span class="mc-tool-count">
+            ${toolCount > 0 ? `<span class="mc-tool-count">
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                 <path d="M1 5h8M5 1v8" stroke="${COLORS.purple}" stroke-width="1.2" stroke-linecap="round"/>
               </svg>
-              ${toolCount} tool call${toolCount !== 1 ? 's' : ''}
-            </span>
-            ${hasStream ? '<span class="mc-stream-indicator">STREAMING</span>' : ''}
+              ${toolCount} tool${toolCount !== 1 ? 's' : ''}
+            </span>` : ''}
+            ${tools.length > 0 ? `<span class="mc-elapsed">${this._formatElapsed(tools)}</span>` : ''}
+            ${hasStream ? '<span class="mc-stream-indicator">LIVE</span>' : ''}
           </div>` : ''}
         </div>
       </div>
@@ -331,6 +334,18 @@ export class TasksPanel {
     return name;
   }
 
+  _formatElapsed(tools) {
+    if (!tools.length) return '';
+    const first = tools[0].startTime;
+    const last = tools[tools.length - 1];
+    const end = last.duration != null ? last.startTime + last.duration : Date.now();
+    const secs = Math.round((end - first) / 1000);
+    if (secs < 60) return `${secs}s`;
+    const mins = Math.floor(secs / 60);
+    const rem = secs % 60;
+    return `${mins}m ${rem}s`;
+  }
+
   _toolIcon(toolName) {
     const name = (toolName || '').replace(/^mcp__\w+__/, '');
     const map = { Read: 'R', Edit: 'E', Write: 'W', Bash: 'B', Grep: 'G', Glob: 'F', Agent: 'A', WebFetch: 'W', ToolSearch: 'S' };
@@ -358,7 +373,9 @@ export class TasksPanel {
   _updateCardMilestone(taskIndex, toolName, toolInput) {
     const card = this._el.querySelector(`.mc-card[data-index="${taskIndex}"]`);
     if (!card) return;
-    const label = this._toolLabel(toolName, toolInput);
+    const name = (toolName || '').replace(/^mcp__\w+__/, '');
+    const arg = this._toolArg(name, toolInput);
+    const icon = this._toolIcon(toolName);
 
     let milestone = card.querySelector('.mc-card-milestone');
     if (!milestone) {
@@ -371,7 +388,7 @@ export class TasksPanel {
     }
     milestone.innerHTML = `
       <span class="mc-milestone-dot"></span>
-      <span class="mc-milestone-text">${escapeHtml(label)}</span>
+      <span class="mc-milestone-badge"><span class="mc-milestone-icon">${icon}</span>${escapeHtml(name)}</span>${arg ? `<span class="mc-milestone-arg">${escapeHtml(arg.split('/').pop())}</span>` : ''}
     `;
     // Animate flash
     milestone.classList.remove('mc-milestone-flash');

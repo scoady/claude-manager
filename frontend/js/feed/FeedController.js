@@ -98,6 +98,11 @@ export class FeedController {
     this._dashboardCanvas.setProject(project.name);
     this._dashboardCanvas.mount(this._dashboardWidgetGrid);
 
+    // 2c. Agent stream container — live text output from agents
+    this._agentContainer = document.createElement('div');
+    this._agentContainer.className = 'agent-stream-container';
+    this._overviewContainer.appendChild(this._agentContainer);
+
     this._el.appendChild(this._overviewContainer);
 
     // 3. Tasks container (hidden by default)
@@ -867,6 +872,26 @@ export class FeedController {
       this._taskAgentMap.set(taskIndex, sessionId);
     }
 
+    // Mount section.el into the agent container in the overview
+    if (this._agentContainer) {
+      // Controllers get expanded by default so their output is visible
+      if (isController) {
+        section.setExpanded(true);
+      }
+      const card = document.createElement('div');
+      card.className = 'agent-strip-card';
+      card.dataset.session = sessionId;
+      card.style.opacity = '0';
+      card.style.transform = 'translateY(8px)';
+      card.appendChild(section.el);
+      this._agentContainer.appendChild(card);
+      requestAnimationFrame(() => {
+        card.style.transition = 'opacity 280ms ease, transform 280ms ease';
+        card.style.opacity = '1';
+        card.style.transform = 'translateY(0)';
+      });
+    }
+
     // Hydrate existing agent output on reconnect
     if (turnCount > 0 || (phase && phase !== 'starting')) {
       api.getMessages(sessionId).then(messages => {
@@ -1043,6 +1068,9 @@ export class FeedController {
         childSection.setCompactMode(true);
         this._sections.set(subId, childSection);
         this._subagentMap.set(tool_use_id, subId);
+
+        // Mount subagent as child of the controller section
+        controllerSection.appendChildSection(childSection);
 
         this._updateControllerMonitoring();
         break;

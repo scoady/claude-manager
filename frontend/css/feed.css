@@ -1518,7 +1518,15 @@
 .mc-card:hover {
   border-color: var(--bg-border);
   transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 1px rgba(103, 232, 249, 0.15);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 1px rgba(103, 232, 249, 0.15), 0 0 20px rgba(103, 232, 249, 0.06);
+}
+
+.mc-card-in_progress:hover {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 20px rgba(251, 191, 36, 0.1);
+}
+
+.mc-card-done:hover {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 20px rgba(74, 222, 128, 0.1);
 }
 
 .mc-card-in_progress {
@@ -1543,7 +1551,8 @@
 }
 
 .mc-card:hover .mc-card-glow {
-  opacity: 0.8;
+  opacity: 1;
+  height: 60px;
 }
 
 .mc-card-inner {
@@ -1619,21 +1628,50 @@
 
 .mc-card-title {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 500;
   color: var(--text-primary);
-  line-height: 1.4;
+  line-height: 1.45;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-.mc-card-indent {
-  color: var(--text-muted);
-  margin-right: 4px;
+/* Markdown inside card titles — tighten spacing */
+.mc-card-title p { margin: 0; }
+.mc-card-title code {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 0.88em;
+  background: rgba(103, 232, 249, 0.08);
+  color: #67e8f9;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid rgba(103, 232, 249, 0.12);
+}
+.mc-card-title strong { color: #e2e8f0; font-weight: 600; }
+.mc-card-title em { color: var(--text-secondary); font-style: italic; }
+.mc-card-title a { color: #67e8f9; text-decoration: none; }
+
+/* Subtask visual hierarchy */
+.mc-card-subtask {
+  margin-left: 16px;
+  border-left: 2px solid var(--subtask-accent, #475569);
+}
+
+.mc-card-subtask .mc-card-title {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.mc-card-subtask .mc-card-ring {
+  width: 32px;
+  height: 32px;
+}
+
+.mc-card-subtask .mc-ring-svg {
+  width: 32px;
+  height: 32px;
 }
 
 .mc-card-pending .mc-card-title {
@@ -1732,6 +1770,47 @@
   flex: 1;
 }
 
+.mc-milestone-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: #a78bfa;
+  background: rgba(167, 139, 250, 0.1);
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid rgba(167, 139, 250, 0.18);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.mc-milestone-icon {
+  font-size: 9px;
+  font-weight: 700;
+  color: #67e8f9;
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(103, 232, 249, 0.1);
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.mc-milestone-arg {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
 /* ─── Card Footer ─────────────────────────────────────────────────────────── */
 
 .mc-card-footer {
@@ -1749,6 +1828,13 @@
   color: var(--text-muted);
 }
 
+.mc-elapsed {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
 .mc-stream-indicator {
   font-family: var(--font-mono);
   font-size: 9px;
@@ -1760,6 +1846,7 @@
   border-radius: 6px;
   border: 1px solid rgba(103, 232, 249, 0.15);
   animation: mc-stream-blink 1.5s ease-in-out infinite;
+  margin-left: auto;
 }
 
 @keyframes mc-stream-blink {
@@ -3262,7 +3349,64 @@
   gap: 0;
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* When agent stream container is present, cap the widget grid so agents are visible */
+.overview-container:has(.agent-stream-container:not(:empty)) .dashboard-widget-grid {
+  flex: none;
+}
+
+/* ─── Agent Stream Container (live output in overview) ─── */
+
+.agent-stream-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 4px;
+  flex-shrink: 0;
+}
+
+.agent-stream-container:empty {
+  display: none;
+}
+
+.agent-stream-container > .agent-strip-card {
+  flex: none;
+  max-width: none;
+  width: 100%;
+}
+
+/* Controller sections in the stream container get a gold accent border */
+.agent-stream-container .agent-section.controller {
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(145deg, rgba(251, 191, 36, 0.04), var(--bg-elevated));
+  box-shadow: 0 0 16px rgba(251, 191, 36, 0.06), inset 0 1px 0 rgba(251, 191, 36, 0.08);
+}
+
+.agent-stream-container .agent-section.controller:hover {
+  border-color: rgba(251, 191, 36, 0.4);
+  box-shadow: 0 0 24px rgba(251, 191, 36, 0.1), inset 0 1px 0 rgba(251, 191, 36, 0.12);
+}
+
+/* Expanded controller shows full stream area with scroll */
+.agent-stream-container .agent-section.controller.expanded .agent-stream-area {
+  max-height: clamp(200px, 40vh, 500px);
+  overflow-y: auto;
+}
+
+/* Subagent children nested under controller */
+.agent-stream-container .agent-children {
+  padding-left: 16px;
+  border-left: 2px solid rgba(251, 191, 36, 0.15);
+  margin-left: 8px;
+  margin-top: 4px;
+}
+
+.agent-stream-container .agent-children:empty {
+  display: none;
 }
 
 /* ─── Widget Frame (shared by all canvas widgets) ─── */
