@@ -6,18 +6,40 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 TOKEN_FILE="$PROJECT_DIR/.claude-snapshot/oauth-token"
 
-# ── Extract token from Keychain and write to file ──────────────────────────
+# ── Extract token from Keychain or credentials file ────────────────────────
 _refresh_token() {
+  local token=""
+
+  # Try macOS Keychain first
   local cred_json
   cred_json=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null || true)
-  if [ -z "$cred_json" ]; then
-    echo "ERROR: Could not read Claude credentials from macOS Keychain."
+  if [ -n "$cred_json" ]; then
+    token=$(echo "$cred_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['claudeAiOauth']['accessToken'])" 2>/dev/null || true)
+  fi
+
+  # Fall back to ~/.claude/.credentials.json
+  if [ -z "$token" ]; then
+    local creds_file="$HOME/.claude/.credentials.json"
+    if [ -f "$creds_file" ]; then
+      token=$(python3 -c "import json; print(json.load(open('$creds_file'))['claudeAiOauth']['accessToken'])" 2>/dev/null || true)
+      [ -n "$token" ] && echo "OAuth token read from $creds_file"
+    fi
+  fi
+
+  if [ -z "$token" ]; then
+    echo "ERROR: Could not read Claude credentials from Keychain or ~/.claude/.credentials.json."
     echo "Run 'claude auth login' first to authenticate."
     return 1
   fi
+
   mkdir -p "$(dirname "$TOKEN_FILE")"
-  echo "$cred_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['claudeAiOauth']['accessToken'])" > "$TOKEN_FILE"
+  echo "$token" > "$TOKEN_FILE"
   echo "OAuth token refreshed → $TOKEN_FILE ($(wc -c < "$TOKEN_FILE" | tr -d ' ') chars)"
+
+  # Also write to ~/.claude/oauth-token so k8s pods (hostPath mount) can read it
+  local k8s_token_file="$HOME/.claude/oauth-token"
+  echo "$token" > "$k8s_token_file"
+  echo "OAuth token also written → $k8s_token_file"
 }
 
 _refresh_token || exit 1
