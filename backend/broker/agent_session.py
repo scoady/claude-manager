@@ -21,7 +21,7 @@ from typing import Any, Callable
 from ..models import SessionPhase
 
 CLAUDE_BIN = os.environ.get("CLAUDE_BIN", "claude")
-OAUTH_TOKEN_FILE = "/run/claude-oauth-token"
+OAUTH_TOKEN_FILE = os.environ.get("OAUTH_TOKEN_FILE", "/run/claude-oauth-token")
 CLAUDE_DATA_DIR = Path(os.environ.get("CLAUDE_DATA_DIR", str(Path.home() / ".claude")))
 
 
@@ -370,6 +370,10 @@ class AgentSession:
 
     async def _handle_stream_event(self, event: dict[str, Any]) -> None:
         """Process one stream-json event from the claude subprocess."""
+        # Unwrap stream_event wrapper — CLI emits {"type":"stream_event","event":{...}}
+        if event.get("type") == "stream_event" and "event" in event:
+            event = event["event"]
+
         etype = event.get("type")
 
         # ── System init — CLI session_id arrives ──────────────────────────────
