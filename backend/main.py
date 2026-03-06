@@ -55,6 +55,7 @@ from .services import roles as roles_svc
 from .services import artifacts as artifacts_svc
 from .services import cron as cron_svc
 from .services import templates as templates_svc
+from .services.metrics import metrics_service
 from .services import widget_catalog as widget_catalog_svc
 from .services.canvas import canvas_service
 from .ws_manager import WSManager
@@ -142,6 +143,29 @@ async def _notify_controller_queue(project_name: str, context: str) -> None:
         await broker.check_task_queue(project_name)
     except Exception as exc:
         print(f"[task-queue] notify error: {exc}")
+
+
+async def _metrics_snapshot_task(broker: AgentBroker) -> None:
+    """Capture metrics snapshot every 30 seconds."""
+    while True:
+        await asyncio.sleep(30.0)
+        try:
+            sessions = broker.get_all_sessions()
+            # Gather task state for all active projects
+            active_projects: set[str] = set()
+            for s in sessions:
+                active_projects.add(s.project_name)
+            tasks_by_project: dict[str, list[dict]] = {}
+            loop = asyncio.get_event_loop()
+            for name in active_projects:
+                try:
+                    tasks = await loop.run_in_executor(None, tasks_svc.get_tasks, name)
+                    tasks_by_project[name] = tasks
+                except Exception:
+                    pass
+            metrics_service.snapshot(sessions, tasks_by_project)
+        except Exception as exc:
+            print(f"[metrics-snapshot] error: {exc}")
 
 
 async def _task_poll_task(broker: AgentBroker) -> None:
@@ -254,6 +278,7 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(_project_refresh_task(broker)),
         asyncio.create_task(_stats_task(broker)),
         asyncio.create_task(_task_poll_task(broker)),
+        asyncio.create_task(_metrics_snapshot_task(broker)),
         asyncio.create_task(cron_svc.cron_loop(_make_cron_dispatch(broker))),
         rules.start(),
     ]
@@ -1920,6 +1945,51 @@ async def delete_widget_template(template_id: str) -> dict[str, bool]:
     if not ok:
         raise HTTPException(status_code=404, detail="Template not found")
     return {"ok": True}
+
+
+# ─── Metrics API ──────────────────────────────────────────────────────────────
+
+
+@app.get("/api/metrics/agents")
+async def get_agent_metrics(since: str = "1h", resolution: str = "1m") -> list[dict]:
+    """Time-series agent activity data."""
+    return metrics_service.get_agent_activity(since, resolution)
+
+
+@app.get("/api/metrics/costs")
+async def get_cost_metrics(since: str = "1h", resolution: str = "1m") -> list[dict]:
+    """Time-series cost accumulation data."""
+    return metrics_service.get_cost_series(since, resolution)
+
+
+@app.get("/api/metrics/tasks")
+async def get_task_metrics(since: str = "1h", resolution: str = "1m") -> list[dict]:
+    """Time-series task throughput data."""
+    return metrics_service.get_task_throughput(since, resolution)
+
+
+@app.get("/api/metrics/models")
+async def get_model_metrics(since: str = "24h") -> list[dict]:
+    """Model usage breakdown."""
+    return metrics_service.get_model_usage(since)
+
+
+@app.get("/api/metrics/projects")
+async def get_project_metrics(since: str = "1h", resolution: str = "5m") -> dict[str, list[dict]]:
+    """Per-project activity time-series."""
+    return metrics_service.get_project_activity(since, resolution)
+
+
+@app.get("/api/metrics/health")
+async def get_system_health() -> dict:
+    """Current system health stats."""
+    return metrics_service.get_system_health(ws_connections=ws_manager.connection_count)
+
+
+@app.get("/api/metrics/summary")
+async def get_metrics_summary() -> dict:
+    """Quick summary: total agents today, total cost, uptime, etc."""
+    return metrics_service.get_summary(ws_connections=ws_manager.connection_count)
 
 
 @app.get("/api/stats", response_model=GlobalStats)

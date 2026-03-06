@@ -92,6 +92,13 @@ class AgentBroker:
 
         self._sessions[session_id] = session
 
+        # Track spawn in metrics
+        try:
+            from ..services.metrics import metrics_service
+            metrics_service.record_agent_spawned()
+        except Exception:
+            pass
+
         # Broadcast immediately so UI shows the card
         await self._ws.broadcast(WSMessageType.AGENT_SPAWNED, {
             "session_id": session_id,
