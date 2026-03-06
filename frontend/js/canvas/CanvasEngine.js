@@ -58,8 +58,8 @@ export class CanvasEngine {
 
     this._grid = GridStack.init({
       column: GRID_COLUMNS,
-      cellHeight: 80,
-      margin: 5,
+      cellHeight: 55,
+      margin: 4,
       animate: true,
       float: true,
       removable: false,

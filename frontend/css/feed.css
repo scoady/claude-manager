@@ -3220,7 +3220,7 @@
 .overview-container {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -3401,7 +3401,8 @@
 .dashboard-widget-grid {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* GridStack overrides to match our design system */
