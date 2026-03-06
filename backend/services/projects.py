@@ -184,7 +184,7 @@ def list_projects(active_session_ids: dict[str, list[str]] | None = None) -> lis
 
     projects: list[ManagedProject] = []
     for entry in sorted(MANAGED_DIR.iterdir()):
-        if not entry.is_dir() or entry.name.startswith(".") or entry.name == "unmanaged":
+        if not entry.is_dir() or entry.name.startswith(".") or entry.name in ("unmanaged", "__global__"):
             continue
         description, goal = _read_project_md(entry)
         config = _read_manager_config(entry)
