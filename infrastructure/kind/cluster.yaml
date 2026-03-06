@@ -1,0 +1,78 @@
+# kind cluster config for claude-manager-dev
+# A lightweight dev/experimentation cluster for running the full claude-manager
+# stack (backend + frontend + MCP servers) entirely in k8s.
+#
+# IMPORTANT: This is NOT the scoady production cluster. Do not confuse them.
+#
+# Create with:
+#   kind create cluster --config infrastructure/kind/cluster.yaml
+#
+# Or use the bootstrap script:
+#   bash infrastructure/kind/setup-dev-cluster.sh
+
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: claude-manager-dev
+nodes:
+  # ── Control plane ──────────────────────────────────────────────────────────
+  # Port mappings go on the control plane node (where ingress controller runs).
+  - role: control-plane
+    labels:
+      cluster: claude-manager-dev
+    extraPortMappings:
+      # NGINX ingress HTTP — mapped to 8080 to avoid conflict with scoady on :80
+      - containerPort: 80
+        hostPort: 8080
+        protocol: TCP
+      # NGINX ingress HTTPS — mapped to 8443 to avoid conflict with scoady on :443
+      - containerPort: 443
+        hostPort: 8443
+        protocol: TCP
+
+  # ── Worker node ────────────────────────────────────────────────────────────
+  # Single worker with all hostPath mounts the backend needs.
+  - role: worker
+    labels:
+      cluster: claude-manager-dev
+    extraMounts:
+      # Claude CLI persistence — sessions, settings, canvas, cron, roles, oauth-token
+      - hostPath: /Users/ayx106492/.claude
+        containerPath: /Users/ayx106492/.claude
+        readOnly: false
+
+      # Claude CLI binary versions (read-only, linked by doctor.sh)
+      - hostPath: /Users/ayx106492/.local/share/claude/versions
+        containerPath: /Users/ayx106492/.local/share/claude/versions
+        readOnly: true
+
+      # Managed projects — agents read/write here, git worktrees created here
+      - hostPath: /Users/ayx106492/git/claude-managed-projects
+        containerPath: /Users/ayx106492/git/claude-managed-projects
+        readOnly: false
+
+      # claude-manager source — symlink resolution from managed projects
+      - hostPath: /Users/ayx106492/git/claude-manager
+        containerPath: /Users/ayx106492/git/claude-manager
+        readOnly: true
+
+      # Infrastructure repos — agents may reference these
+      - hostPath: /Users/ayx106492/git/kind-infra
+        containerPath: /Users/ayx106492/git/kind-infra
+        readOnly: true
+      - hostPath: /Users/ayx106492/git/helm-platform
+        containerPath: /Users/ayx106492/git/helm-platform
+        readOnly: true
+
+      # SSH keys for git operations inside agents
+      - hostPath: /Users/ayx106492/.ssh
+        containerPath: /Users/ayx106492/.ssh
+        readOnly: true
+
+      # Git config
+      - hostPath: /Users/ayx106492/.gitconfig
+        containerPath: /Users/ayx106492/.gitconfig
+        readOnly: true
+
+      # Docker socket — agents that need Docker access
+      - hostPath: /var/run/docker.sock
+        containerPath: /var/run/docker.sock

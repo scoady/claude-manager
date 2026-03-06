@@ -8,8 +8,14 @@ metadata:
     {{- include "claude-manager.labels" . | nindent 4 }}
     app.kubernetes.io/component: frontend
   annotations:
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    # Extended timeouts for WebSocket connections (agent streaming)
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    {{- if .Values.backend.enabled }}
+    # WebSocket upgrade support for /ws path
+    nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
+    {{- end }}
 spec:
   ingressClassName: {{ .Values.frontend.ingress.className }}
   rules:
@@ -17,6 +23,24 @@ spec:
     - host: {{ .Values.frontend.ingress.host }}
       http:
         paths:
+          {{- if .Values.backend.enabled }}
+          # Backend API routes — must come before the catch-all frontend route
+          - path: /api/
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 4040
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 4040
+          {{- end }}
+          # Frontend catch-all
           - path: /
             pathType: Prefix
             backend:
@@ -27,6 +51,22 @@ spec:
     {{- else }}
     - http:
         paths:
+          {{- if .Values.backend.enabled }}
+          - path: /api/
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 4040
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 4040
+          {{- end }}
           - path: /
             pathType: Prefix
             backend:

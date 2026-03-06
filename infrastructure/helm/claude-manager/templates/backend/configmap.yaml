@@ -1,0 +1,41 @@
+{{- if .Values.backend.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-mcp-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "claude-manager.labels" . | nindent 4 }}
+    app: backend
+    app.kubernetes.io/component: backend
+data:
+  # MCP config for controller agents — sidecars are on localhost in the same pod
+  controller_mcp_config.json: |
+    {
+      "mcpServers": {
+        {{- if .Values.backend.mcp.canvas.enabled }}
+        "canvas": {
+          "type": "sse",
+          "url": "http://localhost:4041/sse"
+        }{{ if .Values.backend.mcp.orchestrator.enabled }},{{ end }}
+        {{- end }}
+        {{- if .Values.backend.mcp.orchestrator.enabled }}
+        "orchestrator": {
+          "type": "sse",
+          "url": "http://localhost:4042/sse"
+        }
+        {{- end }}
+      }
+    }
+  canvas_mcp_config.json: |
+    {
+      "mcpServers": {
+        {{- if .Values.backend.mcp.canvas.enabled }}
+        "canvas": {
+          "type": "sse",
+          "url": "http://localhost:4041/sse"
+        }
+        {{- end }}
+      }
+    }
+{{- end }}

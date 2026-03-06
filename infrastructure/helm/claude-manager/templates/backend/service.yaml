@@ -1,0 +1,29 @@
+{{- if .Values.backend.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "claude-manager.labels" . | nindent 4 }}
+    app: backend
+    app.kubernetes.io/component: backend
+spec:
+  selector:
+    app: backend
+  ports:
+    - name: http
+      port: 4040
+      targetPort: 4040
+    {{- if .Values.backend.mcp.canvas.enabled }}
+    - name: mcp-canvas
+      port: 4041
+      targetPort: 4041
+    {{- end }}
+    {{- if .Values.backend.mcp.orchestrator.enabled }}
+    - name: mcp-orchestrator
+      port: 4042
+      targetPort: 4042
+    {{- end }}
+  type: ClusterIP
+{{- end }}

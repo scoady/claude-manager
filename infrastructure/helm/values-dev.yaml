@@ -1,37 +1,37 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# claude-manager Helm values
+# claude-manager Helm values — dev cluster (claude-manager-dev)
 #
 # Deploy with:
 #   helm upgrade --install claude-manager ./infrastructure/helm/claude-manager \
-#     --namespace claude-manager --create-namespace \
-#     --values ./infrastructure/helm/claude-manager/values.yaml
+#     --namespace claude-manager \
+#     --context kind-claude-manager-dev \
+#     --values ./infrastructure/helm/values-dev.yaml
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── Global ────────────────────────────────────────────────────────────────────
 global:
-  # Registry prefix prepended to every image reference.
-  # Empty → no prefix (local dev). Jenkins CI sets this to the in-cluster addr.
-  imageRegistry: ""
+  imageRegistry: "registry.registry.svc.cluster.local:5000"
 
-# ── Backend (FastAPI + MCP sidecars) ──────────────────────────────────────────
-# Disabled by default (scoady production uses docker-compose on host).
-# Enable via values-dev.yaml for the claude-manager-dev cluster.
+# ── Backend ───────────────────────────────────────────────────────────────────
 backend:
-  enabled: false
+  enabled: true
 
   image:
     repository: claude-manager/backend
     tag: latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
 
   replicas: 1
 
-  # Host filesystem paths — override in values-dev.yaml with actual paths
-  hostHome: ""
-  repoDir: ""
-  managedProjectsDir: ""
+  # Host filesystem paths — these must match the kind cluster.yaml extraMounts.
+  # Using absolute paths because the kind node mounts are at these exact paths.
+  hostHome: /Users/ayx106492
+  repoDir: /Users/ayx106492/git
+  managedProjectsDir: /Users/ayx106492/git/claude-managed-projects
 
-  nodeSelector: {}
+  # Pin to the worker node (which has the hostPath mounts)
+  nodeSelector:
+    kubernetes.io/hostname: claude-manager-dev-worker
 
   resources:
     requests:
@@ -41,6 +41,7 @@ backend:
       memory: "4Gi"
       cpu: "4000m"
 
+  # MCP sidecars
   mcp:
     canvas:
       enabled: true
@@ -61,19 +62,19 @@ backend:
           memory: "256Mi"
           cpu: "500m"
 
-# ── Frontend (nginx) ──────────────────────────────────────────────────────────
+# ── Frontend ──────────────────────────────────────────────────────────────────
 frontend:
   image:
     repository: claude-manager/frontend
     tag: latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
 
   replicas: 1
 
   ingress:
     enabled: true
     className: nginx
-    host: claude-manager.localhost
+    host: claude-manager-dev.localhost
 
   resources:
     requests:
