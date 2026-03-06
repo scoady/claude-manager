@@ -328,6 +328,11 @@ async function createProject() {
 // ─── Template Catalog ───────────────────────────────────────────────────────────
 
 let _pendingTemplate = null; // holds generated template before save
+let _catalogTemplates = [];  // cached full templates for filtering
+let _activeCategory = 'all';
+let _searchQuery = '';
+let _viewMode = 'grid';      // 'grid' | 'list'
+let _selectedTemplateId = null;
 
 function _renderTemplatePreview(template, container) {
   // Render template HTML with preview_data substituted
@@ -377,6 +382,204 @@ const _BADGE_CLASS = {
   custom: 'tpl-badge-custom',
 };
 
+// Category-specific SVG icons for static thumbnails
+const _THUMB_ICONS = {
+  metrics: `<svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+    <rect x="4" y="20" width="6" height="12" rx="1.5" fill="currentColor" opacity="0.2"/>
+    <rect x="15" y="12" width="6" height="20" rx="1.5" fill="currentColor" opacity="0.3"/>
+    <rect x="26" y="6" width="6" height="26" rx="1.5" fill="currentColor" opacity="0.4"/>
+  </svg>`,
+  chart: `<svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+    <path d="M4 28L12 18L20 22L32 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+    <path d="M4 28L12 18L20 22L32 8V28H4Z" fill="currentColor" opacity="0.08"/>
+  </svg>`,
+  status: `<svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+    <circle cx="18" cy="18" r="12" stroke="currentColor" stroke-width="2" opacity="0.15"/>
+    <circle cx="18" cy="18" r="12" stroke="currentColor" stroke-width="2" stroke-dasharray="53 22" opacity="0.4" transform="rotate(-90 18 18)"/>
+    <circle cx="18" cy="18" r="3" fill="currentColor" opacity="0.3"/>
+  </svg>`,
+  log: `<svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+    <rect x="4" y="8" width="20" height="2" rx="1" fill="currentColor" opacity="0.3"/>
+    <rect x="4" y="14" width="28" height="2" rx="1" fill="currentColor" opacity="0.2"/>
+    <rect x="4" y="20" width="16" height="2" rx="1" fill="currentColor" opacity="0.25"/>
+    <rect x="4" y="26" width="24" height="2" rx="1" fill="currentColor" opacity="0.15"/>
+  </svg>`,
+  custom: `<svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+    <rect x="6" y="6" width="10" height="10" rx="2" stroke="currentColor" stroke-width="1.5" opacity="0.25"/>
+    <rect x="20" y="6" width="10" height="10" rx="2" stroke="currentColor" stroke-width="1.5" opacity="0.25"/>
+    <rect x="6" y="20" width="10" height="10" rx="2" stroke="currentColor" stroke-width="1.5" opacity="0.25"/>
+    <rect x="20" y="20" width="10" height="10" rx="2" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.2"/>
+  </svg>`,
+};
+
+function _escHtml(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function _getFilteredTemplates() {
+  return _catalogTemplates.filter(t => {
+    const cat = (t.category || 'custom').toLowerCase();
+    if (_activeCategory !== 'all' && cat !== _activeCategory) return false;
+    if (_searchQuery) {
+      const q = _searchQuery.toLowerCase();
+      const name = (t.name || t.id || '').toLowerCase();
+      const desc = (t.description || '').toLowerCase();
+      if (!name.includes(q) && !desc.includes(q) && !cat.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function _renderCatalogGrid() {
+  const grid = $('template-grid');
+  if (!grid) return;
+
+  const filtered = _getFilteredTemplates();
+
+  // Apply view mode class
+  grid.classList.toggle('list-view', _viewMode === 'list');
+
+  if (filtered.length === 0 && _catalogTemplates.length === 0) {
+    grid.innerHTML = `
+      <div class="studio-catalog-empty">
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+          <rect x="8" y="8" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.5"/>
+          <rect x="26" y="8" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.5"/>
+          <rect x="8" y="26" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.5"/>
+          <rect x="26" y="26" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 3"/>
+        </svg>
+        <div class="studio-catalog-empty-title">No templates yet</div>
+        <div class="studio-catalog-empty-sub">Describe a widget above and generate your first reusable template</div>
+      </div>`;
+    return;
+  }
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `
+      <div class="studio-catalog-empty">
+        <div class="studio-catalog-empty-title">No matching templates</div>
+        <div class="studio-catalog-empty-sub">Try a different search term or category filter</div>
+      </div>`;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(t => {
+    const cat = (t.category || 'custom').toLowerCase();
+    const badgeClass = _BADGE_CLASS[cat] || _BADGE_CLASS.custom;
+    const thumbIcon = _THUMB_ICONS[cat] || _THUMB_ICONS.custom;
+    const colSpan = t.col_span || 1;
+    const rowSpan = t.row_span || 1;
+    return `
+      <div class="tpl-card" data-template-id="${_escHtml(t.id)}">
+        <div class="tpl-card-thumb" data-cat="${_escHtml(cat)}">
+          <div class="tpl-card-thumb-icon">${thumbIcon}</div>
+          <span class="tpl-card-thumb-size">${colSpan}x${rowSpan}</span>
+        </div>
+        <div class="tpl-card-info">
+          <div class="tpl-card-top">
+            <span class="tpl-card-name">${_escHtml(t.name || t.id)}</span>
+            <span class="tpl-card-badge ${badgeClass}">${_escHtml(cat)}</span>
+          </div>
+          <div class="tpl-card-desc">${_escHtml(t.description || '')}</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Click on card → open detail panel
+  grid.querySelectorAll('.tpl-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const id = card.dataset.templateId;
+      _openDetailPanel(id);
+    });
+  });
+}
+
+async function _openDetailPanel(templateId) {
+  const panel = $('studio-detail-panel');
+  const backdrop = $('studio-detail-backdrop');
+  if (!panel || !backdrop) return;
+
+  _selectedTemplateId = templateId;
+
+  // Find template in cache
+  let template = _catalogTemplates.find(t => t.id === templateId);
+
+  // Fetch full template (with html/css/js) if we only have metadata
+  if (template && !template.html) {
+    try {
+      const resp = await fetch(`/api/widget-catalog/${encodeURIComponent(templateId)}`);
+      if (resp.ok) {
+        template = await resp.json();
+        // Update cache
+        const idx = _catalogTemplates.findIndex(t => t.id === templateId);
+        if (idx >= 0) _catalogTemplates[idx] = template;
+      }
+    } catch (_) {}
+  }
+
+  if (!template) return;
+
+  const cat = (template.category || 'custom').toLowerCase();
+  const badgeClass = _BADGE_CLASS[cat] || _BADGE_CLASS.custom;
+
+  // Populate header
+  $('studio-detail-title').textContent = template.name || template.id || 'Untitled';
+  const badge = $('studio-detail-badge');
+  badge.textContent = cat;
+  badge.className = `studio-detail-badge ${badgeClass}`;
+
+  // Populate description
+  $('studio-detail-desc').textContent = template.description || 'No description available.';
+
+  // Populate metadata
+  const metaEl = $('studio-detail-meta');
+  const colSpan = template.col_span || 1;
+  const rowSpan = template.row_span || 1;
+  const schemaKeys = template.data_schema ? Object.keys(template.data_schema) : [];
+  metaEl.innerHTML = `
+    <div class="studio-detail-meta-item"><span class="meta-label">Size:</span> ${colSpan}x${rowSpan}</div>
+    <div class="studio-detail-meta-item"><span class="meta-label">Category:</span> ${_escHtml(cat)}</div>
+    ${schemaKeys.length ? `<div class="studio-detail-meta-item"><span class="meta-label">Data fields:</span> ${_escHtml(schemaKeys.join(', '))}</div>` : ''}
+    ${template.created_at ? `<div class="studio-detail-meta-item"><span class="meta-label">Created:</span> ${new Date(template.created_at).toLocaleDateString()}</div>` : ''}
+  `;
+
+  // Render live preview (only here, not in the grid)
+  const previewEl = $('studio-detail-preview');
+  previewEl.innerHTML = '';
+  if (template.html || template.css) {
+    _renderTemplatePreview(template, previewEl);
+  } else {
+    previewEl.innerHTML = `<div style="color: var(--text-muted); font-size: 11px; font-family: var(--font-mono);">No preview available</div>`;
+  }
+
+  // Hide project picker on open
+  $('studio-project-picker')?.classList.add('hidden');
+
+  // Show panel with animation
+  panel.classList.remove('hidden');
+  backdrop.classList.remove('hidden');
+  // Force reflow before adding visible class for CSS transition
+  void panel.offsetWidth;
+  panel.classList.add('visible');
+  backdrop.classList.add('visible');
+}
+
+function _closeDetailPanel() {
+  const panel = $('studio-detail-panel');
+  const backdrop = $('studio-detail-backdrop');
+  if (!panel || !backdrop) return;
+
+  panel.classList.remove('visible');
+  backdrop.classList.remove('visible');
+
+  // Wait for transition before hiding
+  setTimeout(() => {
+    panel.classList.add('hidden');
+    backdrop.classList.add('hidden');
+    _selectedTemplateId = null;
+  }, 350);
+}
+
 async function loadTemplateCatalog() {
   const grid = $('template-grid');
   const count = $('studio-template-count');
@@ -386,85 +589,8 @@ async function loadTemplateCatalog() {
     const resp = await fetch('/api/widget-catalog');
     const templates = await resp.json();
     if (count) count.textContent = templates.length;
-
-    // Also fetch full templates for preview rendering
-    const fullTemplates = await Promise.all(
-      templates.map(t =>
-        fetch(`/api/widget-catalog/${encodeURIComponent(t.id)}`)
-          .then(r => r.json())
-          .catch(() => t)
-      )
-    );
-
-    if (fullTemplates.length === 0) {
-      grid.innerHTML = `
-        <div class="studio-catalog-empty">
-          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-            <rect x="8" y="8" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.5"/>
-            <rect x="26" y="8" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.5"/>
-            <rect x="8" y="26" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.5"/>
-            <rect x="26" y="26" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 3"/>
-          </svg>
-          <div class="studio-catalog-empty-title">No templates yet</div>
-          <div class="studio-catalog-empty-sub">Describe a widget above and generate your first reusable template</div>
-        </div>`;
-      return;
-    }
-
-    grid.innerHTML = fullTemplates.map(t => {
-      const cat = t.category || 'custom';
-      const badgeClass = _BADGE_CLASS[cat] || _BADGE_CLASS.custom;
-      return `
-        <div class="tpl-card" data-template-id="${t.id}">
-          <div class="tpl-card-preview" data-tpl-preview="${t.id}"></div>
-          <div class="tpl-card-info">
-            <div class="tpl-card-top">
-              <span class="tpl-card-name">${t.name || t.id}</span>
-              <span class="tpl-card-badge ${badgeClass}">${cat}</span>
-            </div>
-            <div class="tpl-card-desc">${t.description || ''}</div>
-          </div>
-          <div class="tpl-card-actions">
-            <button class="tpl-btn-copy" data-id="${t.id}" title="Copy canvas_put snippet">Copy canvas_put</button>
-            <button class="tpl-btn-delete" data-id="${t.id}" title="Delete template">Delete</button>
-          </div>
-        </div>`;
-    }).join('');
-
-    // Render live previews into each card
-    for (const t of fullTemplates) {
-      const previewEl = grid.querySelector(`[data-tpl-preview="${t.id}"]`);
-      if (previewEl && (t.html || t.css)) {
-        _renderTemplatePreview(t, previewEl);
-      }
-    }
-
-    // Copy button — copy canvas_put snippet to clipboard
-    grid.querySelectorAll('.tpl-btn-copy').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const id = btn.dataset.id;
-        const snippet = `canvas_put(project="PROJECT", widget_id="my-widget", title="Widget", template="${id}", data='{}')`;
-        navigator.clipboard.writeText(snippet).then(() => {
-          toast('canvas_put snippet copied', 'success', 2000);
-        });
-      });
-    });
-
-    // Delete buttons
-    grid.querySelectorAll('.tpl-btn-delete').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        const id = btn.dataset.id;
-        try {
-          await fetch(`/api/widget-catalog/${encodeURIComponent(id)}`, { method: 'DELETE' });
-          toast('Template deleted', 'success', 2000);
-          loadTemplateCatalog();
-        } catch (err) {
-          toast(`Delete failed: ${err.message}`, 'error');
-        }
-      });
-    });
+    _catalogTemplates = templates;
+    _renderCatalogGrid();
   } catch (e) {
     console.warn('[catalog] Failed to load templates:', e);
   }
@@ -559,11 +685,145 @@ function initTemplateCatalog() {
     if (promptEl) promptEl.value = '';
   });
 
-  // Enter key in prompt → generate
+  // Enter key in prompt -> generate
   promptEl?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       generateBtn?.click();
+    }
+  });
+
+  // ── Filter bar: search ─────────────────────────────────────────────────────
+  const searchEl = $('studio-search');
+  searchEl?.addEventListener('input', () => {
+    _searchQuery = searchEl.value.trim();
+    _renderCatalogGrid();
+  });
+
+  // ── Filter bar: category buttons ───────────────────────────────────────────
+  document.querySelectorAll('.studio-cat-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.studio-cat-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      _activeCategory = btn.dataset.category;
+      _renderCatalogGrid();
+    });
+  });
+
+  // ── View toggle: grid / list ───────────────────────────────────────────────
+  document.querySelectorAll('.studio-view-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.studio-view-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      _viewMode = btn.dataset.view;
+      _renderCatalogGrid();
+    });
+  });
+
+  // ── Detail panel: close ────────────────────────────────────────────────────
+  $('studio-detail-close')?.addEventListener('click', _closeDetailPanel);
+  $('studio-detail-backdrop')?.addEventListener('click', _closeDetailPanel);
+
+  // ── Detail panel: copy canvas_put ──────────────────────────────────────────
+  $('studio-detail-copy')?.addEventListener('click', () => {
+    if (!_selectedTemplateId) return;
+    const snippet = `canvas_put(project="PROJECT", widget_id="my-widget", title="Widget", template="${_selectedTemplateId}", data='{}')`;
+    navigator.clipboard.writeText(snippet).then(() => {
+      toast('canvas_put snippet copied', 'success', 2000);
+    });
+  });
+
+  // ── Detail panel: delete ───────────────────────────────────────────────────
+  $('studio-detail-delete')?.addEventListener('click', async () => {
+    if (!_selectedTemplateId) return;
+    try {
+      await fetch(`/api/widget-catalog/${encodeURIComponent(_selectedTemplateId)}`, { method: 'DELETE' });
+      toast('Template deleted', 'success', 2000);
+      _closeDetailPanel();
+      loadTemplateCatalog();
+    } catch (err) {
+      toast(`Delete failed: ${err.message}`, 'error');
+    }
+  });
+
+  // ── Detail panel: Add to Canvas ────────────────────────────────────────────
+  const pickerEl = $('studio-project-picker');
+  const pickerSelect = $('studio-picker-select');
+
+  $('studio-detail-add-canvas')?.addEventListener('click', async () => {
+    if (!pickerEl || !pickerSelect) return;
+    // Fetch projects and populate dropdown
+    try {
+      const projects = await api.getProjects();
+      pickerSelect.innerHTML = projects.map(p =>
+        `<option value="${_escHtml(p.name)}">${_escHtml(p.name)}</option>`
+      ).join('');
+      if (projects.length === 0) {
+        pickerSelect.innerHTML = '<option value="" disabled>No projects found</option>';
+      }
+      pickerEl.classList.remove('hidden');
+    } catch (e) {
+      toast(`Failed to load projects: ${e.message}`, 'error');
+    }
+  });
+
+  $('studio-picker-cancel')?.addEventListener('click', () => {
+    pickerEl?.classList.add('hidden');
+  });
+
+  $('studio-picker-confirm')?.addEventListener('click', async () => {
+    const project = pickerSelect?.value;
+    if (!project || !_selectedTemplateId) return;
+
+    // Find the full template
+    let template = _catalogTemplates.find(t => t.id === _selectedTemplateId);
+    if (!template) return;
+
+    // Fetch full template if needed
+    if (!template.html) {
+      try {
+        const resp = await fetch(`/api/widget-catalog/${encodeURIComponent(_selectedTemplateId)}`);
+        if (resp.ok) template = await resp.json();
+      } catch (_) {}
+    }
+
+    // POST widget to canvas
+    try {
+      const widgetBody = {
+        title: template.name || template.id || 'Widget',
+        html: template.html || '',
+        css: template.css || '',
+        js: template.js || '',
+        template_id: template.id,
+        template_data: template.preview_data || {},
+        col_span: template.col_span || 1,
+        row_span: template.row_span || 1,
+        gs_w: Math.max((template.col_span || 1) * 4, 4),
+        gs_h: Math.max((template.row_span || 1) * 3, 3),
+      };
+
+      const resp = await fetch(`/api/canvas/${encodeURIComponent(project)}/widgets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(widgetBody),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${resp.status}`);
+      }
+
+      pickerEl?.classList.add('hidden');
+      toast(`Widget added to "${project}" canvas`, 'success', 4000);
+    } catch (e) {
+      toast(`Failed to add widget: ${e.message}`, 'error');
+    }
+  });
+
+  // ── Escape key closes detail panel ─────────────────────────────────────────
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && _selectedTemplateId) {
+      _closeDetailPanel();
     }
   });
 

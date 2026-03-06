@@ -186,16 +186,85 @@
         </div>
       </div>
 
-      <!-- Divider -->
+      <!-- Divider + Filter bar -->
       <div class="studio-divider">
         <div class="studio-divider-line"></div>
         <span class="studio-divider-label">Catalog</span>
         <div class="studio-divider-line"></div>
       </div>
 
+      <div class="studio-filter-bar" id="studio-filter-bar">
+        <div class="studio-search-wrap">
+          <svg class="studio-search-icon" width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <circle cx="5.5" cy="5.5" r="4" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M8.5 8.5L12 12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          <input type="text" id="studio-search" class="studio-search-input" placeholder="Search templates..." spellcheck="false" />
+        </div>
+        <div class="studio-category-filters" id="studio-category-filters">
+          <button class="studio-cat-btn active" data-category="all">All</button>
+          <button class="studio-cat-btn" data-category="metrics">Metrics</button>
+          <button class="studio-cat-btn" data-category="chart">Chart</button>
+          <button class="studio-cat-btn" data-category="status">Status</button>
+          <button class="studio-cat-btn" data-category="log">Log</button>
+          <button class="studio-cat-btn" data-category="custom">Custom</button>
+        </div>
+        <div class="studio-view-toggle" id="studio-view-toggle">
+          <button class="studio-view-btn active" data-view="grid" title="Grid view">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/>
+              <rect x="8" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/>
+              <rect x="1" y="8" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/>
+              <rect x="8" y="8" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/>
+            </svg>
+          </button>
+          <button class="studio-view-btn" data-view="list" title="List view">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M1 3h12M1 7h12M1 11h12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
       <!-- Template catalog grid -->
       <div class="studio-catalog" id="studio-catalog">
         <div class="studio-catalog-grid" id="template-grid"></div>
+      </div>
+
+      <!-- Detail panel (slide-in from right) -->
+      <div class="studio-detail-backdrop hidden" id="studio-detail-backdrop"></div>
+      <div class="studio-detail-panel hidden" id="studio-detail-panel">
+        <div class="studio-detail-header">
+          <button class="studio-detail-close" id="studio-detail-close" title="Close">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <span class="studio-detail-title" id="studio-detail-title"></span>
+          <span class="studio-detail-badge" id="studio-detail-badge"></span>
+        </div>
+        <div class="studio-detail-body">
+          <div class="studio-detail-preview" id="studio-detail-preview"></div>
+          <div class="studio-detail-meta" id="studio-detail-meta"></div>
+          <div class="studio-detail-desc" id="studio-detail-desc"></div>
+          <div class="studio-detail-actions">
+            <button class="studio-detail-btn-add" id="studio-detail-add-canvas">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                <path d="M6.5 2v9M2 6.5h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+              Add to Canvas
+            </button>
+            <button class="studio-detail-btn-copy" id="studio-detail-copy">Copy canvas_put</button>
+            <button class="studio-detail-btn-delete" id="studio-detail-delete">Delete</button>
+          </div>
+          <!-- Project picker (shown when Add to Canvas is clicked) -->
+          <div class="studio-project-picker hidden" id="studio-project-picker">
+            <label class="studio-picker-label">Select project:</label>
+            <select class="studio-picker-select" id="studio-picker-select"></select>
+            <button class="studio-picker-confirm" id="studio-picker-confirm">Add Widget</button>
+            <button class="studio-picker-cancel" id="studio-picker-cancel">Cancel</button>
+          </div>
+        </div>
       </div>
 
     </div>
