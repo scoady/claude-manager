@@ -1,133 +1,99 @@
-/** TasksPanel — equalizer-style task progress with per-task agent output */
+/** TasksPanel — Mission Control Board with canvas-style task widgets */
 import { escapeHtml, toast } from '../utils.js';
 import { renderMarkdown } from './MarkdownRenderer.js';
 import { api } from '../api.js';
+
+// Color palette
+const COLORS = {
+  done: { main: '#4ade80', dim: 'rgba(74,222,128,0.12)', glow: 'rgba(74,222,128,0.35)' },
+  in_progress: { main: '#fbbf24', dim: 'rgba(251,191,36,0.12)', glow: 'rgba(251,191,36,0.35)' },
+  pending: { main: '#475569', dim: 'rgba(71,85,105,0.15)', glow: 'rgba(71,85,105,0.2)' },
+  cyan: '#67e8f9',
+  purple: '#a78bfa',
+  surface: '#0e1525',
+  elevated: '#141d30',
+};
 
 export class TasksPanel {
   constructor(projectName) {
     this._project = projectName;
     this._tasks = [];
     this._el = document.createElement('div');
-    this._el.className = 'tasks-panel';
-    this._collapsedGroups = new Set();
-    // Per-task stream buffers: taskIndex → accumulated markdown text
+    this._el.className = 'tasks-panel-v2';
     this._taskStreams = new Map();
-    // Per-task tool calls: taskIndex → [{toolName, toolInput, toolOutput, duration, status}]
     this._taskTools = new Map();
-    // taskIndex → sessionId mapping (set externally by FeedController)
     this._taskAgentMap = new Map();
-    // Currently open modal task index (null if closed)
     this._modalTaskIndex = null;
+    this._particles = [];
+    this._animFrame = null;
+    this._filterStatus = 'all'; // all | in_progress | pending | done
     this._render();
   }
 
   get el() { return this._el; }
 
-  /** Set the task→agent mapping so streams route to the right row. */
-  setTaskAgentMap(map) {
-    this._taskAgentMap = map;
-  }
+  setTaskAgentMap(map) { this._taskAgentMap = map; }
 
   async load() {
     try {
       this._tasks = await api.getTasks(this._project);
       this._renderContent();
     } catch (e) {
-      this._el.querySelector('.tasks-body').innerHTML =
-        '<div class="tasks-empty">Failed to load tasks</div>';
+      const body = this._el.querySelector('.mc-board');
+      if (body) body.innerHTML = '<div class="mc-empty">Failed to load tasks</div>';
     }
   }
 
   updateTasks(tasks) {
+    const oldStatuses = new Map(this._tasks.map(t => [t.index, t.status]));
     this._tasks = tasks;
+    // Detect completions for particle burst
+    tasks.forEach(t => {
+      if (t.status === 'done' && oldStatuses.get(t.index) !== 'done') {
+        this._queueCompletionBurst(t.index);
+      }
+    });
     this._renderContent();
   }
 
-  /**
-   * Append a stream chunk for a specific agent session.
-   * Routes to the correct task row via taskAgentMap.
-   */
   appendAgentChunk(sessionId, chunk) {
     const taskIndex = this._resolveTaskIndex(sessionId);
     if (taskIndex == null) return;
-
     const prev = this._taskStreams.get(taskIndex) || '';
     this._taskStreams.set(taskIndex, prev + chunk);
-
-    // If modal is open for this task, update it live
-    if (this._modalTaskIndex === taskIndex) {
-      this._updateModalOutput(taskIndex);
-    }
+    if (this._modalTaskIndex === taskIndex) this._updateModalOutput(taskIndex);
+    // Update the card's live indicator
+    this._updateCardLiveState(taskIndex);
   }
 
-  /**
-   * Handle a tool_start event — show milestone badge on the task row + track for modal.
-   */
   addToolMilestone(sessionId, toolName, toolInput) {
     const taskIndex = this._resolveTaskIndex(sessionId);
     if (taskIndex == null) return;
-
-    // Track tool call
     if (!this._taskTools.has(taskIndex)) this._taskTools.set(taskIndex, []);
-    const tools = this._taskTools.get(taskIndex);
-    tools.push({
-      toolName: toolName || '',
-      toolInput: toolInput || {},
-      toolOutput: null,
-      startTime: Date.now(),
-      duration: null,
-      status: 'running'
+    this._taskTools.get(taskIndex).push({
+      toolName: toolName || '', toolInput: toolInput || {},
+      toolOutput: null, startTime: Date.now(), duration: null, status: 'running'
     });
-
-    const row = this._el.querySelector(`.task-row[data-index="${taskIndex}"]`);
-    if (!row) return;
-
-    // Replace waiting indicator
-    const waiting = row.querySelector('.task-waiting');
-    if (waiting) {
-      waiting.innerHTML = '<span class="task-waiting-dots"><span></span><span></span><span></span></span> Agent working\u2026';
-    }
-
-    let badge = row.querySelector('.task-tool-badge');
-    if (!badge) {
-      badge = document.createElement('span');
-      badge.className = 'task-tool-badge';
-      const main = row.querySelector('.task-row-main');
-      main?.insertBefore(badge, main.querySelector('.task-actions'));
-    }
-    badge.textContent = this._toolLabel(toolName, toolInput);
-
-    // Update modal tools tab if open
-    if (this._modalTaskIndex === taskIndex) {
-      this._updateModalTools(taskIndex);
-    }
+    this._updateCardMilestone(taskIndex, toolName, toolInput);
+    if (this._modalTaskIndex === taskIndex) this._updateModalTools(taskIndex);
   }
 
-  /**
-   * Handle a tool_done event — update the last tool's output and status.
-   */
   completeToolMilestone(sessionId, toolOutput) {
     const taskIndex = this._resolveTaskIndex(sessionId);
     if (taskIndex == null) return;
-
     const tools = this._taskTools.get(taskIndex);
-    if (!tools || !tools.length) return;
+    if (!tools?.length) return;
     const last = tools[tools.length - 1];
     last.toolOutput = toolOutput;
     last.duration = Date.now() - last.startTime;
     last.status = 'ok';
-
-    if (this._modalTaskIndex === taskIndex) {
-      this._updateModalTools(taskIndex);
-    }
+    if (this._modalTaskIndex === taskIndex) this._updateModalTools(taskIndex);
   }
 
-  /** Resolve sessionId → taskIndex via the agent map. */
   _resolveTaskIndex(sessionId) {
     for (const [idx, sid] of this._taskAgentMap) {
       if (sid === sessionId) return idx;
     }
-    // Fallback: route to any in_progress task without a mapped agent
     const mappedIndices = new Set(this._taskAgentMap.values());
     const activeTask = this._tasks.find(t =>
       t.status === 'in_progress' && !mappedIndices.has(t.index)
@@ -137,6 +103,222 @@ export class TasksPanel {
       return activeTask.index;
     }
     return null;
+  }
+
+  destroy() {
+    this._closeModal();
+    if (this._animFrame) cancelAnimationFrame(this._animFrame);
+  }
+
+  // ── Rendering ──────────────────────────────────────────────────
+
+  _render() {
+    this._el.innerHTML = `
+      <div class="mc-canvas-bg"><canvas class="mc-particle-canvas"></canvas></div>
+      <div class="mc-content">
+        <div class="mc-add-form">
+          <div class="mc-add-row">
+            <input type="text" class="mc-add-input" placeholder="Add a new task..." />
+            <button class="mc-add-btn" disabled>+</button>
+            <button class="mc-plan-btn" disabled>Plan</button>
+          </div>
+        </div>
+        <div class="mc-board"></div>
+      </div>
+    `;
+    this._bindAddForm();
+    this._initParticleCanvas();
+  }
+
+  _renderContent() {
+    const board = this._el.querySelector('.mc-board');
+    if (!this._tasks.length) {
+      board.innerHTML = `
+        <div class="mc-empty">
+          <div class="mc-empty-icon">
+            <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+              <circle cx="24" cy="24" r="20" stroke="${COLORS.cyan}" stroke-width="1" stroke-dasharray="4 4" opacity="0.3"/>
+              <circle cx="24" cy="24" r="3" fill="${COLORS.cyan}" opacity="0.4"/>
+              <path d="M24 12v4M24 32v4M12 24h4M32 24h4" stroke="${COLORS.cyan}" stroke-width="1" opacity="0.3"/>
+            </svg>
+          </div>
+          <div class="mc-empty-text">No tasks yet</div>
+          <div class="mc-empty-sub">Add a task above to begin</div>
+        </div>`;
+      return;
+    }
+
+    const done = this._tasks.filter(t => t.status === 'done');
+    const active = this._tasks.filter(t => t.status === 'in_progress');
+    const pending = this._tasks.filter(t => t.status === 'pending');
+    const total = this._tasks.length;
+    const pctDone = total ? Math.round((done.length / total) * 100) : 0;
+    const pctActive = total ? Math.round((active.length / total) * 100) : 0;
+    const pctPending = total ? 100 - pctDone - pctActive : 0;
+
+    // Filter tasks
+    const filtered = this._filterStatus === 'all'
+      ? this._tasks
+      : this._tasks.filter(t => t.status === this._filterStatus);
+
+    board.innerHTML = `
+      <div class="mc-status-strip">
+        <div class="mc-flow-bar">
+          <div class="mc-flow-seg mc-flow-done" style="width:${pctDone}%"
+               title="${done.length} done"></div>
+          <div class="mc-flow-seg mc-flow-active" style="width:${pctActive}%"
+               title="${active.length} active"></div>
+          <div class="mc-flow-seg mc-flow-pending" style="width:${pctPending}%"
+               title="${pending.length} pending"></div>
+        </div>
+        <div class="mc-stats-row">
+          <div class="mc-stat mc-stat-pct">
+            <span class="mc-stat-big">${pctDone}</span><span class="mc-stat-unit">%</span>
+          </div>
+          <div class="mc-stat-filters">
+            <button class="mc-filter-btn${this._filterStatus === 'all' ? ' active' : ''}" data-filter="all">
+              ALL <span class="mc-filter-count">${total}</span>
+            </button>
+            <button class="mc-filter-btn mc-filter-active${this._filterStatus === 'in_progress' ? ' active' : ''}" data-filter="in_progress">
+              <span class="mc-filter-dot" style="background:${COLORS.in_progress.main}"></span>
+              ACTIVE <span class="mc-filter-count">${active.length}</span>
+            </button>
+            <button class="mc-filter-btn mc-filter-pending${this._filterStatus === 'pending' ? ' active' : ''}" data-filter="pending">
+              <span class="mc-filter-dot" style="background:${COLORS.pending.main}"></span>
+              QUEUED <span class="mc-filter-count">${pending.length}</span>
+            </button>
+            <button class="mc-filter-btn mc-filter-done${this._filterStatus === 'done' ? ' active' : ''}" data-filter="done">
+              <span class="mc-filter-dot" style="background:${COLORS.done.main}"></span>
+              DONE <span class="mc-filter-count">${done.length}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="mc-grid">
+        ${filtered.map((t, i) => this._renderCard(t, i)).join('')}
+      </div>
+    `;
+
+    this._bindFilterEvents(board);
+    this._bindCardEvents(board);
+  }
+
+  _renderCard(task, staggerIndex) {
+    const st = task.status;
+    const c = COLORS[st] || COLORS.pending;
+    const hasStream = this._taskStreams.has(task.index);
+    const tools = this._taskTools.get(task.index) || [];
+    const lastTool = tools.length ? tools[tools.length - 1] : null;
+    const hasMappedAgent = this._taskAgentMap.has(task.index);
+    const toolCount = tools.length;
+
+    // Progress ring values
+    let ringPct = 0;
+    if (st === 'done') ringPct = 100;
+    else if (st === 'in_progress') ringPct = Math.min(95, 10 + toolCount * 5);
+
+    const circumference = 2 * Math.PI * 18;
+    const dashOffset = circumference - (ringPct / 100) * circumference;
+
+    // Status label
+    const statusLabel = st === 'done' ? 'COMPLETE' : st === 'in_progress' ? 'ACTIVE' : 'QUEUED';
+
+    // Last milestone text
+    let milestoneText = '';
+    if (lastTool) {
+      milestoneText = this._toolLabel(lastTool.toolName, lastTool.toolInput);
+    } else if (st === 'in_progress' && !hasStream && !hasMappedAgent) {
+      milestoneText = 'Waiting for dispatch...';
+    } else if (st === 'in_progress' && !hasStream) {
+      milestoneText = 'Agent starting...';
+    }
+
+    // Indentation indicator
+    const indent = task.indent || 0;
+    const indentMark = indent > 0
+      ? `<span class="mc-card-indent" title="Subtask (depth ${indent})">${'\u2514'.repeat(1)}</span>`
+      : '';
+
+    return `
+      <div class="mc-card mc-card-${st}" data-index="${task.index}"
+           style="animation-delay:${staggerIndex * 40}ms">
+        <div class="mc-card-glow" style="background:radial-gradient(ellipse at 50% 0%, ${c.glow}, transparent 70%)"></div>
+        <div class="mc-card-inner">
+          <div class="mc-card-top">
+            <div class="mc-card-ring">
+              <svg viewBox="0 0 40 40" class="mc-ring-svg">
+                <circle cx="20" cy="20" r="18" fill="none" stroke="${COLORS.elevated}"
+                        stroke-width="2.5"/>
+                <circle cx="20" cy="20" r="18" fill="none" stroke="${c.main}"
+                        stroke-width="2.5" stroke-linecap="round"
+                        stroke-dasharray="${circumference}"
+                        stroke-dashoffset="${dashOffset}"
+                        transform="rotate(-90 20 20)"
+                        class="mc-ring-progress"/>
+                ${st === 'done'
+                  ? `<path d="M14 20l4 4 8-8" stroke="${c.main}" stroke-width="2" fill="none"
+                           stroke-linecap="round" stroke-linejoin="round"
+                           class="mc-ring-check"/>`
+                  : st === 'in_progress'
+                    ? `<circle cx="20" cy="20" r="3" fill="${c.main}" class="mc-ring-pulse"/>`
+                    : `<circle cx="20" cy="20" r="2.5" fill="${COLORS.pending.main}" opacity="0.5"/>`
+                }
+              </svg>
+            </div>
+            <div class="mc-card-info">
+              <div class="mc-card-badge" style="color:${c.main};background:${c.dim};border-color:${c.main}30">
+                ${statusLabel}
+              </div>
+              <div class="mc-card-title">${indentMark}${escapeHtml(task.text)}</div>
+            </div>
+            <div class="mc-card-actions">
+              ${st === 'pending' ? `<button class="mc-start-btn" data-index="${task.index}" title="Start task">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <polygon points="4,2 12,7 4,12" fill="${COLORS.done.main}"/>
+                </svg>
+              </button>` : ''}
+              <button class="mc-cycle-btn" data-index="${task.index}" title="Cycle status">
+                ${this._statusIcon(task.status)}
+              </button>
+              <button class="mc-delete-btn" data-index="${task.index}" title="Remove">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          ${milestoneText ? `
+          <div class="mc-card-milestone">
+            ${st === 'in_progress' ? '<span class="mc-milestone-dot"></span>' : ''}
+            <span class="mc-milestone-text">${escapeHtml(milestoneText)}</span>
+          </div>` : ''}
+          ${toolCount > 0 ? `
+          <div class="mc-card-footer">
+            <span class="mc-tool-count">
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                <path d="M1 5h8M5 1v8" stroke="${COLORS.purple}" stroke-width="1.2" stroke-linecap="round"/>
+              </svg>
+              ${toolCount} tool call${toolCount !== 1 ? 's' : ''}
+            </span>
+            ${hasStream ? '<span class="mc-stream-indicator">STREAMING</span>' : ''}
+          </div>` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  _statusIcon(status) {
+    if (status === 'done') return `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <rect x="1" y="1" width="12" height="12" rx="3" fill="${COLORS.done.dim}" stroke="${COLORS.done.main}" stroke-width="1.3"/>
+      <path d="M4 7l2 2 4-4" stroke="${COLORS.done.main}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
+    if (status === 'in_progress') return `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <rect x="1" y="1" width="12" height="12" rx="3" fill="${COLORS.in_progress.dim}" stroke="${COLORS.in_progress.main}" stroke-width="1.3"/>
+      <path d="M5 7h4" stroke="${COLORS.in_progress.main}" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>`;
+    return `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <rect x="1" y="1" width="12" height="12" rx="3" stroke="${COLORS.pending.main}" stroke-width="1.3"/>
+    </svg>`;
   }
 
   _toolLabel(toolName, input) {
@@ -155,160 +337,162 @@ export class TasksPanel {
     return map[name] || name.charAt(0).toUpperCase();
   }
 
-  destroy() {
-    this._closeModal();
-  }
+  // ── Live card updates (without full re-render) ─────────────────
 
-  // ── Rendering ──────────────────────────────────────────────────
-
-  _render() {
-    this._el.innerHTML = `
-      <div class="tasks-add-form">
-        <div class="tasks-add-row">
-          <input type="text" class="tasks-add-input" placeholder="Add a task..." />
-          <button class="tasks-add-btn" disabled title="Add task">+</button>
-          <button class="tasks-plan-btn" disabled title="Add task &amp; run planner">Plan</button>
-        </div>
-      </div>
-      <div class="tasks-body"></div>
-    `;
-    this._bindAddForm();
-  }
-
-  _renderContent() {
-    const body = this._el.querySelector('.tasks-body');
-
-    if (!this._tasks.length) {
-      body.innerHTML = '<div class="tasks-empty">No tasks yet. Add one above.</div>';
-      return;
+  _updateCardLiveState(taskIndex) {
+    const card = this._el.querySelector(`.mc-card[data-index="${taskIndex}"]`);
+    if (!card) return;
+    // Add streaming indicator if not present
+    let footer = card.querySelector('.mc-card-footer');
+    if (!footer) {
+      const inner = card.querySelector('.mc-card-inner');
+      footer = document.createElement('div');
+      footer.className = 'mc-card-footer';
+      inner.appendChild(footer);
     }
+    if (!footer.querySelector('.mc-stream-indicator')) {
+      footer.innerHTML += '<span class="mc-stream-indicator">STREAMING</span>';
+    }
+  }
 
-    const done = this._tasks.filter(t => t.status === 'done');
-    const active = this._tasks.filter(t => t.status === 'in_progress');
-    const pending = this._tasks.filter(t => t.status === 'pending');
+  _updateCardMilestone(taskIndex, toolName, toolInput) {
+    const card = this._el.querySelector(`.mc-card[data-index="${taskIndex}"]`);
+    if (!card) return;
+    const label = this._toolLabel(toolName, toolInput);
 
-    const eqBars = this._tasks.map((t, i) => {
-      if (t.status === 'done') {
-        const h = 28 + this._seededRandom(i) * 32;
-        return `<div class="eq-bar done" style="height:${h}px" data-index="${t.index}" title="${escapeHtml(t.text)}"></div>`;
-      } else if (t.status === 'in_progress') {
-        const low = 10 + this._seededRandom(i) * 16;
-        const high = 40 + this._seededRandom(i + 100) * 20;
-        const dur = (0.5 + this._seededRandom(i + 200) * 0.6).toFixed(2);
-        return `<div class="eq-bar active" style="--eq-low:${low}px;--eq-high:${high}px;--bounce-dur:${dur}s;height:${low}px" data-index="${t.index}" title="${escapeHtml(t.text)}"></div>`;
-      } else {
-        const h = 6 + this._seededRandom(i) * 10;
-        return `<div class="eq-bar queued" style="height:${h}px" data-index="${t.index}" title="${escapeHtml(t.text)}"></div>`;
+    let milestone = card.querySelector('.mc-card-milestone');
+    if (!milestone) {
+      milestone = document.createElement('div');
+      milestone.className = 'mc-card-milestone';
+      const inner = card.querySelector('.mc-card-inner');
+      const footer = inner.querySelector('.mc-card-footer');
+      if (footer) inner.insertBefore(milestone, footer);
+      else inner.appendChild(milestone);
+    }
+    milestone.innerHTML = `
+      <span class="mc-milestone-dot"></span>
+      <span class="mc-milestone-text">${escapeHtml(label)}</span>
+    `;
+    // Animate flash
+    milestone.classList.remove('mc-milestone-flash');
+    void milestone.offsetWidth;
+    milestone.classList.add('mc-milestone-flash');
+
+    // Update tool count
+    const tools = this._taskTools.get(taskIndex) || [];
+    let countEl = card.querySelector('.mc-tool-count');
+    if (countEl) {
+      countEl.innerHTML = `
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+          <path d="M1 5h8M5 1v8" stroke="${COLORS.purple}" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+        ${tools.length} tool call${tools.length !== 1 ? 's' : ''}
+      `;
+    }
+  }
+
+  // ── Particle canvas ──────────────────────────────────────────────
+
+  _initParticleCanvas() {
+    const canvas = this._el.querySelector('.mc-particle-canvas');
+    if (!canvas) return;
+    this._pCtx = canvas.getContext('2d');
+    this._pCanvas = canvas;
+    this._resizeCanvas();
+    this._particles = [];
+
+    // Seed ambient particles
+    for (let i = 0; i < 30; i++) {
+      this._particles.push(this._makeParticle());
+    }
+    this._animateParticles();
+
+    this._resizeObserver = new ResizeObserver(() => this._resizeCanvas());
+    this._resizeObserver.observe(this._el);
+  }
+
+  _resizeCanvas() {
+    if (!this._pCanvas) return;
+    this._pCanvas.width = this._el.offsetWidth;
+    this._pCanvas.height = this._el.offsetHeight;
+  }
+
+  _makeParticle(x, y, burst = false) {
+    return {
+      x: x ?? Math.random() * (this._pCanvas?.width || 800),
+      y: y ?? Math.random() * (this._pCanvas?.height || 600),
+      vx: (Math.random() - 0.5) * (burst ? 3 : 0.3),
+      vy: (Math.random() - 0.5) * (burst ? 3 : 0.3) - (burst ? 1 : 0),
+      r: burst ? 1.5 + Math.random() * 2.5 : 0.5 + Math.random() * 1.2,
+      life: burst ? 60 + Math.random() * 40 : 200 + Math.random() * 300,
+      maxLife: burst ? 100 : 500,
+      color: burst ? COLORS.done.main : COLORS.cyan,
+      burst,
+    };
+  }
+
+  _queueCompletionBurst(taskIndex) {
+    const card = this._el.querySelector(`.mc-card[data-index="${taskIndex}"]`);
+    if (!card || !this._pCanvas) return;
+    const rect = card.getBoundingClientRect();
+    const elRect = this._el.getBoundingClientRect();
+    const cx = rect.left - elRect.left + rect.width / 2;
+    const cy = rect.top - elRect.top + rect.height / 2;
+    for (let i = 0; i < 20; i++) {
+      this._particles.push(this._makeParticle(cx, cy, true));
+    }
+  }
+
+  _animateParticles() {
+    if (!this._pCtx || !this._pCanvas) return;
+    const ctx = this._pCtx;
+    const w = this._pCanvas.width;
+    const h = this._pCanvas.height;
+
+    ctx.clearRect(0, 0, w, h);
+
+    for (let i = this._particles.length - 1; i >= 0; i--) {
+      const p = this._particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life--;
+
+      if (p.life <= 0) {
+        if (p.burst) {
+          this._particles.splice(i, 1);
+        } else {
+          // Respawn ambient particle
+          Object.assign(p, this._makeParticle());
+        }
+        continue;
       }
-    }).join('');
 
-    body.innerHTML = `
-      <div class="tasks-eq-header">
-        <div class="tasks-eq-title-row">
-          <span class="tasks-eq-title">Task Progress</span>
-          <div class="tasks-eq-stats">
-            <span class="tasks-eq-stat"><span class="stat-dot done"></span> ${done.length} done</span>
-            <span class="tasks-eq-stat"><span class="stat-dot active"></span> ${active.length} active</span>
-            <span class="tasks-eq-stat"><span class="stat-dot queued"></span> ${pending.length} queued</span>
-          </div>
-        </div>
-        <div class="eq-container">${eqBars}</div>
-      </div>
-      <div class="tasks-groups">
-        ${this._renderGroup('active', 'In Progress', active)}
-        ${this._renderGroup('queued', 'Pending', pending)}
-        ${this._renderGroup('done', 'Completed', done)}
-      </div>
-    `;
+      // Wrap ambient particles
+      if (!p.burst) {
+        if (p.x < 0) p.x = w;
+        if (p.x > w) p.x = 0;
+        if (p.y < 0) p.y = h;
+        if (p.y > h) p.y = 0;
+      }
 
-    this._bindGroupEvents(body);
-    this._bindRowEvents(body);
-  }
+      const alpha = Math.min(1, p.life / (p.maxLife * 0.3));
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = p.color;
+      ctx.globalAlpha = alpha * (p.burst ? 0.8 : 0.15);
+      ctx.fill();
 
-  _renderGroup(status, label, tasks) {
-    if (!tasks.length) return '';
-    const collapsed = this._collapsedGroups.has(status);
-    return `
-      <div class="task-group${collapsed ? ' collapsed' : ''}" data-group="${status}">
-        <div class="group-header">
-          <svg class="group-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M5 3l5 5-5 5"/>
-          </svg>
-          <span class="group-badge ${status}">${status === 'active' ? 'ACTIVE' : status === 'done' ? 'DONE' : 'QUEUED'}</span>
-          <span class="group-label">${label}</span>
-          <span class="group-count">${tasks.length} task${tasks.length !== 1 ? 's' : ''}</span>
-        </div>
-        <div class="group-rows">
-          ${tasks.map(t => this._renderTaskRow(t, status)).join('')}
-        </div>
-      </div>
-    `;
-  }
-
-  _renderTaskRow(t, groupStatus) {
-    const hasStream = this._taskStreams.has(t.index);
-    let indicator;
-    if (groupStatus === 'active') {
-      indicator = `<span class="task-status-indicator">
-        <span class="mini-eq-bar"></span>
-        <span class="mini-eq-bar"></span>
-        <span class="mini-eq-bar"></span>
-      </span>`;
-    } else {
-      indicator = `<span class="task-status-indicator"><span class="status-dot ${groupStatus}"></span></span>`;
-    }
-
-    const hasMappedAgent = this._taskAgentMap.has(t.index);
-
-    // Compact inline status: waiting indicator or last tool badge
-    let inlineStatus = '';
-    if (groupStatus === 'active') {
-      if (!hasStream && !hasMappedAgent) {
-        inlineStatus = `<div class="task-waiting"><span class="task-waiting-dots"><span></span><span></span><span></span></span> Waiting for dispatch\u2026</div>`;
-      } else if (!hasStream) {
-        inlineStatus = `<div class="task-waiting"><span class="task-waiting-dots"><span></span><span></span><span></span></span> Agent starting\u2026</div>`;
+      if (p.burst && p.r > 1.5) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * 2, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = alpha * 0.15;
+        ctx.fill();
       }
     }
+    ctx.globalAlpha = 1;
 
-    return `
-      <div class="task-row" data-index="${t.index}">
-        <div class="task-row-main">
-          ${indicator}
-          <span class="task-name${groupStatus === 'queued' ? ' muted' : ''}">${escapeHtml(t.text)}</span>
-          <div class="task-actions">
-            ${groupStatus === 'queued' ? `<button class="task-start-btn" data-index="${t.index}" title="Start this task">Start</button>` : ''}
-            <button class="task-cycle-btn" data-index="${t.index}" title="Cycle status">
-              ${this._statusIcon(t.status)}
-            </button>
-            <button class="task-delete-btn" data-index="${t.index}" title="Remove task">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-        ${inlineStatus ? `<div style="padding: 2px 4px 6px 46px">${inlineStatus}</div>` : ''}
-      </div>
-    `;
-  }
-
-  _statusIcon(status) {
-    if (status === 'done') return `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      <rect x="1" y="1" width="12" height="12" rx="3" fill="var(--accent-green)" opacity="0.15" stroke="var(--accent-green)" stroke-width="1.3"/>
-      <path d="M4 7l2 2 4-4" stroke="var(--accent-green)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>`;
-    if (status === 'in_progress') return `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      <rect x="1" y="1" width="12" height="12" rx="3" fill="var(--accent-amber)" opacity="0.15" stroke="var(--accent-amber)" stroke-width="1.3"/>
-      <path d="M5 7h4" stroke="var(--accent-amber)" stroke-width="1.5" stroke-linecap="round"/>
-    </svg>`;
-    return `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      <rect x="1" y="1" width="12" height="12" rx="3" stroke="var(--text-muted)" stroke-width="1.3"/>
-    </svg>`;
-  }
-
-  _seededRandom(i) {
-    const x = Math.sin(i * 9301 + 49297) * 49297;
-    return x - Math.floor(x);
+    this._animFrame = requestAnimationFrame(() => this._animateParticles());
   }
 
   // ── Modal ────────────────────────────────────────────────────────
@@ -356,14 +540,12 @@ export class TasksPanel {
       </div>
     `;
 
-    // Bind events
     const overlay = container.querySelector('.task-modal-overlay');
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) this._closeModal();
     });
     container.querySelector('.task-modal-close').addEventListener('click', () => this._closeModal());
 
-    // Tab switching
     container.querySelectorAll('.task-modal-tab').forEach(tab => {
       tab.addEventListener('click', () => {
         container.querySelectorAll('.task-modal-tab').forEach(t => t.classList.remove('active'));
@@ -374,10 +556,8 @@ export class TasksPanel {
       });
     });
 
-    // Tool entry expand/collapse
     this._bindModalToolEvents(container);
 
-    // Inject bar
     const injectInput = container.querySelector('.task-modal-inject input');
     const injectBtn = container.querySelector('.task-modal-inject button');
     if (injectInput && injectBtn) {
@@ -400,10 +580,7 @@ export class TasksPanel {
       });
     }
 
-    // Escape to close
-    this._modalEscHandler = (e) => {
-      if (e.key === 'Escape') this._closeModal();
-    };
+    this._modalEscHandler = (e) => { if (e.key === 'Escape') this._closeModal(); };
     document.addEventListener('keydown', this._modalEscHandler);
   }
 
@@ -413,9 +590,7 @@ export class TasksPanel {
     const overlay = container.querySelector('.task-modal-overlay');
     if (overlay) {
       overlay.classList.add('closing');
-      overlay.addEventListener('animationend', () => {
-        container.innerHTML = '';
-      }, { once: true });
+      overlay.addEventListener('animationend', () => { container.innerHTML = ''; }, { once: true });
     } else {
       container.innerHTML = '';
     }
@@ -483,7 +658,6 @@ export class TasksPanel {
     if (!toolsBody) return;
     const tools = this._taskTools.get(taskIndex) || [];
     toolsBody.innerHTML = this._renderModalTools(tools);
-    // Update tab count
     const toolsTab = container.querySelector('.task-modal-tab[data-tab="tools"]');
     if (toolsTab) toolsTab.innerHTML = `Tools <span style="color:var(--text-muted)">(${tools.length})</span>`;
     this._bindModalToolEvents(container);
@@ -498,17 +672,13 @@ export class TasksPanel {
         const tool = taskTools[idx];
         if (!tool) return;
 
-        // Toggle: remove existing detail
         const existing = entry.nextElementSibling;
         if (existing && existing.classList.contains('task-modal-tool-detail')) {
           existing.remove();
           return;
         }
-
-        // Remove any other open detail
         container.querySelectorAll('.task-modal-tool-detail').forEach(d => d.remove());
 
-        // Create detail element
         const detail = document.createElement('div');
         detail.className = 'task-modal-tool-detail';
         let html = '';
@@ -532,9 +702,9 @@ export class TasksPanel {
   // ── Event binding ─────────────────────────────────────────────
 
   _bindAddForm() {
-    const input = this._el.querySelector('.tasks-add-input');
-    const addBtn = this._el.querySelector('.tasks-add-btn');
-    const planBtn = this._el.querySelector('.tasks-plan-btn');
+    const input = this._el.querySelector('.mc-add-input');
+    const addBtn = this._el.querySelector('.mc-add-btn');
+    const planBtn = this._el.querySelector('.mc-plan-btn');
 
     input.addEventListener('input', () => {
       const hasText = input.value.trim().length > 0;
@@ -553,32 +723,25 @@ export class TasksPanel {
     planBtn.addEventListener('click', () => this._addAndPlan(input));
   }
 
-  _bindGroupEvents(root) {
-    root.querySelectorAll('.group-header').forEach(header => {
-      header.addEventListener('click', () => {
-        const group = header.closest('.task-group');
-        const groupName = group.dataset.group;
-        group.classList.toggle('collapsed');
-        if (group.classList.contains('collapsed')) {
-          this._collapsedGroups.add(groupName);
-        } else {
-          this._collapsedGroups.delete(groupName);
-        }
+  _bindFilterEvents(root) {
+    root.querySelectorAll('.mc-filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this._filterStatus = btn.dataset.filter;
+        this._renderContent();
       });
     });
   }
 
-  _bindRowEvents(root) {
-    root.querySelectorAll('.task-row-main').forEach(main => {
-      main.addEventListener('click', (e) => {
-        if (e.target.closest('.task-actions')) return;
-        const row = main.closest('.task-row');
-        const idx = parseInt(row.dataset.index, 10);
+  _bindCardEvents(root) {
+    root.querySelectorAll('.mc-card').forEach(card => {
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.mc-card-actions')) return;
+        const idx = parseInt(card.dataset.index, 10);
         this._openModal(idx);
       });
     });
 
-    root.querySelectorAll('.task-cycle-btn').forEach(btn => {
+    root.querySelectorAll('.mc-cycle-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const idx = parseInt(btn.dataset.index, 10);
@@ -589,14 +752,14 @@ export class TasksPanel {
       });
     });
 
-    root.querySelectorAll('.task-start-btn').forEach(btn => {
+    root.querySelectorAll('.mc-start-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         this._startTask(parseInt(btn.dataset.index, 10));
       });
     });
 
-    root.querySelectorAll('.task-delete-btn').forEach(btn => {
+    root.querySelectorAll('.mc-delete-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         this._deleteTask(parseInt(btn.dataset.index, 10));
