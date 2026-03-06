@@ -16,6 +16,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel as PydanticBaseModel
 
 from .models import (
     AddTaskRequest,
@@ -52,6 +53,7 @@ from .services import skills as skills_svc
 from .services import tasks as tasks_svc
 from .services import roles as roles_svc
 from .services import artifacts as artifacts_svc
+from .services import cron as cron_svc
 from .services import templates as templates_svc
 from .services import widget_catalog as widget_catalog_svc
 from .services.canvas import canvas_service
@@ -195,6 +197,33 @@ def _compute_stats(broker: AgentBroker) -> GlobalStats:
     )
 
 
+# ─── Cron dispatch helper ──────────────────────────────────────────────────────
+
+
+def _make_cron_dispatch(broker: AgentBroker):
+    """Return an async callable that dispatches a cron task through the broker."""
+
+    async def _dispatch(project_name: str, task: str) -> None:
+        loop = asyncio.get_event_loop()
+        project = await loop.run_in_executor(
+            None, projects_svc.get_project, project_name, []
+        )
+        if not project:
+            logger.warning("Cron: project %s not found, skipping", project_name)
+            return
+        model = project.config.model
+        mcp_config = project.config.mcp_config
+        await broker.create_session(
+            project_name=project_name,
+            project_path=project.path,
+            initial_task=f"[Cron scheduled task] {task}",
+            model=model,
+            mcp_config_path=mcp_config,
+        )
+
+    return _dispatch
+
+
 # ─── Lifespan ──────────────────────────────────────────────────────────────────
 
 
@@ -225,6 +254,7 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(_project_refresh_task(broker)),
         asyncio.create_task(_stats_task(broker)),
         asyncio.create_task(_task_poll_task(broker)),
+        asyncio.create_task(cron_svc.cron_loop(_make_cron_dispatch(broker))),
         rules.start(),
     ]
 
@@ -1095,6 +1125,78 @@ async def get_project_git_status(name: str) -> dict[str, str]:
         return await loop.run_in_executor(None, artifacts_svc.get_git_status, name)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+# ─── Cron API ────────────────────────────────────────────────────────────────
+
+
+class CronJobCreate(PydanticBaseModel):
+    name: str
+    schedule: str
+    task: str
+    enabled: bool = True
+
+
+class CronJobUpdate(PydanticBaseModel):
+    name: str | None = None
+    schedule: str | None = None
+    task: str | None = None
+    enabled: bool | None = None
+
+
+@app.get("/api/projects/{name}/cron")
+async def list_cron_jobs(name: str) -> list[dict[str, Any]]:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, cron_svc.list_jobs, name)
+
+
+@app.post("/api/projects/{name}/cron", status_code=201)
+async def create_cron_job(name: str, body: CronJobCreate) -> dict[str, Any]:
+    try:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, cron_svc.create_job, name, body.name, body.schedule, body.task, body.enabled
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.put("/api/projects/{name}/cron/{job_id}")
+async def update_cron_job(name: str, job_id: str, body: CronJobUpdate) -> dict[str, Any]:
+    try:
+        updates = body.model_dump(exclude_none=True)
+
+        def _do_update():
+            return cron_svc.update_job(name, job_id, **updates)
+
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _do_update)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.delete("/api/projects/{name}/cron/{job_id}")
+async def delete_cron_job(name: str, job_id: str) -> dict[str, str]:
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, cron_svc.delete_job, name, job_id)
+        return {"status": "deleted"}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.post("/api/projects/{name}/cron/{job_id}/trigger")
+async def trigger_cron_job(name: str, job_id: str) -> dict[str, str]:
+    loop = asyncio.get_event_loop()
+    job = await loop.run_in_executor(None, cron_svc.get_job, name, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    broker: AgentBroker = app.state.broker
+    dispatch_fn = _make_cron_dispatch(broker)
+    await dispatch_fn(name, job["task"])
+    cron_svc.mark_job_run(name, job_id)
+    return {"status": "triggered"}
 
 
 # ─── Canvas API ──────────────────────────────────────────────────────────────

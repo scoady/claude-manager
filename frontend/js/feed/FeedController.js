@@ -5,6 +5,7 @@ import { TasksPanel } from './TasksPanel.js';
 import { MilestonesPanel } from './MilestonesPanel.js';
 import { WorkflowPanel } from './WorkflowPanel.js';
 import { ArtifactsPanel } from './ArtifactsPanel.js';
+import { CronPanel } from './CronPanel.js';
 import { renderMarkdown } from './MarkdownRenderer.js';
 import { CanvasEngine } from '../canvas/CanvasEngine.js';
 import { api } from '../api.js';
@@ -42,6 +43,8 @@ export class FeedController {
     this._workflowPanel = null;
     this._artifactsContainer = null;
     this._artifactsPanel = null;
+    this._cronContainer = null;
+    this._cronPanel = null;
     this._subagentMap = new Map(); // tool_use_id → subagent section id
     this._taskAgentMap = new Map(); // taskIndex → sessionId
     this._onDeleteProject = onDeleteProject || null;
@@ -133,6 +136,15 @@ export class FeedController {
     if (this._artifactsPanel) this._artifactsPanel.destroy();
     this._artifactsPanel = new ArtifactsPanel(project.name);
     this._artifactsContainer.appendChild(this._artifactsPanel.el);
+
+    // 7. Cron container (hidden by default)
+    this._cronContainer = document.createElement('div');
+    this._cronContainer.className = 'feed-cron-container hidden';
+    this._el.appendChild(this._cronContainer);
+
+    if (this._cronPanel) this._cronPanel.destroy();
+    this._cronPanel = new CronPanel(project.name);
+    this._cronContainer.appendChild(this._cronPanel.el);
 
     this._bindTabEvents();
 
@@ -392,6 +404,7 @@ export class FeedController {
         <button class="feed-tab" data-feed-tab="milestones">Milestones</button>
         <button class="feed-tab" data-feed-tab="workflow">Workflow</button>
         <button class="feed-tab" data-feed-tab="artifacts">Artifacts</button>
+        <button class="feed-tab" data-feed-tab="cron">Cron</button>
         <button class="feed-save-layout-btn" title="Save dashboard layout">
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
             <path d="M10.5 11.5H2.5a1 1 0 01-1-1V2.5a1 1 0 011-1h6.59a1 1 0 01.7.29l1.92 1.92a1 1 0 01.29.7V10.5a1 1 0 01-1 1z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
@@ -1082,6 +1095,7 @@ export class FeedController {
         this._milestonesContainer?.classList.add('hidden');
         this._workflowContainer?.classList.add('hidden');
         this._artifactsContainer?.classList.add('hidden');
+        this._cronContainer?.classList.add('hidden');
 
         // Overview-only UI elements
         const showOverviewUI = (tabName === 'overview');
@@ -1094,6 +1108,7 @@ export class FeedController {
         // Stop panel refreshes
         this._milestonesPanel?.stopAutoRefresh();
         this._workflowPanel?.stopAutoRefresh();
+        this._cronPanel?.stopAutoRefresh();
 
         if (tabName === 'overview') {
           this._overviewContainer?.classList.remove('hidden');
@@ -1111,6 +1126,9 @@ export class FeedController {
         } else if (tabName === 'artifacts') {
           this._artifactsContainer?.classList.remove('hidden');
           this._artifactsPanel?.load();
+        } else if (tabName === 'cron') {
+          this._cronContainer?.classList.remove('hidden');
+          this._cronPanel?.load();
         }
       });
     });
