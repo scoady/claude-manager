@@ -1,0 +1,502 @@
+#!/usr/bin/env bash
+# cm — Claude Manager CLI
+# Wraps Jenkins, kubectl, and docker compose operations for the local
+# kind/Helm/Jenkins infrastructure.
+#
+# Usage: cm <command> [args...]
+# Run `cm help` for the full command list.
+
+set -euo pipefail
+
+# ── Configuration ────────────────────────────────────────────────────────────
+
+JENKINS_URL="${JENKINS_URL:-http://jenkins.localhost}"
+JENKINS_USER="${JENKINS_USER:-admin}"
+JENKINS_PASS="${JENKINS_PASS:-admin}"
+JENKINS_AUTH="${JENKINS_USER}:${JENKINS_PASS}"
+
+CM_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+GIT_ROOT="$HOME/git"
+KIND_CLUSTER="scoady"
+KUBE_CONTEXT="kind-${KIND_CLUSTER}"
+
+# ── Colors ───────────────────────────────────────────────────────────────────
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+YELLOW='\033[0;33m'
+BOLD='\033[1m'
+DIM='\033[2m'
+RESET='\033[0m'
+
+info()    { echo -e "${CYAN}>>>${RESET} $*"; }
+success() { echo -e "${GREEN}>>>${RESET} $*"; }
+warn()    { echo -e "${YELLOW}>>>${RESET} $*"; }
+error()   { echo -e "${RED}>>>${RESET} $*" >&2; }
+die()     { error "$@"; exit 1; }
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+# Verify a command exists
+require_cmd() {
+  command -v "$1" &>/dev/null || die "Required command not found: $1"
+}
+
+# Call Jenkins JSON API — $1 is the path (e.g. /api/json), rest are curl args
+jenkins_api() {
+  local path="$1"; shift
+  curl -sf --globoff --user "${JENKINS_AUTH}" "${JENKINS_URL}${path}" "$@"
+}
+
+# Get a CSRF crumb for POST requests.  Returns crumb string or empty on failure.
+jenkins_crumb() {
+  jenkins_api "/crumbIssuer/api/json" 2>/dev/null \
+    | python3 -c "import sys,json; print(json.load(sys.stdin)['crumb'])" 2>/dev/null || true
+}
+
+# List all Jenkins job names
+jenkins_list_jobs() {
+  jenkins_api "/api/json?tree=jobs[name]" \
+    | python3 -c "import sys,json; [print(j['name']) for j in json.load(sys.stdin).get('jobs',[])]" 2>/dev/null
+}
+
+# Find the Jenkins job whose config.xml references $1 (repo fragment or job substring)
+jenkins_find_job() {
+  local fragment="$1"
+  local jobs
+  jobs=$(jenkins_list_jobs) || die "Cannot reach Jenkins at ${JENKINS_URL}"
+  while IFS= read -r job; do
+    [[ -z "$job" ]] && continue
+    local cfg
+    cfg=$(jenkins_api "/job/${job}/config.xml" 2>/dev/null) || continue
+    if echo "$cfg" | grep -q "$fragment"; then
+      echo "$job"
+      return 0
+    fi
+  done <<< "$jobs"
+  return 1
+}
+
+# Trigger a Jenkins job.  $1=job name, remaining args become build parameters.
+# For parameterized builds pass key=value pairs after the job name.
+jenkins_trigger() {
+  local job="$1"; shift
+  local crumb
+  crumb=$(jenkins_crumb)
+  [[ -z "$crumb" ]] && die "Jenkins unreachable (cannot get crumb)"
+
+  local cookie_jar
+  cookie_jar=$(mktemp)
+  # Re-fetch crumb with cookie jar for CSRF consistency
+  crumb=$(curl -sf -c "$cookie_jar" --user "${JENKINS_AUTH}" \
+    "${JENKINS_URL}/crumbIssuer/api/json" \
+    | python3 -c "import sys,json; print(json.load(sys.stdin)['crumb'])" 2>/dev/null)
+
+  local url http_code
+  if [[ $# -gt 0 ]]; then
+    # Parameterized build
+    local params=""
+    for kv in "$@"; do
+      local k="${kv%%=*}" v="${kv#*=}"
+      params="${params}&${k}=${v}"
+    done
+    params="${params:1}"  # strip leading &
+    url="${JENKINS_URL}/job/${job}/buildWithParameters?${params}"
+  else
+    url="${JENKINS_URL}/job/${job}/build"
+  fi
+
+  http_code=$(curl -s -b "$cookie_jar" -X POST "$url" \
+    --user "${JENKINS_AUTH}" \
+    -H "Jenkins-Crumb: ${crumb}" \
+    -w "%{http_code}" -o /dev/null)
+  rm -f "$cookie_jar"
+
+  if [[ "$http_code" == "201" ]]; then
+    success "Triggered ${BOLD}${job}${RESET} ${DIM}(${JENKINS_URL}/job/${job})${RESET}"
+    return 0
+  else
+    die "Jenkins returned HTTP ${http_code} for job ${job}"
+  fi
+}
+
+# Resolve project name: if given, use it; otherwise infer from cwd repo name.
+resolve_project() {
+  local project="${1:-}"
+  if [[ -z "$project" ]]; then
+    # Try to infer from current git repo
+    local remote
+    remote=$(git remote get-url origin 2>/dev/null || true)
+    if [[ -n "$remote" ]]; then
+      project=$(echo "$remote" | sed 's|.*[/:]||; s|\.git$||')
+    fi
+  fi
+  [[ -z "$project" ]] && die "Cannot determine project. Pass a project name or run from inside a git repo."
+  echo "$project"
+}
+
+# Get the GitHub org/repo fragment for a project
+repo_fragment() {
+  local project="$1"
+  local repo_dir="${GIT_ROOT}/${project}"
+  if [[ -d "$repo_dir/.git" ]]; then
+    local remote
+    remote=$(git -C "$repo_dir" remote get-url origin 2>/dev/null || true)
+    if [[ -n "$remote" ]]; then
+      echo "$remote" | sed 's|.*github\.com[:/]||; s|\.git$||'
+      return
+    fi
+  fi
+  # Fallback: assume scoady org
+  echo "scoady/${project}"
+}
+
+# Get the latest build number for a job
+jenkins_latest_build() {
+  local job="$1"
+  jenkins_api "/job/${job}/lastBuild/api/json?tree=number" 2>/dev/null \
+    | python3 -c "import sys,json; print(json.load(sys.stdin)['number'])" 2>/dev/null || echo ""
+}
+
+# ── Commands ─────────────────────────────────────────────────────────────────
+
+cmd_build() {
+  local project
+  project=$(resolve_project "${1:-}")
+  local fragment
+  fragment=$(repo_fragment "$project")
+  info "Finding build job for ${BOLD}${project}${RESET} (${fragment})..."
+
+  local job
+  job=$(jenkins_find_job "$fragment" | head -1 | grep -i build) || true
+  if [[ -z "$job" ]]; then
+    # Try explicit name
+    job="${project}-build"
+    info "No config.xml match, trying ${job}..."
+    jenkins_api "/job/${job}/api/json" &>/dev/null || die "Build job not found for ${project}"
+  fi
+
+  info "Triggering ${BOLD}${job}${RESET}..."
+  jenkins_trigger "$job"
+}
+
+cmd_deploy() {
+  local project
+  project=$(resolve_project "${1:-}")
+  local tag="${2:-latest}"
+  local fragment
+  fragment=$(repo_fragment "$project")
+  info "Finding deploy job for ${BOLD}${project}${RESET}..."
+
+  local job
+  job=$(jenkins_find_job "$fragment" | grep -i deploy | head -1) || true
+  if [[ -z "$job" ]]; then
+    job="${project}-deploy"
+    info "No config.xml match, trying ${job}..."
+    jenkins_api "/job/${job}/api/json" &>/dev/null || die "Deploy job not found for ${project}"
+  fi
+
+  info "Triggering ${BOLD}${job}${RESET} with IMAGE_TAG=${tag}..."
+  jenkins_trigger "$job" "IMAGE_TAG=${tag}"
+}
+
+cmd_build_deploy() {
+  local project
+  project=$(resolve_project "${1:-}")
+  info "Build + deploy for ${BOLD}${project}${RESET}"
+  info "The build pipeline will trigger deploy automatically."
+  cmd_build "$project"
+}
+
+cmd_status() {
+  local project
+  project=$(resolve_project "${1:-}")
+  local fragment
+  fragment=$(repo_fragment "$project")
+
+  require_cmd python3
+
+  local jobs
+  jobs=$(jenkins_list_jobs) || die "Cannot reach Jenkins"
+
+  echo ""
+  echo -e "${BOLD}Jenkins jobs for ${project}${RESET}"
+  echo -e "${DIM}────────────────────────────────────────${RESET}"
+
+  while IFS= read -r job; do
+    [[ -z "$job" ]] && continue
+    local cfg
+    cfg=$(jenkins_api "/job/${job}/config.xml" 2>/dev/null) || continue
+    if echo "$cfg" | grep -q "$fragment"; then
+      local build_json
+      build_json=$(jenkins_api "/job/${job}/lastBuild/api/json?tree=number,result,timestamp,duration,displayName" 2>/dev/null) || true
+      if [[ -n "$build_json" ]]; then
+        local num result duration
+        num=$(echo "$build_json" | python3 -c "import sys,json; print(json.load(sys.stdin).get('number','?'))" 2>/dev/null)
+        result=$(echo "$build_json" | python3 -c "import sys,json; print(json.load(sys.stdin).get('result','RUNNING') or 'RUNNING')" 2>/dev/null)
+        duration=$(echo "$build_json" | python3 -c "import sys,json; d=json.load(sys.stdin).get('duration',0); print(f'{d//1000}s')" 2>/dev/null)
+
+        local color="$YELLOW"
+        [[ "$result" == "SUCCESS" ]] && color="$GREEN"
+        [[ "$result" == "FAILURE" ]] && color="$RED"
+
+        echo -e "  ${BOLD}${job}${RESET}  #${num}  ${color}${result}${RESET}  ${DIM}(${duration})${RESET}"
+      else
+        echo -e "  ${BOLD}${job}${RESET}  ${DIM}(no builds)${RESET}"
+      fi
+    fi
+  done <<< "$jobs"
+  echo ""
+}
+
+cmd_logs() {
+  local project
+  project=$(resolve_project "${1:-}")
+  local fragment
+  fragment=$(repo_fragment "$project")
+
+  # Find the build job
+  local job
+  job=$(jenkins_find_job "$fragment" | grep -i build | head -1) || true
+  [[ -z "$job" ]] && job="${project}-build"
+
+  local build_num
+  build_num=$(jenkins_latest_build "$job")
+  [[ -z "$build_num" ]] && die "No builds found for ${job}"
+
+  info "Tailing console for ${BOLD}${job}${RESET} #${build_num}..."
+  echo -e "${DIM}────────────────────────────────────────${RESET}"
+
+  # Stream console output — follow if build is still running
+  local offset=0
+  local more="true"
+  while [[ "$more" == "true" ]]; do
+    local response headers
+    local tmpfile
+    tmpfile=$(mktemp)
+    curl -sf --user "${JENKINS_AUTH}" \
+      "${JENKINS_URL}/job/${job}/${build_num}/logText/progressiveText?start=${offset}" \
+      -D "$tmpfile" -o /dev/stdout 2>/dev/null || true
+    headers=$(cat "$tmpfile")
+    rm -f "$tmpfile"
+
+    local new_offset
+    new_offset=$(echo "$headers" | grep -i "X-Text-Size" | tr -d '\r' | awk '{print $2}')
+    more=$(echo "$headers" | grep -i "X-More-Data" | tr -d '\r' | awk '{print $2}')
+
+    if [[ -n "$new_offset" ]]; then
+      offset="$new_offset"
+    fi
+
+    if [[ "$more" == "true" ]]; then
+      sleep 2
+    fi
+  done
+  echo ""
+  success "Console output complete."
+}
+
+cmd_pods() {
+  local project
+  project=$(resolve_project "${1:-}")
+  require_cmd kubectl
+  info "Pods in namespace ${BOLD}${project}${RESET}"
+  echo ""
+  kubectl --context="${KUBE_CONTEXT}" get pods -n "$project" \
+    -o wide --no-headers 2>/dev/null \
+    | while read -r line; do
+      if echo "$line" | grep -q "Running"; then
+        echo -e "  ${GREEN}${line}${RESET}"
+      elif echo "$line" | grep -qE "Error|CrashLoop|OOMKilled"; then
+        echo -e "  ${RED}${line}${RESET}"
+      else
+        echo -e "  ${YELLOW}${line}${RESET}"
+      fi
+    done || warn "Namespace ${project} not found or no pods running."
+  echo ""
+}
+
+cmd_restart() {
+  local project
+  project=$(resolve_project "${1:-}")
+  require_cmd kubectl
+  info "Rolling restart of deployments in ${BOLD}${project}${RESET}..."
+  local deployments
+  deployments=$(kubectl --context="${KUBE_CONTEXT}" get deployments -n "$project" \
+    -o jsonpath='{.items[*].metadata.name}' 2>/dev/null)
+  if [[ -z "$deployments" ]]; then
+    die "No deployments found in namespace ${project}"
+  fi
+  for dep in $deployments; do
+    kubectl --context="${KUBE_CONTEXT}" rollout restart deployment/"$dep" -n "$project"
+    success "Restarted ${BOLD}${dep}${RESET}"
+  done
+}
+
+cmd_frontend_build() {
+  info "Triggering frontend build for claude-manager..."
+  local job="claude-manager-build"
+  jenkins_api "/job/${job}/api/json" &>/dev/null \
+    || die "Job ${job} not found on Jenkins"
+  jenkins_trigger "$job"
+}
+
+cmd_backend_restart() {
+  info "Restarting claude-manager backend..."
+  cd "$CM_DIR"
+  docker compose down 2>/dev/null || true
+  success "Containers stopped."
+  info "Starting via scripts/start.sh -d ..."
+  exec bash "${CM_DIR}/scripts/start.sh" -d
+}
+
+cmd_cluster_status() {
+  require_cmd kubectl
+  local ctx="${KUBE_CONTEXT}"
+
+  echo ""
+  echo -e "${BOLD}Cluster: ${KIND_CLUSTER}${RESET}  ${DIM}(context: ${ctx})${RESET}"
+  echo -e "${DIM}════════════════════════════════════════════════════════════════${RESET}"
+
+  echo ""
+  echo -e "${BOLD}Nodes${RESET}"
+  kubectl --context="$ctx" get nodes -o wide 2>/dev/null || warn "Cannot reach cluster"
+
+  echo ""
+  echo -e "${BOLD}Pods (all namespaces)${RESET}"
+  kubectl --context="$ctx" get pods -A --sort-by='.metadata.namespace' 2>/dev/null \
+    | while IFS= read -r line; do
+      if echo "$line" | grep -q "Running"; then
+        echo -e "  ${GREEN}${line}${RESET}"
+      elif echo "$line" | head -1 | grep -q "NAMESPACE"; then
+        echo -e "  ${BOLD}${line}${RESET}"
+      elif echo "$line" | grep -qE "Error|CrashLoop|OOMKilled|ImagePull"; then
+        echo -e "  ${RED}${line}${RESET}"
+      elif echo "$line" | grep -q "Completed"; then
+        echo -e "  ${DIM}${line}${RESET}"
+      else
+        echo -e "  ${YELLOW}${line}${RESET}"
+      fi
+    done
+
+  echo ""
+  echo -e "${BOLD}Services (non-default)${RESET}"
+  kubectl --context="$ctx" get svc -A --no-headers 2>/dev/null \
+    | grep -v "^default " \
+    | grep -v "^kube-system " \
+    | while IFS= read -r line; do
+      echo -e "  ${CYAN}${line}${RESET}"
+    done
+  echo ""
+}
+
+cmd_registry_fix() {
+  require_cmd kubectl
+  require_cmd docker
+  info "Fixing registry /etc/hosts on kind nodes..."
+
+  local registry_ip
+  registry_ip=$(kubectl --context="${KUBE_CONTEXT}" get svc registry -n registry \
+    -o jsonpath='{.spec.clusterIP}' 2>/dev/null) \
+    || die "Cannot find registry service in namespace 'registry'"
+
+  info "Registry ClusterIP: ${registry_ip}"
+
+  local nodes
+  nodes=$(kind get nodes --name "$KIND_CLUSTER" 2>/dev/null) || die "Cannot list kind nodes"
+
+  while IFS= read -r node; do
+    [[ -z "$node" ]] && continue
+    docker exec "$node" sh -c \
+      "grep -v registry.registry.svc.cluster.local /etc/hosts > /tmp/h && cp /tmp/h /etc/hosts && echo '${registry_ip} registry.registry.svc.cluster.local' >> /etc/hosts"
+    success "Fixed ${BOLD}${node}${RESET}"
+  done <<< "$nodes"
+
+  success "Registry /etc/hosts entries updated on all nodes."
+}
+
+cmd_jenkins_fix() {
+  require_cmd kubectl
+  info "Checking Jenkins pod status..."
+
+  local pod_status
+  pod_status=$(kubectl --context="${KUBE_CONTEXT}" get pods -n cicd -l app.kubernetes.io/name=jenkins \
+    -o jsonpath='{.items[0].status.containerStatuses[0].state}' 2>/dev/null) || true
+
+  if echo "$pod_status" | grep -q "OOMKilled"; then
+    warn "Jenkins pod was OOMKilled. Restarting..."
+  else
+    info "Jenkins pod status: $(kubectl --context="${KUBE_CONTEXT}" get pods -n cicd -l app.kubernetes.io/name=jenkins --no-headers 2>/dev/null || echo 'unknown')"
+  fi
+
+  info "Deleting Jenkins pod to force restart..."
+  kubectl --context="${KUBE_CONTEXT}" delete pod -n cicd -l app.kubernetes.io/name=jenkins --wait=false
+  success "Jenkins pod deleted. Kubernetes will recreate it."
+  info "Wait a moment, then check with: ${BOLD}cm cluster-status${RESET}"
+}
+
+cmd_help() {
+  echo ""
+  echo -e "${BOLD}cm${RESET} -- Claude Manager CLI"
+  echo ""
+  echo -e "${BOLD}USAGE${RESET}"
+  echo "  cm <command> [args...]"
+  echo ""
+  echo -e "${BOLD}BUILD / DEPLOY${RESET}"
+  echo -e "  ${CYAN}build${RESET} [project]           Trigger Jenkins build job for a project"
+  echo -e "  ${CYAN}deploy${RESET} [project] [tag]    Trigger Jenkins deploy job (default tag: latest)"
+  echo -e "  ${CYAN}build-deploy${RESET} [project]    Build then auto-deploy (build triggers deploy)"
+  echo -e "  ${CYAN}status${RESET} [project]          Show build/deploy status from Jenkins"
+  echo -e "  ${CYAN}logs${RESET} [project]            Tail Jenkins build console output"
+  echo -e "  ${CYAN}frontend-build${RESET}            Trigger claude-manager frontend build"
+  echo ""
+  echo -e "${BOLD}KUBERNETES${RESET}"
+  echo -e "  ${CYAN}pods${RESET} [project]            Show k8s pods for a project namespace"
+  echo -e "  ${CYAN}restart${RESET} [project]         Rolling restart of k8s deployments"
+  echo -e "  ${CYAN}cluster-status${RESET}            Show all nodes, pods, and services"
+  echo ""
+  echo -e "${BOLD}INFRASTRUCTURE${RESET}"
+  echo -e "  ${CYAN}backend-restart${RESET}           docker compose down + scripts/start.sh -d"
+  echo -e "  ${CYAN}registry-fix${RESET}              Fix registry /etc/hosts on kind nodes"
+  echo -e "  ${CYAN}jenkins-fix${RESET}               Restart Jenkins pod (OOMKilled recovery)"
+  echo ""
+  echo -e "${BOLD}OTHER${RESET}"
+  echo -e "  ${CYAN}help${RESET}                      Show this help message"
+  echo ""
+  echo -e "${BOLD}PROJECT RESOLUTION${RESET}"
+  echo "  If [project] is omitted, cm infers it from the current git repo's"
+  echo "  remote URL. Pass a project name explicitly to target any repo."
+  echo ""
+  echo -e "${BOLD}ENVIRONMENT${RESET}"
+  echo "  JENKINS_URL   Jenkins base URL   (default: http://jenkins.localhost)"
+  echo "  JENKINS_USER  Jenkins username   (default: admin)"
+  echo "  JENKINS_PASS  Jenkins password   (default: admin)"
+  echo ""
+}
+
+# ── Main dispatch ────────────────────────────────────────────────────────────
+
+main() {
+  local cmd="${1:-help}"
+  shift 2>/dev/null || true
+
+  case "$cmd" in
+    build)           cmd_build "$@" ;;
+    deploy)          cmd_deploy "$@" ;;
+    build-deploy)    cmd_build_deploy "$@" ;;
+    status)          cmd_status "$@" ;;
+    logs)            cmd_logs "$@" ;;
+    pods)            cmd_pods "$@" ;;
+    restart)         cmd_restart "$@" ;;
+    frontend-build)  cmd_frontend_build "$@" ;;
+    backend-restart) cmd_backend_restart "$@" ;;
+    cluster-status)  cmd_cluster_status "$@" ;;
+    registry-fix)    cmd_registry_fix "$@" ;;
+    jenkins-fix)     cmd_jenkins_fix "$@" ;;
+    help|--help|-h)  cmd_help ;;
+    *)               error "Unknown command: ${cmd}"; cmd_help; exit 1 ;;
+  esac
+}
+
+main "$@"

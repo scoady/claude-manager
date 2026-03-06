@@ -29,3 +29,4 @@ frontend/dist/
 !.claude/INSTRUCTIONS.md
 .claude-snapshot/
 .worktrees/
+.host-bins/

@@ -427,7 +427,9 @@ async def dispatch_task(name: str, body: DispatchRequest) -> dict[str, Any]:
 
     # Fallback: controller busy or missing — spawn single standalone agent
     model = body.model or project.config.model
-    mcp_config = project.config.mcp_config
+    mcp_config = project.config.mcp_config or str(
+        Path(__file__).resolve().parent / "mcp" / "controller_mcp_config.json"
+    )
 
     session = await broker.create_session(
         project_name=name,

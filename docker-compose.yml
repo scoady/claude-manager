@@ -27,6 +27,15 @@ services:
       - "${HOME}/.gitconfig:/root/.gitconfig:ro"
       # OAuth token file — refreshed on host by launchd, read per-spawn by backend
       - "./.claude-snapshot/oauth-token:/run/claude-oauth-token:ro"
+      # Docker socket — so agents can build images and interact with Docker
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      # Kubeconfig — rewritten with host.docker.internal for in-container access
+      - "./.claude-snapshot/kubeconfig:/root/.kube/config:ro"
+      # Host CLI binaries — copies in .host-bins/ (Docker Desktop can't share /opt/homebrew)
+      - "./.host-bins/docker:/usr/local/bin/docker:ro"
+      - "./.host-bins/kubectl:/usr/local/bin/kubectl:ro"
+      - "./.host-bins/helm:/usr/local/bin/helm:ro"
+      - "./.host-bins/kind:/usr/local/bin/kind:ro"
     environment:
       CLAUDE_DATA_DIR: /root/.claude
       MANAGED_PROJECTS_DIR: "${MANAGED_PROJECTS_DIR:-${HOME}/git/claude-managed-projects}"

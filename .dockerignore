@@ -6,3 +6,4 @@ frontend/dist
 .git
 ci
 infrastructure
+.host-bins/
