@@ -106,6 +106,8 @@ def _build_template_catalog_docs() -> str:
 async def _broadcast_project_list(broker: AgentBroker) -> None:
     active_map: dict[str, list[str]] = {}
     for s in broker.get_all_sessions():
+        if s.project_name == "__global__":
+            continue
         active_map.setdefault(s.project_name, []).append(s.session_id)
     project_list = projects_svc.list_projects(active_map)
     await ws_manager.broadcast(
@@ -137,12 +139,35 @@ _task_cache: dict[str, list[dict]] = {}
 
 
 async def _notify_controller_queue(project_name: str, context: str) -> None:
-    """Trigger direct task dispatch when tasks are added or completed."""
+    """Notify global controller about task changes, fall back to direct dispatch."""
     broker: AgentBroker = app.state.broker
     try:
+        controller = broker.get_global_controller()
+        if controller and controller.phase == SessionPhase.IDLE:
+            await broker.inject_message(
+                controller.session_id,
+                f'Project: "{project_name}"\n{context}\n'
+                f'Check list_tasks(project="{project_name}") and dispatch_agent() if needed.',
+            )
+            return
+        # Controller busy or missing — fall back to direct dispatch
         await broker.check_task_queue(project_name)
     except Exception as exc:
         print(f"[task-queue] notify error: {exc}")
+
+
+async def _controller_health_task(broker: AgentBroker, mcp_config_path: str) -> None:
+    """Respawn the global controller if it dies."""
+    while True:
+        await asyncio.sleep(10.0)
+        try:
+            controller = broker.get_global_controller()
+            if not controller:
+                logger.warning("Global controller died, respawning...")
+                await broker.spawn_global_controller(mcp_config_path=mcp_config_path)
+                logger.info("Global controller respawned")
+        except Exception as exc:
+            logger.error("Controller health check error: %s", exc)
 
 
 async def _metrics_snapshot_task(broker: AgentBroker) -> None:
@@ -205,7 +230,7 @@ async def _task_poll_task(broker: AgentBroker) -> None:
 
 
 def _compute_stats(broker: AgentBroker) -> GlobalStats:
-    sessions = broker.get_all_sessions()
+    sessions = [s for s in broker.get_all_sessions() if s.project_name != "__global__"]
     working = sum(
         1 for s in sessions
         if s.phase not in (SessionPhase.IDLE, SessionPhase.CANCELLED, SessionPhase.ERROR)
@@ -274,12 +299,21 @@ async def lifespan(app: FastAPI):
     app.state.broker = broker
     app.state.rules = rules
 
+    # Spawn global controller
+    controller_mcp = str(Path(__file__).resolve().parent / "mcp" / "controller_mcp_config.json")
+    try:
+        await broker.spawn_global_controller(mcp_config_path=controller_mcp)
+        logger.info("Global controller spawned")
+    except Exception as exc:
+        logger.error("Failed to spawn global controller: %s", exc)
+
     tasks = [
         asyncio.create_task(_project_refresh_task(broker)),
         asyncio.create_task(_stats_task(broker)),
         asyncio.create_task(_task_poll_task(broker)),
         asyncio.create_task(_metrics_snapshot_task(broker)),
         asyncio.create_task(cron_svc.cron_loop(_make_cron_dispatch(broker))),
+        asyncio.create_task(_controller_health_task(broker, controller_mcp)),
         rules.start(),
     ]
 
@@ -318,6 +352,8 @@ async def list_projects() -> list[ManagedProject]:
     broker: AgentBroker = app.state.broker
     active_map: dict[str, list[str]] = {}
     for s in broker.get_all_sessions():
+        if s.project_name == "__global__":
+            continue
         active_map.setdefault(s.project_name, []).append(s.session_id)
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, projects_svc.list_projects, active_map)
@@ -343,61 +379,20 @@ async def create_project(body: BootstrapProjectRequest) -> ManagedProject:
 
     await _broadcast_project_list(broker)
 
-    project_name = project.name
-
-    _CONTROLLER_MCP_CONFIG = str(
-        Path(__file__).resolve().parent / "mcp" / "controller_mcp_config.json"
-    )
-
-    async def _spawn_controller():
-        controller_task = (
-            "You are the CONTROLLER agent for this project.\n\n"
-            "Your job is to READ PROJECT.md, CREATE a task plan, and MAINTAIN the project dashboard.\n\n"
-            "## Communication Style\n"
-            "IMPORTANT: Always narrate what you're doing in plain English BEFORE making tool calls.\n"
-            "The user sees your text output in real-time on the dashboard.\n"
-            "- Write short status updates: 'Reading project files to understand the goal...'\n"
-            "- Summarize findings: 'Found 5 pending tasks, 2 are blocked on the API refactor.'\n"
-            "- Announce decisions: 'Dispatching a worker to handle the auth migration.'\n"
-            "- Report results: 'Worker completed — tests passing, PR ready for review.'\n"
-            "Keep updates concise (1-2 sentences) but ALWAYS provide them. Never go silent.\n\n"
-            "## Planning\n"
-            "1. Read PROJECT.md to understand the project goal\n"
-            f'2. Use create_tasks(project="{project_name}", tasks=[...]) to add tasks\n'
-            "   - Each task should be a single actionable unit of work\n"
-            "   - Order them logically (dependencies first)\n"
-            "   - Be specific: 'Create hello.sh that prints Hello World' not 'Set up project'\n"
-            "3. Stop when all tasks are created.\n\n"
-            "## Dashboard Management\n"
-            "You OWN the project dashboard. After creating tasks, set up dashboard widgets.\n"
-            "Use `canvas_put()` with `template` (template ID) and `data` (JSON matching the schema).\n"
-            "The system renders templates server-side — just push data, no HTML needed.\n\n"
-            "Available templates:\n"
-            f"{_build_template_catalog_docs()}\n\n"
-            "Example:\n"
-            f'canvas_put(project="{project_name}", widget_id="task-board", title="Tasks",\n'
-            '  template="<template_id>", data=\'{{...fields matching schema...}}\')\n\n'
-            "Dashboard rules:\n"
-            "- YOU are the only agent that creates/updates/removes widgets\n"
-            "- Worker agents report results back to you; you update the dashboard\n"
-            "- Use stable widget_ids so updates replace existing widgets (not create duplicates)\n"
-            "- Standard widget_ids: task-progress, task-board, project-status, activity-log\n"
-            "- Update widgets when: tasks are created, tasks complete, status changes\n"
-            "- Push DATA, not HTML — the template engine renders it for you\n\n"
-            "IMPORTANT: You are a planner/coordinator only. Do NOT write code, do NOT dispatch agents.\n"
-            "Worker agents are spawned automatically for each task you create.\n"
-            "Always use create_tasks() — NEVER edit TASKS.md directly."
+    # Notify global controller about the new project so it can plan tasks
+    controller = broker.get_global_controller()
+    if controller:
+        project_name = project.name
+        setup_prompt = (
+            f'New project created: "{project_name}"\n'
+            f'Path: {project.path}\n\n'
+            f'Read PROJECT.md at that path to understand the goal, then use '
+            f'create_tasks(project="{project_name}", tasks=[...]) to add tasks.\n'
+            f'Each task should be a single actionable unit of work, ordered by dependencies.\n'
+            f'Be specific. Workers will be auto-dispatched for each task you create.\n'
+            f'Narrate what you\'re doing — the user sees your output in real-time.'
         )
-        await broker.create_session(
-            project_name=project.name,
-            project_path=project.path,
-            initial_task=controller_task,
-            model=project.config.model,
-            is_controller=True,
-            mcp_config_path=project.config.mcp_config or _CONTROLLER_MCP_CONFIG,
-        )
-
-    asyncio.create_task(_spawn_controller())
+        await broker.inject_message(controller.session_id, setup_prompt)
 
     return project
 
@@ -457,36 +452,15 @@ async def dispatch_task(name: str, body: DispatchRequest) -> dict[str, Any]:
         "tasks": tasks,
     })
 
-    # Route through controller if available and idle
-    controller = broker.get_controller_for_project(name)
+    # Route through global controller
+    controller = broker.get_global_controller()
     if controller and controller.phase == SessionPhase.IDLE:
-        # Include dashboard data polling instruction if configured
-        dashboard_extra = ""
-        if project.config.dashboard_prompt:
-            dashboard_extra = (
-                '\n\nAfter dispatching the worker, use request_dashboard_data() '
-                'to poll the worker for structured data to update your dashboard widgets. '
-                'Call it periodically while the worker runs, and update widgets with canvas_put().'
-            )
-
         task_prompt = (
-            f'New task received (TASKS.md index #{new_task_idx}): "{body.task}"\n\n'
-            f'IMPORTANT: Narrate what you\'re doing in plain English as you work.\n'
-            f'The user sees your text on the dashboard in real-time. Write short status updates\n'
-            f'before tool calls and summarize results after. Never go silent.\n\n'
-            f'THINK FIRST before acting. Analyze this request:\n'
-            f'1. Can you answer this directly without spawning workers? (e.g. status questions, simple queries)\n'
-            f'   - If yes, just respond with the answer. No workers needed.\n'
-            f'2. Does this need one worker or multiple? What should each worker do?\n'
-            f'   - Break complex tasks into clear, independent sub-tasks before dispatching.\n'
-            f'3. Is this a duplicate of work already in progress? Check with get_agents() first.\n\n'
-            f'When you DO need workers:\n'
-            f'- Use dispatch_agent(project="{name}", task_index={new_task_idx}) to spawn a worker.\n'
-            f'- This links the worker to the task so it auto-completes when done.\n'
-            f'- Monitor with get_agents() and report results when done.\n'
-            f'- Do NOT implement anything yourself — you are the coordinator.\n\n'
-            f'After dispatching or answering, update the dashboard if needed.'
-            f'{dashboard_extra}'
+            f'Project: "{name}"\n'
+            f'New task (TASKS.md index #{new_task_idx}): "{body.task}"\n\n'
+            f'Handle this task. Use dispatch_agent(project="{name}", task_index={new_task_idx}) '
+            f'to spawn a worker, or answer directly if it\'s a simple request.\n'
+            f'Narrate what you\'re doing — the user sees your output.'
         )
         await broker.inject_message(controller.session_id, task_prompt)
         return {"status": "delegated", "session_ids": [controller.session_id]}
@@ -588,10 +562,13 @@ async def plan_task(name: str, body: PlanTaskRequest) -> dict[str, Any]:
         f'When done, write a brief summary of the plan.'
     )
 
-    # Route through controller if available and idle
-    controller = broker.get_controller_for_project(name)
+    # Route through global controller if idle
+    controller = broker.get_global_controller()
     if controller and controller.phase == SessionPhase.IDLE:
-        await broker.inject_message(controller.session_id, plan_prompt)
+        await broker.inject_message(
+            controller.session_id,
+            f'Project: "{name}"\n{plan_prompt}',
+        )
         return {"status": "planning", "session_id": controller.session_id}
 
     # Fallback: spawn standalone agent
@@ -637,10 +614,13 @@ async def start_task(name: str, task_index: int, body: DispatchRequest | None = 
         "tasks": tasks_svc.get_tasks(name),
     })
 
-    # Route through controller if available and idle
-    controller = broker.get_controller_for_project(name)
+    # Route through global controller if idle
+    controller = broker.get_global_controller()
     if controller and controller.phase == SessionPhase.IDLE:
-        await broker.inject_message(controller.session_id, task_prompt)
+        await broker.inject_message(
+            controller.session_id,
+            f'Project: "{name}"\n{task_prompt}',
+        )
         return {"status": "delegated", "session_id": controller.session_id, "task": task["text"]}
 
     # Fallback: spawn standalone agent with its own dashboard widget
@@ -714,64 +694,26 @@ async def ensure_orchestrator(name: str):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    controller = broker.get_controller_for_project(name)
+    controller = broker.get_global_controller()
 
     if controller:
         if controller.phase == SessionPhase.IDLE:
-            # Controller exists but idle — inject status check
             await broker.inject_message(
                 controller.session_id,
+                f'Project: "{name}"\n'
                 "Give a brief project status update: Read TASKS.md. "
                 "What tasks are complete, what's in progress, what's next? "
                 "Be concise — 2-3 sentences max.",
             )
             return {"status": "refreshed", "session_id": controller.session_id}
         else:
-            # Controller is already working
             return {"status": "active", "session_id": controller.session_id}
     else:
-        # No controller — spawn one with orchestrator MCP tools
-        _CONTROLLER_MCP = str(
+        # Global controller dead — try to respawn it
+        controller_mcp = str(
             Path(__file__).resolve().parent / "mcp" / "controller_mcp_config.json"
         )
-        session = await broker.create_session(
-            project_name=name,
-            project_path=project.path,
-            initial_task=(
-                "You are the project orchestrator for this project.\n\n"
-                "## MCP Tools\n"
-                "Task management:\n"
-                f'- list_tasks(project="{name}") — get all tasks from TASKS.md\n'
-                f'- dispatch_agent(project="{name}", task_index=N) — spawn a worker for a task\n'
-                f'- get_agents(project="{name}") — check status of all agents\n'
-                f'- report_complete(project="{name}", task_index=N, summary="...") — mark a task done\n'
-                f'- dispatch_custom(project="{name}", task="...") — spawn an ad-hoc agent\n\n'
-                "Dashboard management (you are the SOLE owner of the dashboard):\n"
-                f'- canvas_list(project="{name}") — see current widgets\n'
-                f'- canvas_put(project="{name}", widget_id="...", title="...", template="...", data="...") — create or update a widget\n'
-                f'- canvas_remove(project="{name}", widget_id="...") — remove a widget\n\n'
-                "## Widget Templates (from catalog)\n"
-                "Push DATA via template + data params — the system renders HTML for you.\n"
-                f"{_build_template_catalog_docs()}\n\n"
-                "## Standard Widget IDs\n"
-                "Use consistent IDs so updates replace widgets (not create duplicates):\n"
-                '- "task-progress" — overall progress bar\n'
-                '- "task-board" — status-card listing all tasks with their status\n'
-                '- "project-status" — high-level project health\n'
-                '- "activity-log" — recent events log\n\n'
-                "## Workflow\n"
-                "1. Read PROJECT.md for context, then list_tasks() to see current state\n"
-                "2. Set up initial dashboard widgets (task-progress, task-board)\n"
-                "3. When told to work: dispatch_agent() for tasks, monitor with get_agents()\n"
-                "4. When workers finish: report_complete(), then UPDATE dashboard widgets\n"
-                "5. Workers do NOT update the dashboard — only you do\n\n"
-                "Do NOT implement anything yourself. You coordinate by dispatching agents via MCP tools."
-            ),
-            model=project.config.model if project.config else None,
-            is_controller=True,
-            mcp_config_path=(project.config.mcp_config if project.config else None)
-                or _CONTROLLER_MCP,
-        )
+        session = await broker.spawn_global_controller(mcp_config_path=controller_mcp)
         return {"status": "spawned", "session_id": session.session_id}
 
 
@@ -885,23 +827,20 @@ async def start_workflow(name: str) -> dict[str, Any]:
             None, projects_svc.update_instructions_overlay, name, tpl.instructions_overlay
         )
 
-    # Inject first phase prompt into controller
-    controller = broker.get_controller_for_project(name)
+    # Inject first phase prompt into global controller
+    controller = broker.get_global_controller()
     if controller and controller.phase == SessionPhase.IDLE:
-        await broker.inject_message(controller.session_id, prompt)
+        await broker.inject_message(
+            controller.session_id,
+            f'Project: "{name}"\n{prompt}',
+        )
     else:
-        # No idle controller — create one
-        project = await loop.run_in_executor(None, projects_svc.get_project, name, [])
-        if project:
-            asyncio.create_task(broker.create_session(
-                project_name=name,
-                project_path=project.path,
-                initial_task=prompt,
-                model=project.config.model,
-                is_controller=True,
-                mcp_config_path=project.config.mcp_config
-                    or str(Path(__file__).resolve().parent / "mcp" / "controller_mcp_config.json"),
-            ))
+        # Controller busy — queue prompt for when it's idle (inject queues it)
+        if controller:
+            await broker.inject_message(
+                controller.session_id,
+                f'Project: "{name}"\n{prompt}',
+            )
 
     await ws_manager.broadcast(WSMessageType.WORKFLOW_UPDATED, {
         "project_name": name,
@@ -926,18 +865,24 @@ async def workflow_action(name: str, body: WorkflowActionRequest) -> dict[str, A
                 None, workflows_svc.resume_workflow, name
             )
             if prompt:
-                controller = broker.get_controller_for_project(name)
-                if controller and controller.phase == SessionPhase.IDLE:
-                    await broker.inject_message(controller.session_id, prompt)
+                controller = broker.get_global_controller()
+                if controller:
+                    await broker.inject_message(
+                        controller.session_id,
+                        f'Project: "{name}"\n{prompt}',
+                    )
             result = wf.model_dump()
         elif body.action == "skip_phase":
             wf, prompt = await loop.run_in_executor(
                 None, workflows_svc.advance_phase, name
             )
             if prompt:
-                controller = broker.get_controller_for_project(name)
-                if controller and controller.phase == SessionPhase.IDLE:
-                    await broker.inject_message(controller.session_id, prompt)
+                controller = broker.get_global_controller()
+                if controller:
+                    await broker.inject_message(
+                        controller.session_id,
+                        f'Project: "{name}"\n{prompt}',
+                    )
             result = wf.model_dump() if wf else {}
         elif body.action == "cancel":
             await loop.run_in_executor(
@@ -972,7 +917,10 @@ async def delete_workflow(name: str) -> None:
 @app.get("/api/agents")
 async def list_agents() -> list[dict[str, Any]]:
     broker: AgentBroker = app.state.broker
-    return [s.to_dict() for s in broker.get_all_sessions()]
+    return [
+        s.to_dict() for s in broker.get_all_sessions()
+        if s.project_name != "__global__"
+    ]
 
 
 @app.get("/api/agents/{session_id}/messages")
@@ -1168,6 +1116,32 @@ async def get_project_git_status(name: str) -> dict[str, str]:
     try:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, artifacts_svc.get_git_status, name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+class WriteFileBody(PydanticBaseModel):
+    path: str
+    content: str
+
+
+@app.put("/api/projects/{name}/files/content")
+async def write_project_file(name: str, body: WriteFileBody) -> dict[str, Any]:
+    try:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, artifacts_svc.write_file, name, body.path, body.content
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/api/projects/{name}/files/branch")
+async def get_project_git_branch(name: str) -> dict[str, str]:
+    try:
+        loop = asyncio.get_event_loop()
+        branch = await loop.run_in_executor(None, artifacts_svc.get_git_branch, name)
+        return {"branch": branch}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -1648,43 +1622,32 @@ async def setup_dashboard_controller(project: str, body: dict[str, Any]) -> dict
     config.dashboard_prompt = prompt
     await loop.run_in_executor(None, projects_svc.update_project_config, project, config)
 
-    # Inject dashboard setup into controller if available
-    controller = broker.get_controller_for_project(project)
+    # Inject dashboard setup into global controller
+    controller = broker.get_global_controller()
+    dashboard_instruction = (
+        f'Project: "{project}"\n'
+        f'DASHBOARD SETUP REQUEST:\n\n'
+        f'The user wants this dashboard: "{prompt}"\n\n'
+        f'Use your canvas tools to design and create widgets that match this vision. '
+        f'Use canvas_design() for creative/custom widgets and canvas_put() for data-driven ones.\n\n'
+        f'After creating the widgets, remember their IDs and data schemas. '
+        f'When you dispatch subagents, include a data contract asking them to provide '
+        f'structured data updates for these widgets. Use request_dashboard_data() '
+        f'periodically to poll running agents for fresh data, then update widgets '
+        f'with canvas_put().\n\n'
+        f'This dashboard is your persistent responsibility — keep it updated as work progresses. '
+        f'Stay idle between updates, ready for new dispatch requests or dashboard changes.'
+    )
     if controller:
-        dashboard_instruction = (
-            f'DASHBOARD SETUP REQUEST:\n\n'
-            f'The user wants this dashboard: "{prompt}"\n\n'
-            f'Use your canvas tools to design and create widgets that match this vision. '
-            f'Use canvas_design() for creative/custom widgets and canvas_put() for data-driven ones.\n\n'
-            f'After creating the widgets, remember their IDs and data schemas. '
-            f'When you dispatch subagents, include a data contract asking them to provide '
-            f'structured data updates for these widgets. Use request_dashboard_data() '
-            f'periodically to poll running agents for fresh data, then update widgets '
-            f'with canvas_put().\n\n'
-            f'This dashboard is your persistent responsibility — keep it updated as work progresses. '
-            f'Stay idle between updates, ready for new dispatch requests or dashboard changes.'
-        )
         await broker.inject_message(controller.session_id, dashboard_instruction)
         return {"status": "injected", "session_id": controller.session_id}
 
-    # No controller — spawn one with the dashboard task
-    model = config.model
-    session = await broker.create_session(
-        project_name=project,
-        project_path=project_data.path,
-        initial_task=(
-            f'You are the dashboard controller for project "{project}". '
-            f'Your primary responsibility is managing the project dashboard.\n\n'
-            f'Dashboard request: "{prompt}"\n\n'
-            f'1. Read PROJECT.md for context about this project\n'
-            f'2. Use canvas_design() and canvas_put() to create widgets matching the request\n'
-            f'3. When agents are dispatched, use request_dashboard_data() to poll them for updates\n'
-            f'4. Update widgets with canvas_put() as new data arrives\n'
-            f'5. Stay idle between updates — you own this dashboard persistently'
-        ),
-        model=model,
-        is_controller=True,
+    # Global controller dead — respawn it
+    controller_mcp = str(
+        Path(__file__).resolve().parent / "mcp" / "controller_mcp_config.json"
     )
+    session = await broker.spawn_global_controller(mcp_config_path=controller_mcp)
+    await broker.inject_message(session.session_id, dashboard_instruction)
     return {"status": "spawned", "session_id": session.session_id}
 
 

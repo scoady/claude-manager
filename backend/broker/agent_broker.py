@@ -30,6 +30,31 @@ if TYPE_CHECKING:
 
 _DEFAULT_MODEL = "claude-opus-4-6"
 
+GLOBAL_CONTROLLER_PROMPT = """You are the GLOBAL CONTROLLER for the C9s agent orchestration system.
+
+You receive user requests and route them to the right projects and agents.
+
+Your capabilities:
+- create_tasks(project, tasks) — add tasks to a project
+- dispatch_agent(project, task_index) — spawn a worker agent for a task
+- get_agents(project) — check running agents and their status
+- list_tasks(project) — see task status for a project
+- report_complete(project, task_index) — mark a task as done
+- canvas_put(...) — update dashboard widgets
+- canvas_remove(...) — remove widgets
+
+Rules:
+1. THINK before acting. Can you answer without spawning a worker? If it's a simple question, just respond.
+2. Never write code yourself. You are a router and supervisor.
+3. Narrate what you're doing — the user sees your output in real-time.
+4. When spawning workers, be specific about the task. One task per agent.
+5. Monitor agents with get_agents() and report results when they finish.
+6. Update the project dashboard after significant events (task created, task completed, status change).
+"""
+
+# Module-level global controller reference
+_global_controller_session_id: str | None = None
+
 
 class AgentBroker:
     def __init__(
@@ -43,14 +68,47 @@ class AgentBroker:
         self._db = db
         self._sessions: dict[str, AgentSession] = {}
 
+    # ── Global controller ────────────────────────────────────────────────────
+
+    async def spawn_global_controller(self, mcp_config_path: str | None = None) -> AgentSession:
+        """Spawn the single global controller agent. Called once at startup."""
+        global _global_controller_session_id
+
+        # Already running?
+        existing = self.get_global_controller()
+        if existing:
+            return existing
+
+        import os
+        os.makedirs("/tmp/c9s-controller", exist_ok=True)
+
+        session = await self.create_session(
+            project_name="__global__",
+            project_path="/tmp/c9s-controller",
+            initial_task=GLOBAL_CONTROLLER_PROMPT,
+            model=None,
+            is_controller=True,
+            mcp_config_path=mcp_config_path or _CONTROLLER_MCP_CONFIG,
+        )
+        _global_controller_session_id = session.session_id
+        return session
+
+    def get_global_controller(self) -> AgentSession | None:
+        """Get the global controller if it's still alive in the registry."""
+        global _global_controller_session_id
+        if _global_controller_session_id:
+            session = self._sessions.get(_global_controller_session_id)
+            if session:
+                return session
+            # Session gone from registry — clear stale reference
+            _global_controller_session_id = None
+        return None
+
     # ── Session management ────────────────────────────────────────────────────
 
     def get_controller_for_project(self, project_name: str) -> AgentSession | None:
-        """Return the controller session for a project, if one exists."""
-        for s in self._sessions.values():
-            if s.project_name == project_name and s.is_controller:
-                return s
-        return None
+        """Return the global controller (backward-compatible shim)."""
+        return self.get_global_controller()
 
     async def create_session(
         self,
@@ -269,8 +327,10 @@ class AgentBroker:
             session._subagent_captured_this_cycle = False
 
         # ── Workflow auto-continuation ─────────────────────────────────────
+        # Skip workflow auto-continuation for the global controller (project __global__)
         workflow_injected = False
-        if session and session.is_controller and reason == "idle":
+        if (session and session.is_controller and reason == "idle"
+                and session.project_name != "__global__"):
             try:
                 from ..services import workflows as workflows_svc
                 from ..models import WorkflowStatus
@@ -294,7 +354,9 @@ class AgentBroker:
                 print(f"[workflow] auto-continue error: {exc}")
 
         # ── Task queue auto-dispatch ──────────────────────────────────────
-        if session and session.is_controller and reason == "idle" and not workflow_injected:
+        # Skip for global controller — it handles all projects, not one
+        if (session and session.is_controller and reason == "idle"
+                and not workflow_injected and session.project_name != "__global__"):
             try:
                 await self.check_task_queue(session.project_name)
             except Exception as exc:
