@@ -1956,6 +1956,46 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         ws_manager.disconnect(websocket)
 
 
+# ─── Widget Data Buffer ───────────────────────────────────────────────────────
+
+from .services.widget_buffer import widget_buffer
+
+
+class BufferWriteRequest(PydanticBaseModel):
+    data: dict
+
+
+@app.post("/api/canvas/{project}/buffer/{widget_id}")
+async def buffer_write(project: str, widget_id: str, body: BufferWriteRequest) -> dict:
+    """Agent writes data to a widget buffer — triggers real-time WS broadcast."""
+    entry = widget_buffer.write(project, widget_id, body.data)
+    await ws_manager.broadcast(
+        WSMessageType.WIDGET_DATA,
+        {
+            "project": project,
+            "widget_id": widget_id,
+            "data": entry["data"],
+            "version": entry["version"],
+        },
+    )
+    return {"ok": True, "version": entry["version"]}
+
+
+@app.get("/api/canvas/{project}/buffer/{widget_id}")
+async def buffer_read(project: str, widget_id: str) -> dict:
+    """Read latest buffered data for a single widget (fallback if WS is down)."""
+    entry = widget_buffer.read(project, widget_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="No buffered data for this widget")
+    return entry
+
+
+@app.get("/api/canvas/{project}/buffer")
+async def buffer_read_all(project: str) -> dict:
+    """Read all buffered data for a project."""
+    return widget_buffer.read_all(project)
+
+
 # ─── Static Files ─────────────────────────────────────────────────────────────
 
 _FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"

@@ -402,6 +402,8 @@ class WSMessageType(str, Enum):
     CANVAS_WIDGET_REMOVED = "canvas_widget_removed"
     CANVAS_SCENE_REPLACED = "canvas_scene_replaced"
     CANVAS_CLEARED        = "canvas_cleared"
+    # Widget data buffer events
+    WIDGET_DATA           = "widget_data"
 
 
 class WSMessage(BaseModel):

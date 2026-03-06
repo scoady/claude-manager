@@ -1,0 +1,38 @@
+services:
+  backend-poc2:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "4052:4040"
+    volumes:
+      - "${HOME}/.claude:/root/.claude"
+      - "${CLAUDE_JSON_SNAPSHOT:-${HOME}/.claude.json}:/tmp/claude-config.json:ro"
+      - "${MANAGED_PROJECTS_DIR:-${HOME}/git/claude-managed-projects}:${MANAGED_PROJECTS_DIR:-${HOME}/git/claude-managed-projects}"
+      - "${HOME}/git/claude-manager:${HOME}/git/claude-manager"
+      - "./frontend:/app/frontend:ro"
+      - "${HOME}/.ssh:/root/.ssh:ro"
+      - "${HOME}/.gitconfig:/root/.gitconfig:ro"
+      - "./.claude-snapshot/oauth-token:/run/claude-oauth-token:ro"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    environment:
+      CLAUDE_DATA_DIR: /root/.claude
+      MANAGED_PROJECTS_DIR: "${MANAGED_PROJECTS_DIR:-${HOME}/git/claude-managed-projects}"
+      DATABASE_URL: "${DATABASE_URL:-}"
+      CLAUDE_CODE_OAUTH_TOKEN: "${CLAUDE_CODE_OAUTH_TOKEN}"
+      GH_TOKEN: "${GH_TOKEN:-}"
+      GITHUB_TOKEN: "${GH_TOKEN:-}"
+    restart: unless-stopped
+
+  mcp-canvas-poc2:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: python3 -m backend.mcp.canvas_server
+    ports:
+      - "4053:4041"
+    environment:
+      CANVAS_API_URL: "http://backend-poc2:4040"
+    depends_on:
+      - backend-poc2
+    restart: unless-stopped

@@ -269,6 +269,17 @@ function onWSMessage(msg) {
       feed.handleCanvasEvent(msg.type, msg.data ?? msg);
       break;
     }
+
+    // ── Widget data buffer — real-time data pipeline for widgets ────
+    case 'widget_data': {
+      const { widget_id, data, version } = msg.data;
+      window.__widgetData = window.__widgetData || {};
+      window.__widgetData[widget_id] = { data, version, timestamp: Date.now() };
+      document.dispatchEvent(new CustomEvent('widget-data-update', {
+        detail: { widget_id, data, version },
+      }));
+      break;
+    }
   }
 }
 

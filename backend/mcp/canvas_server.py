@@ -378,6 +378,25 @@ def canvas_list(project: str) -> list:
 
 
 @mcp.tool()
+def canvas_buffer_write(project: str, widget_id: str, data: str) -> dict:
+    """Write data to a widget's real-time buffer for instant display.
+
+    Much faster than canvas_put — use this for frequent data updates
+    after the widget has been initially created with canvas_put.
+    The data is broadcast over WebSocket immediately so the widget
+    can react in real-time without polling.
+
+    data: JSON string with any structure the widget expects.
+    """
+    parsed = json.loads(data) if isinstance(data, str) else data
+    url = f"{CANVAS_API}/api/canvas/{project}/buffer/{widget_id}"
+    with httpx.Client(timeout=10) as client:
+        resp = client.post(url, json={"data": parsed})
+        resp.raise_for_status()
+        return resp.json()
+
+
+@mcp.tool()
 def canvas_templates() -> list[dict]:
     """
     List available widget templates from the catalog.
