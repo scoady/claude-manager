@@ -328,6 +328,8 @@ class WidgetState(BaseModel):
     gs_y: int | None = None
     gs_w: int = 4
     gs_h: int = 3
+    no_resize: bool = False
+    no_move: bool = False
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -348,6 +350,8 @@ class WidgetCreate(BaseModel):
     gs_y: int | None = None
     gs_w: int = 4
     gs_h: int = 3
+    no_resize: bool = False
+    no_move: bool = False
 
 
 class WidgetUpdate(BaseModel):
@@ -365,6 +369,8 @@ class WidgetUpdate(BaseModel):
     gs_y: int | None = None
     gs_w: int | None = None
     gs_h: int | None = None
+    no_resize: bool | None = None
+    no_move: bool | None = None
 
 
 class WSMessageType(str, Enum):

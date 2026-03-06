@@ -101,6 +101,8 @@ export class CanvasEngine {
         const opts = { w: gsW, h: gsH, id: widgetDef.widget_id, content: '' };
         if (gsX !== undefined && gsX !== null) opts.x = gsX;
         if (gsY !== undefined && gsY !== null) opts.y = gsY;
+        if (widgetDef.no_resize) opts.noResize = true;
+        if (widgetDef.no_move) opts.noMove = true;
 
         const gridEl = this._grid.addWidget(opts);
         const contentEl = gridEl.querySelector('.grid-stack-item-content');

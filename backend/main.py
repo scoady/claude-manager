@@ -407,39 +407,38 @@ async def dispatch_task(name: str, body: DispatchRequest) -> dict[str, Any]:
             )
 
         task_prompt = (
-            f'New task dispatched (TASKS.md index #{new_task_idx}): "{body.task}"\n\n'
-            f'Use dispatch_agent(project="{name}", task_index={new_task_idx}) to spawn a worker for this task. '
-            f'This links the worker to the task so it auto-completes when done. '
-            f'Do NOT implement anything yourself — you are the coordinator. '
-            f'Monitor with get_agents() and report results when done.\n\n'
-            f'After dispatching, update the dashboard:\n'
-            f'1. Update task-board widget to show the new task as "active"\n'
-            f'2. Update task-progress widget with current counts\n'
-            f'3. When the worker finishes, update both widgets again to reflect completion\n\n'
-            f'Use canvas_put() with the same widget_ids to update in-place. '
-            f'You own the dashboard — workers just do their tasks.'
+            f'New task received (TASKS.md index #{new_task_idx}): "{body.task}"\n\n'
+            f'THINK FIRST before acting. Analyze this request:\n'
+            f'1. Can you answer this directly without spawning workers? (e.g. status questions, simple queries)\n'
+            f'   - If yes, just respond with the answer. No workers needed.\n'
+            f'2. Does this need one worker or multiple? What should each worker do?\n'
+            f'   - Break complex tasks into clear, independent sub-tasks before dispatching.\n'
+            f'3. Is this a duplicate of work already in progress? Check with get_agents() first.\n\n'
+            f'When you DO need workers:\n'
+            f'- Use dispatch_agent(project="{name}", task_index={new_task_idx}) to spawn a worker.\n'
+            f'- This links the worker to the task so it auto-completes when done.\n'
+            f'- Monitor with get_agents() and report results when done.\n'
+            f'- Do NOT implement anything yourself — you are the coordinator.\n\n'
+            f'After dispatching or answering, update the dashboard if needed.'
             f'{dashboard_extra}'
         )
         await broker.inject_message(controller.session_id, task_prompt)
         return {"status": "delegated", "session_ids": [controller.session_id]}
 
-    # Fallback: controller busy or missing — spawn standalone agent (no canvas MCP)
+    # Fallback: controller busy or missing — spawn single standalone agent
     model = body.model or project.config.model
     mcp_config = project.config.mcp_config
 
-    session_ids = []
-    for _ in range(project.config.parallelism):
-        session = await broker.create_session(
-            project_name=name,
-            project_path=project.path,
-            initial_task=body.task,
-            model=model,
-            mcp_config_path=mcp_config,
-            task_index=new_task_idx,
-        )
-        session_ids.append(session.session_id)
+    session = await broker.create_session(
+        project_name=name,
+        project_path=project.path,
+        initial_task=body.task,
+        model=model,
+        mcp_config_path=mcp_config,
+        task_index=new_task_idx,
+    )
 
-    return {"status": "dispatched", "session_ids": session_ids}
+    return {"status": "dispatched", "session_ids": [session.session_id]}
 
 
 # ─── Tasks API ────────────────────────────────────────────────────────────────
