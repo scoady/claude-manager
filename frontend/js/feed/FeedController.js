@@ -4,7 +4,6 @@ import { AgentSection } from './AgentSection.js';
 import { TasksPanel } from './TasksPanel.js';
 import { MilestonesPanel } from './MilestonesPanel.js';
 import { WorkflowPanel } from './WorkflowPanel.js';
-import { ArtifactsPanel } from './ArtifactsPanel.js';
 import { CronPanel } from './CronPanel.js';
 import { EditorPanel } from './EditorPanel.js';
 import { renderMarkdown } from './MarkdownRenderer.js';
@@ -42,8 +41,6 @@ export class FeedController {
     this._milestonesPanel = null;
     this._workflowContainer = null;
     this._workflowPanel = null;
-    this._artifactsContainer = null;
-    this._artifactsPanel = null;
     this._cronContainer = null;
     this._cronPanel = null;
     this._subagentMap = new Map(); // tool_use_id → subagent section id
@@ -134,16 +131,7 @@ export class FeedController {
     this._workflowPanel = new WorkflowPanel(project.name);
     this._workflowContainer.appendChild(this._workflowPanel.el);
 
-    // 6. Artifacts container (hidden by default)
-    this._artifactsContainer = document.createElement('div');
-    this._artifactsContainer.className = 'feed-artifacts-container hidden';
-    this._el.appendChild(this._artifactsContainer);
-
-    if (this._artifactsPanel) this._artifactsPanel.destroy();
-    this._artifactsPanel = new ArtifactsPanel(project.name);
-    this._artifactsContainer.appendChild(this._artifactsPanel.el);
-
-    // 6b. Editor container (hidden by default)
+    // 6. Editor container (hidden by default)
     this._editorContainer = document.createElement('div');
     this._editorContainer.className = 'feed-editor-container hidden';
     this._el.appendChild(this._editorContainer);
@@ -418,7 +406,6 @@ export class FeedController {
         <button class="feed-tab" data-feed-tab="tasks">Tasks</button>
         <button class="feed-tab" data-feed-tab="milestones">Milestones</button>
         <button class="feed-tab" data-feed-tab="workflow">Workflow</button>
-        <button class="feed-tab" data-feed-tab="artifacts">Artifacts</button>
         <button class="feed-tab" data-feed-tab="editor">Editor</button>
         <button class="feed-tab" data-feed-tab="cron">Cron</button>
         <button class="feed-save-layout-btn" title="Save dashboard layout">
@@ -1133,7 +1120,6 @@ export class FeedController {
         this._tasksContainer?.classList.add('hidden');
         this._milestonesContainer?.classList.add('hidden');
         this._workflowContainer?.classList.add('hidden');
-        this._artifactsContainer?.classList.add('hidden');
         this._editorContainer?.classList.add('hidden');
         this._cronContainer?.classList.add('hidden');
 
@@ -1163,9 +1149,6 @@ export class FeedController {
           this._workflowContainer?.classList.remove('hidden');
           this._workflowPanel?.load();
           this._workflowPanel?.startAutoRefresh();
-        } else if (tabName === 'artifacts') {
-          this._artifactsContainer?.classList.remove('hidden');
-          this._artifactsPanel?.load();
         } else if (tabName === 'editor') {
           this._editorContainer?.classList.remove('hidden');
           this._editorPanel?.load();

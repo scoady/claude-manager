@@ -35,51 +35,50 @@ pipeline {
       }
     }
 
-    // ── Stage 2: Build and push images (parallel) ─────────────────────────────
-    stage('Build images') {
-      parallel {
-        stage('Frontend') {
-          steps {
-            container('kaniko') {
-              sh """
-                /kaniko/executor \\
-                  --dockerfile=${WORKSPACE}/frontend/Dockerfile \\
-                  --context=dir://${WORKSPACE}/frontend \\
-                  --destination=${REGISTRY}/claude-manager/frontend:${IMAGE_TAG} \\
-                  --destination=${REGISTRY}/claude-manager/frontend:latest \\
-                  --insecure \\
-                  --insecure-pull \\
-                  --skip-tls-verify \\
-                  --skip-tls-verify-pull \\
-                  --cache=false \\
-                  --verbosity=info
-              """
-            }
-          }
-        }
-        stage('Backend') {
-          steps {
-            container('kaniko') {
-              sh """
-                /kaniko/executor \\
-                  --dockerfile=${WORKSPACE}/backend/Dockerfile \\
-                  --context=dir://${WORKSPACE} \\
-                  --destination=${REGISTRY}/claude-manager/backend:${IMAGE_TAG} \\
-                  --destination=${REGISTRY}/claude-manager/backend:latest \\
-                  --insecure \\
-                  --insecure-pull \\
-                  --skip-tls-verify \\
-                  --skip-tls-verify-pull \\
-                  --cache=false \\
-                  --verbosity=info
-              """
-            }
-          }
+    // ── Stage 2: Build frontend image ─────────────────────────────────────────
+    stage('Frontend') {
+      steps {
+        container('kaniko') {
+          sh """
+            /kaniko/executor \\
+              --dockerfile=${WORKSPACE}/frontend/Dockerfile \\
+              --context=dir://${WORKSPACE}/frontend \\
+              --destination=${REGISTRY}/claude-manager/frontend:${IMAGE_TAG} \\
+              --destination=${REGISTRY}/claude-manager/frontend:latest \\
+              --insecure \\
+              --insecure-pull \\
+              --skip-tls-verify \\
+              --skip-tls-verify-pull \\
+              --cache=false \\
+              --verbosity=info
+          """
         }
       }
     }
 
-    // ── Stage 3: Trigger deploy pipeline ──────────────────────────────────────
+    // ── Stage 3: Build backend image ──────────────────────────────────────────
+    stage('Backend') {
+      steps {
+        container('kaniko') {
+          sh """
+            /kaniko/executor \\
+              --dockerfile=${WORKSPACE}/backend/Dockerfile \\
+              --context=dir://${WORKSPACE} \\
+              --destination=${REGISTRY}/claude-manager/backend:${IMAGE_TAG} \\
+              --destination=${REGISTRY}/claude-manager/backend:latest \\
+              --insecure \\
+              --insecure-pull \\
+              --skip-tls-verify \\
+              --skip-tls-verify-pull \\
+              --snapshot-mode=redo \\
+              --cache=false \\
+              --verbosity=info
+          """
+        }
+      }
+    }
+
+    // ── Stage 4: Trigger deploy pipeline ──────────────────────────────────────
     stage('Deploy') {
       steps {
         script {
