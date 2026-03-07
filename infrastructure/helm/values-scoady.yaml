@@ -16,10 +16,8 @@ global:
   imageRegistry: "registry.registry.svc.cluster.local:5000"
 
 # ── Backend ───────────────────────────────────────────────────────────────────
-# Set to true after cluster recreation with updated hostPath mounts.
-# The scoady cluster needs docker.sock + repo dir mounts on the labeled worker.
 backend:
-  enabled: false
+  enabled: true
 
   image:
     repository: claude-manager/backend

@@ -15,9 +15,6 @@ metadata:
     {{- if .Values.backend.enabled }}
     # WebSocket upgrade support
     nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      proxy_set_header Upgrade $http_upgrade;
-      proxy_set_header Connection "upgrade";
     {{- end }}
 spec:
   ingressClassName: {{ .Values.frontend.ingress.className }}
