@@ -61,9 +61,6 @@ spec:
           volumeMounts:
             - name: claude-data
               mountPath: /root/.claude
-            - name: claude-json
-              mountPath: /tmp/claude-config.json
-              readOnly: true
             - name: claude-versions
               mountPath: "{{ .Values.backend.hostHome }}/.local/share/claude/versions"
               readOnly: true
@@ -139,10 +136,6 @@ spec:
           hostPath:
             path: "{{ .Values.backend.hostHome }}/.claude"
             type: Directory
-        - name: claude-json
-          hostPath:
-            path: "{{ .Values.backend.hostHome }}/.claude.json"
-            type: File
         - name: claude-versions
           hostPath:
             path: "{{ .Values.backend.hostHome }}/.local/share/claude/versions"
