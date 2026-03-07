@@ -61,6 +61,12 @@ spec:
           volumeMounts:
             - name: claude-data
               mountPath: /root/.claude
+            - name: claude-json
+              mountPath: /tmp/claude-config.json
+              readOnly: true
+            - name: claude-versions
+              mountPath: "{{ .Values.backend.hostHome }}/.local/share/claude/versions"
+              readOnly: true
             - name: managed-projects
               mountPath: "{{ .Values.backend.managedProjectsDir }}"
             - name: claude-manager-src
@@ -132,6 +138,14 @@ spec:
         - name: claude-data
           hostPath:
             path: "{{ .Values.backend.hostHome }}/.claude"
+            type: Directory
+        - name: claude-json
+          hostPath:
+            path: "{{ .Values.backend.hostHome }}/.claude.json"
+            type: File
+        - name: claude-versions
+          hostPath:
+            path: "{{ .Values.backend.hostHome }}/.local/share/claude/versions"
             type: Directory
         - name: managed-projects
           hostPath:

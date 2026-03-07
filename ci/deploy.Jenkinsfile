@@ -2,15 +2,11 @@
 // Parameterized pipeline: runs `helm upgrade` to deploy claude-manager with
 // the specified image tag from the in-cluster registry.
 //
+// Deploys both the frontend (nginx) and backend (FastAPI + MCP sidecars).
+// Backend is enabled/disabled via values-scoady.yaml.
+//
 // Triggered automatically by ci/build.Jenkinsfile, or manually from the
 // Jenkins UI with any tag.
-//
-// Requires agent label 'helm' (alpine/helm + kubectl):
-//   - jnlp container: clones repo
-//   - helm container: runs helm upgrade and kubectl rollout status
-//
-// NOTE: The backend runs natively on the host (not in k8s) — see run.sh.
-// Only the frontend nginx image is deployed here.
 
 def REGISTRY = "registry.registry.svc.cluster.local:5000"
 
@@ -55,9 +51,12 @@ pipeline {
               --namespace claude-manager \\
               --create-namespace \\
               --values ${WORKSPACE}/infrastructure/helm/claude-manager/values.yaml \\
+              --values ${WORKSPACE}/infrastructure/helm/values-scoady.yaml \\
               --set global.imageRegistry=${REGISTRY} \\
               --set frontend.image.tag=${params.IMAGE_TAG} \\
               --set frontend.image.pullPolicy=Always \\
+              --set backend.image.tag=${params.IMAGE_TAG} \\
+              --set backend.image.pullPolicy=Always \\
               --wait \\
               --timeout 5m
           """
@@ -70,6 +69,9 @@ pipeline {
         container('helm') {
           sh """
             kubectl rollout status deployment/frontend -n claude-manager --timeout=120s
+            if kubectl get deployment/backend -n claude-manager 2>/dev/null; then
+              kubectl rollout status deployment/backend -n claude-manager --timeout=120s
+            fi
           """
         }
       }

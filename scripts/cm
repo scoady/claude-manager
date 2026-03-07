@@ -343,12 +343,25 @@ cmd_frontend_build() {
 }
 
 cmd_backend_restart() {
-  info "Restarting claude-manager backend..."
-  cd "$CM_DIR"
-  docker compose down 2>/dev/null || true
-  success "Containers stopped."
-  info "Starting via scripts/start.sh -d ..."
-  exec bash "${CM_DIR}/scripts/start.sh" -d
+  # Detect whether backend runs in k8s or docker-compose
+  if kubectl --context="$KUBE_CONTEXT" get deployment/backend -n claude-manager &>/dev/null; then
+    info "Restarting claude-manager backend in k8s..."
+    kubectl --context="$KUBE_CONTEXT" rollout restart deployment/backend -n claude-manager
+    kubectl --context="$KUBE_CONTEXT" rollout status deployment/backend -n claude-manager --timeout=120s
+    success "Backend pod restarted."
+  else
+    info "Restarting claude-manager backend via docker-compose..."
+    cd "$CM_DIR"
+    docker compose down 2>/dev/null || true
+    success "Containers stopped."
+    info "Starting via scripts/start.sh -d ..."
+    exec bash "${CM_DIR}/scripts/start.sh" -d
+  fi
+}
+
+cmd_migrate_k8s() {
+  info "Running k8s backend migration..."
+  exec bash "${CM_DIR}/scripts/migrate-to-k8s.sh"
 }
 
 cmd_cluster_status() {
@@ -457,7 +470,8 @@ cmd_help() {
   echo -e "  ${CYAN}cluster-status${RESET}            Show all nodes, pods, and services"
   echo ""
   echo -e "${BOLD}INFRASTRUCTURE${RESET}"
-  echo -e "  ${CYAN}backend-restart${RESET}           docker compose down + scripts/start.sh -d"
+  echo -e "  ${CYAN}backend-restart${RESET}           Restart backend (auto-detects k8s or docker-compose)"
+  echo -e "  ${CYAN}migrate-k8s${RESET}               Migrate backend from docker-compose to k8s"
   echo -e "  ${CYAN}registry-fix${RESET}              Fix registry /etc/hosts on kind nodes"
   echo -e "  ${CYAN}jenkins-fix${RESET}               Restart Jenkins pod (OOMKilled recovery)"
   echo ""
@@ -491,6 +505,7 @@ main() {
     restart)         cmd_restart "$@" ;;
     frontend-build)  cmd_frontend_build "$@" ;;
     backend-restart) cmd_backend_restart "$@" ;;
+    migrate-k8s)     cmd_migrate_k8s "$@" ;;
     cluster-status)  cmd_cluster_status "$@" ;;
     registry-fix)    cmd_registry_fix "$@" ;;
     jenkins-fix)     cmd_jenkins_fix "$@" ;;

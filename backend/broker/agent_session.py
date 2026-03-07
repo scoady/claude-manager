@@ -21,7 +21,10 @@ from typing import Any, Callable
 from ..models import SessionPhase
 
 CLAUDE_BIN = os.environ.get("CLAUDE_BIN", "claude")
-OAUTH_TOKEN_FILE = os.environ.get("OAUTH_TOKEN_FILE", "/run/claude-oauth-token")
+OAUTH_TOKEN_FILE = os.environ.get(
+    "OAUTH_TOKEN_FILE",
+    str(Path(os.environ.get("CLAUDE_DATA_DIR", str(Path.home() / ".claude"))) / "oauth-token"),
+)
 CLAUDE_DATA_DIR = Path(os.environ.get("CLAUDE_DATA_DIR", str(Path.home() / ".claude")))
 
 

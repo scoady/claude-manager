@@ -1,8 +1,6 @@
 // ci/build.Jenkinsfile
-// Builds the frontend image with Kaniko, pushes it to the in-cluster Docker
-// registry, then triggers the deploy pipeline.
-//
-// The backend runs natively on the host (not in k8s) — see run.sh.
+// Builds the frontend AND backend images with Kaniko, pushes them to the
+// in-cluster Docker registry, then triggers the deploy pipeline.
 
 def REGISTRY = "registry.registry.svc.cluster.local:5000"
 def IMAGE_TAG = ""
@@ -37,23 +35,46 @@ pipeline {
       }
     }
 
-    // ── Stage 2: Build and push frontend image ────────────────────────────────
+    // ── Stage 2: Build and push images (parallel) ─────────────────────────────
     stage('Build images') {
-      steps {
-        container('kaniko') {
-          sh """
-            /kaniko/executor \\
-              --dockerfile=${WORKSPACE}/frontend/Dockerfile \\
-              --context=dir://${WORKSPACE}/frontend \\
-              --destination=${REGISTRY}/claude-manager/frontend:${IMAGE_TAG} \\
-              --destination=${REGISTRY}/claude-manager/frontend:latest \\
-              --insecure \\
-              --insecure-pull \\
-              --skip-tls-verify \\
-              --skip-tls-verify-pull \\
-              --cache=false \\
-              --verbosity=info
-          """
+      parallel {
+        stage('Frontend') {
+          steps {
+            container('kaniko') {
+              sh """
+                /kaniko/executor \\
+                  --dockerfile=${WORKSPACE}/frontend/Dockerfile \\
+                  --context=dir://${WORKSPACE}/frontend \\
+                  --destination=${REGISTRY}/claude-manager/frontend:${IMAGE_TAG} \\
+                  --destination=${REGISTRY}/claude-manager/frontend:latest \\
+                  --insecure \\
+                  --insecure-pull \\
+                  --skip-tls-verify \\
+                  --skip-tls-verify-pull \\
+                  --cache=false \\
+                  --verbosity=info
+              """
+            }
+          }
+        }
+        stage('Backend') {
+          steps {
+            container('kaniko') {
+              sh """
+                /kaniko/executor \\
+                  --dockerfile=${WORKSPACE}/backend/Dockerfile \\
+                  --context=dir://${WORKSPACE} \\
+                  --destination=${REGISTRY}/claude-manager/backend:${IMAGE_TAG} \\
+                  --destination=${REGISTRY}/claude-manager/backend:latest \\
+                  --insecure \\
+                  --insecure-pull \\
+                  --skip-tls-verify \\
+                  --skip-tls-verify-pull \\
+                  --cache=false \\
+                  --verbosity=info
+              """
+            }
+          }
         }
       }
     }

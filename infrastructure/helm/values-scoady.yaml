@@ -1,0 +1,62 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# claude-manager Helm values — scoady production cluster
+#
+# Enables the backend alongside the frontend. Uses hostPath mounts from the
+# kind cluster.yaml.tmpl to access the host filesystem.
+#
+# Deploy with:
+#   helm upgrade --install claude-manager ./infrastructure/helm/claude-manager \
+#     --namespace claude-manager \
+#     --values ./infrastructure/helm/claude-manager/values.yaml \
+#     --values ./infrastructure/helm/values-scoady.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Global ────────────────────────────────────────────────────────────────────
+global:
+  imageRegistry: "registry.registry.svc.cluster.local:5000"
+
+# ── Backend ───────────────────────────────────────────────────────────────────
+backend:
+  enabled: true
+
+  image:
+    repository: claude-manager/backend
+    tag: latest
+    pullPolicy: Always
+
+  replicas: 1
+
+  # Host filesystem paths — must match the kind cluster.yaml.tmpl extraMounts
+  hostHome: /Users/ayx106492
+  repoDir: /Users/ayx106492/git
+  managedProjectsDir: /Users/ayx106492/git/claude-managed-projects
+
+  # Pin backend to the worker node that has docker.sock + extra mounts
+  nodeSelector:
+    claude-manager-backend: "true"
+
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "4Gi"
+      cpu: "4000m"
+
+  mcp:
+    canvas:
+      enabled: true
+    orchestrator:
+      enabled: true
+
+# ── Frontend ──────────────────────────────────────────────────────────────────
+frontend:
+  image:
+    repository: claude-manager/frontend
+    tag: latest
+    pullPolicy: Always
+
+  ingress:
+    enabled: true
+    className: nginx
+    host: claude-manager.localhost
